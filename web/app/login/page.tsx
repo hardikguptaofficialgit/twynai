@@ -9,9 +9,9 @@ function Login() {
   const [email, setEmail] = useState("hardikgupta8792@gmail.com");
   const [name, setName] = useState("Hardik Gupta");
   const [err, setErr] = useState("");
-  useEffect(() => { const t = sp.get("token"); if (t) { localStorage.setItem("proxy_token", t); r.push("/studio"); } }, [sp, r]);
+  useEffect(() => { if (sp.get("handle")) localStorage.setItem("proxy_claim", sp.get("handle")!); const t = sp.get("token"); if (t) { localStorage.setItem("proxy_token", t); r.push("/onboarding"); } }, [sp, r]);
   async function dev() {
-    try { const d = await api("/api/auth/dev", { method: "POST", body: JSON.stringify({ email, name }) }); localStorage.setItem("proxy_token", d.token); r.push("/studio"); }
+    try { const d = await api("/api/auth/dev", { method: "POST", body: JSON.stringify({ email, name }) }); localStorage.setItem("proxy_token", d.token); const h = sp.get("handle"); if (h) localStorage.setItem("proxy_claim", h); r.push("/onboarding"); }
     catch (e: any) { setErr(e.message); }
   }
   return (

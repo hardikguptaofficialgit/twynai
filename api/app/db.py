@@ -35,12 +35,16 @@ class Persona(Base):
     accent: Mapped[str] = mapped_column(String, default="lilac")
     voice_embedding: Mapped[str] = mapped_column(Text, default="")  # json speaker_embedding
     voice_sample_path: Mapped[str] = mapped_column(String, default="")
+    languages: Mapped[str] = mapped_column(Text, default='["en","hi"]')
+    availability: Mapped[str] = mapped_column(Text, default='{}')
+    published: Mapped[bool] = mapped_column(default=False)
+    onboarding_step: Mapped[int] = mapped_column(default=0)
     created_at: Mapped[dt.datetime] = mapped_column(DateTime, default=now)
 
     def to_dict(self, public=False):
         d = dict(id=self.id, handle=self.handle, name=self.name, headline=self.headline, bio=self.bio,
                  rates=self.rates, faqs=json.loads(self.faqs or "[]"), links=json.loads(self.links or "[]"),
-                 tone=self.tone, accent=self.accent, has_voice=bool(self.voice_embedding or self.voice_sample_path))
+                 tone=self.tone, accent=self.accent, languages=json.loads(self.languages or "[]"), availability=json.loads(self.availability or "{}"), published=bool(self.published), onboarding_step=self.onboarding_step or 0, has_voice=bool(self.voice_embedding or self.voice_sample_path))
         if not public: d["owner_id"] = self.owner_id
         return d
 
@@ -100,4 +104,11 @@ class Booking(Base):
 def row(o):
     return {c.name: (getattr(o, c.name).isoformat() + "Z" if isinstance(getattr(o, c.name), dt.datetime) else getattr(o, c.name)) for c in o.__table__.columns}
 
-def init_db(): Base.metadata.create_all(engine)
+def init_db():
+    Base.metadata.create_all(engine)
+    from sqlalchemy import inspect, text
+    have = {c["name"] for c in inspect(engine).get_columns("personas")}
+    add = {"languages": "TEXT DEFAULT '[\"en\",\"hi\"]'", "availability": "TEXT DEFAULT '{}'", "published": "BOOLEAN DEFAULT 0", "onboarding_step": "INTEGER DEFAULT 0"}
+    with engine.begin() as c:
+        for k, v in add.items():
+            if k not in have: c.execute(text(f"ALTER TABLE personas ADD COLUMN {k} {v}"))

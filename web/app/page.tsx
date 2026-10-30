@@ -1,92 +1,142 @@
 "use client";
 import Link from "next/link";
+import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
-import { Mic, CalendarCheck, Languages, BookOpen, Users, Hand, ArrowRight } from "lucide-react";
-import { Nav, Backdrop, Pill, Card } from "@/components/ui";
+import { ArrowRight, AudioLines, BookOpenCheck, CalendarCheck, Languages, Hand } from "lucide-react";
+import { Logo } from "@/components/ui";
 import { Orb } from "@/components/Orb";
 
-const fade = { initial: { opacity: 0, y: 18 }, whileInView: { opacity: 1, y: 0 }, viewport: { once: true }, transition: { duration: 0.6 } };
+const fade = { initial: { opacity: 0, y: 16 }, whileInView: { opacity: 1, y: 0 }, viewport: { once: true, margin: "-80px" }, transition: { duration: 0.6, ease: [0.22, 1, 0.36, 1] as [number, number, number, number] } };
+
+function ClaimBar({ big }: { big?: boolean }) {
+  const r = useRouter(); const [h, setH] = useState("");
+  const go = () => r.push(`/login?handle=${encodeURIComponent(h.toLowerCase().replace(/[^a-z0-9-]/g, ""))}`);
+  return (
+    <form onSubmit={(e) => { e.preventDefault(); go(); }} className={`clay mx-auto flex w-full max-w-md items-center gap-1 p-1.5 ${big ? "" : ""}`} style={{ borderRadius: 20 }}>
+      <span className="pl-4 text-sm text-ink-mute">proxy.app/</span>
+      <input value={h} onChange={(e) => setH(e.target.value)} placeholder="yourname" aria-label="Your handle"
+        className="min-w-0 flex-1 bg-transparent py-2.5 text-sm font-medium text-ink outline-none placeholder:text-ink-mute/70" />
+      <button className="inline-flex items-center gap-1.5 rounded-[14px] bg-ink px-4 py-2.5 text-sm font-medium text-white hover:bg-[#33334f]">
+        Claim <ArrowRight size={15} />
+      </button>
+    </form>
+  );
+}
+
+function Preview() {
+  return (
+    <div className="glass mx-auto w-full max-w-4xl p-2.5" style={{ borderRadius: 30 }}>
+      <div className="flex items-center gap-1.5 px-3 pb-2.5 pt-1">
+        {[0, 1, 2].map((i) => <span key={i} className="h-2.5 w-2.5 rounded-full bg-ink/10" />)}
+        <span className="mx-auto rounded-lg bg-white/70 px-3 py-1 text-[11px] text-ink-mute">proxy.app/hardik</span>
+      </div>
+      <div className="grid gap-2.5 md:grid-cols-[1fr_1.35fr]">
+        <div className="clay grid place-items-center px-6 py-8" style={{ borderRadius: 22 }}>
+          <Orb size={120} state="speaking" level={0.35} />
+          <p className="mt-1 text-sm font-medium">Hardik's Proxy</p>
+          <p className="text-xs text-ink-mute">Speaking in his voice, in Hinglish</p>
+        </div>
+        <div className="clay flex flex-col gap-3 p-5" style={{ borderRadius: 22 }}>
+          <div className="self-end rounded-2xl rounded-br-md bg-ink px-4 py-2.5 text-sm text-white">Bhai aapka rate kitna hai?</div>
+          <div className="max-w-[85%] rounded-2xl rounded-bl-md bg-white px-4 py-2.5 text-sm text-ink shadow-[0_4px_14px_rgba(104,98,150,.10)]">MVP builds 25,000 rupees per week se start hote hain. Discovery call free hai, kal 3 baje slot book kar doon?</div>
+          <div className="self-end rounded-2xl rounded-br-md bg-ink px-4 py-2.5 text-sm text-white">Haan, book kar do.</div>
+          <div className="flex items-center gap-3 rounded-2xl bg-mint px-4 py-3 text-sm">
+            <CalendarCheck size={17} className="text-mint-deep" />
+            <div><p className="font-medium">Discovery call booked</p><p className="text-xs text-ink-soft">Sat 31 Oct, 3:00 PM IST · invite sent</p></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 const features = [
-  { icon: Mic, tone: "bg-lilac", t: "Your cloned voice", d: "Upload 30 seconds of audio. Proxy answers callers in a voice that sounds like you, powered by Gnani Timbre." },
-  { icon: Languages, tone: "bg-mint", t: "Speaks their language", d: "Hinglish, Tamil, Kannada, Bengali. Gnani Prisma detects the language and Proxy replies in kind." },
-  { icon: BookOpen, tone: "bg-peach", t: "Only what you know", d: "Answers come from your bio, rates, FAQs and documents. If it is not in your notes, it says so." },
-  { icon: CalendarCheck, tone: "bg-sky", t: "Books real meetings", d: "Connected to Google Calendar. It checks free slots and books the call while you sleep." },
-  { icon: Users, tone: "bg-butter", t: "Captures every lead", d: "Contact details and intent are saved with a summary of every conversation." },
-  { icon: Hand, tone: "bg-lilac", t: "Take over live", d: "Watch conversations in real time and jump in with one tap. Proxy steps aside." },
+  { icon: AudioLines, tone: "bg-lilac", t: "Your voice", d: "Thirty seconds of audio and Proxy speaks like you, powered by Gnani Timbre." },
+  { icon: Languages, tone: "bg-sky", t: "Their language", d: "Hindi, Hinglish, Tamil, Bengali and more. It replies in whatever the caller speaks." },
+  { icon: BookOpenCheck, tone: "bg-peach", t: "Only what you know", d: "Grounded in your bio, rates, FAQs and documents. If it is not in your notes, it says so." },
+  { icon: CalendarCheck, tone: "bg-mint", t: "Books the meeting", d: "Checks your Google Calendar and confirms a slot before the conversation ends." },
 ];
 
-export default function Home() {
+export default function Landing() {
   return (
-    <main className="relative min-h-screen overflow-x-hidden pb-24">
-      <Backdrop />
-      <Nav />
-      <section className="mx-auto mt-14 grid w-[min(1180px,calc(100%-2rem))] items-center gap-10 lg:grid-cols-[1.1fr_1fr]">
-        <motion.div {...fade}>
-          <Pill tone="white" className="mb-6"><span className="h-2 w-2 rounded-full bg-mint-deep" />Built on Gnani Prisma and Timbre</Pill>
-          <h1 className="text-5xl font-semibold leading-[1.04] tracking-[-0.035em] md:text-7xl">
-            You, on call.<br /><span className="text-ink-soft">Even when you are not.</span>
+    <main className="min-h-screen">
+      <header className="mx-auto flex w-[min(1080px,calc(100%-2.5rem))] items-center justify-between py-6">
+        <Logo />
+        <nav className="flex items-center gap-1 text-sm">
+          <Link href="/p/hardik" className="rounded-xl px-3 py-2 text-ink-soft hover:text-ink">Demo</Link>
+          <Link href="#how" className="hidden rounded-xl px-3 py-2 text-ink-soft hover:text-ink sm:block">How it works</Link>
+          <Link href="/login" className="rounded-xl px-3 py-2 text-ink-soft hover:text-ink">Sign in</Link>
+          <Link href="/login" className="clay-sm ml-1 bg-white px-4 py-2 font-medium text-ink">Get started</Link>
+        </nav>
+      </header>
+
+      <section className="mx-auto w-[min(1080px,calc(100%-2.5rem))] pb-20 pt-16 text-center md:pt-24">
+        <motion.div initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.7, ease: [0.22, 1, 0.36, 1] }}>
+          <span className="inline-flex items-center gap-2 rounded-full bg-white/70 px-3 py-1 text-xs text-ink-soft">
+            <span className="h-1.5 w-1.5 rounded-full bg-mint-deep" /> Voice by Gnani Prisma and Timbre
+          </span>
+          <h1 className="mx-auto mt-6 max-w-3xl text-5xl font-semibold leading-[1.04] tracking-[-0.035em] md:text-7xl">
+            You, on call.<br /><span className="text-ink-mute">Even when you are not.</span>
           </h1>
-          <p className="mt-6 max-w-xl text-lg leading-relaxed text-ink-soft">
-            Proxy is your AI persona. Share one link and anyone can chat or talk with it. It answers in your voice, in their language, from your own knowledge, and books meetings on your calendar.
+          <p className="mx-auto mt-6 max-w-lg text-lg leading-relaxed text-ink-soft">
+            One link where anyone can talk to an AI version of you, in your voice and their language.
           </p>
-          <div className="mt-9 flex flex-wrap gap-3">
-            <Link href="/login" className="clay-sm inline-flex items-center gap-2 bg-ink px-6 py-3.5 text-sm font-medium text-white">Create your Proxy <ArrowRight size={16} /></Link>
-            <Link href="/p/hardik" className="clay-sm inline-flex items-center gap-2 bg-[#f7f7fb] px-6 py-3.5 text-sm font-medium">Talk to Hardik's Proxy</Link>
-          </div>
-          <div className="mt-10 flex items-center gap-6 text-sm text-ink-mute">
-            <span>proxy.app/<span className="font-medium text-ink">hardik</span></span>
-            <span className="h-1 w-1 rounded-full bg-ink-mute" />
-            <span>11 Indian languages</span>
-            <span className="h-1 w-1 rounded-full bg-ink-mute" />
-            <span>Live takeover</span>
-          </div>
+          <div className="mt-9"><ClaimBar /></div>
+          <Link href="/p/hardik" className="mt-4 inline-block text-sm text-ink-soft underline decoration-ink/20 underline-offset-4 hover:text-ink">or talk to Hardik's Proxy</Link>
         </motion.div>
-        <motion.div {...fade} transition={{ duration: 0.8, delay: 0.1 }} className="relative">
-          <div className="glass relative mx-auto max-w-md p-7">
-            <div className="flex items-center gap-3">
-              <div className="clay-sm grid h-12 w-12 place-items-center bg-peach text-base font-semibold">HG</div>
-              <div><div className="font-semibold">Hardik Gupta</div><div className="text-sm text-ink-mute">Full-stack and AI engineer</div></div>
-              <Pill tone="mint" className="ml-auto">Live</Pill>
-            </div>
-            <div className="my-4 flex justify-center"><Orb state="speaking" level={0.45} size={150} /></div>
-            <div className="space-y-3 text-sm">
-              <div className="ml-auto w-fit max-w-[85%] rounded-2xl rounded-br-md bg-ink px-4 py-2.5 text-white">Bhai aapka rate kitna hai?</div>
-              <div className="clay-sm w-fit max-w-[85%] bg-white/80 px-4 py-2.5">MVP builds 25,000 rupees per week se start hote hain. Discovery call free hai, slot book kar doon?</div>
-              <div className="flex gap-2"><Pill tone="sky">check_availability</Pill><Pill tone="butter">Hinglish detected</Pill></div>
-            </div>
-          </div>
+        <motion.div className="mt-16" initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.9, delay: 0.15, ease: [0.22, 1, 0.36, 1] }}>
+          <Preview />
         </motion.div>
       </section>
 
-      <section className="mx-auto mt-28 w-[min(1180px,calc(100%-2rem))]">
-        <motion.div {...fade} className="mb-10 max-w-2xl">
-          <h2 className="text-4xl font-semibold tracking-[-0.03em]">A persona, not a chatbot.</h2>
-          <p className="mt-3 text-ink-soft">Everything a busy founder, freelancer or creator needs to never miss a conversation again.</p>
+      <section id="how" className="mx-auto w-[min(1080px,calc(100%-2.5rem))] py-20">
+        <motion.div {...fade} className="max-w-xl">
+          <p className="text-xs font-medium uppercase tracking-[0.16em] text-ink-mute">How it works</p>
+          <h2 className="mt-3 text-3xl font-semibold tracking-tight md:text-4xl">Live in five minutes.</h2>
         </motion.div>
-        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-          {features.map((f, i) => (
-            <motion.div key={f.t} {...fade} transition={{ duration: 0.5, delay: i * 0.05 }}>
-              <Card className="h-full">
-                <div className={`clay-sm mb-5 grid h-12 w-12 place-items-center ${f.tone}`}><f.icon size={20} strokeWidth={1.8} /></div>
-                <h3 className="text-lg font-semibold">{f.t}</h3>
-                <p className="mt-2 text-sm leading-relaxed text-ink-soft">{f.d}</p>
-              </Card>
+        <div className="mt-10 grid gap-4 md:grid-cols-3">
+          {[["01", "Teach it", "Add your bio, rates, FAQs and a voice sample."], ["02", "Connect your calendar", "Set the hours you take calls. Proxy handles the rest."], ["03", "Share your link", "Put it in your bio, email signature or missed-call SMS."]].map(([n, t, d], i) => (
+            <motion.div key={n} {...fade} transition={{ ...fade.transition, delay: i * 0.08 }} className="clay p-7">
+              <span className="font-mono text-xs text-ink-mute">{n}</span>
+              <h3 className="mt-6 text-lg font-semibold">{t}</h3>
+              <p className="mt-1.5 text-sm leading-relaxed text-ink-soft">{d}</p>
             </motion.div>
           ))}
         </div>
       </section>
 
-      <section className="mx-auto mt-28 w-[min(1180px,calc(100%-2rem))]">
-        <div className="glass grid gap-8 p-10 md:grid-cols-3">
-          {[["01", "Build", "Sign in with Google, add your bio, rates, FAQs, documents and a voice sample."],
-            ["02", "Share", "Get proxy.app/you. Put it in your bio, email signature or missed-call SMS."],
-            ["03", "Relax", "Proxy talks, books and captures leads. You read the summaries and step in when it matters."]].map(([n, t, d]) => (
-            <div key={n}><div className="font-mono text-sm text-ink-mute">{n}</div><div className="mt-2 text-2xl font-semibold tracking-tight">{t}</div><p className="mt-2 text-sm leading-relaxed text-ink-soft">{d}</p></div>
+      <section className="mx-auto w-[min(1080px,calc(100%-2.5rem))] py-20">
+        <motion.div {...fade} className="max-w-xl">
+          <p className="text-xs font-medium uppercase tracking-[0.16em] text-ink-mute">Why Proxy</p>
+          <h2 className="mt-3 text-3xl font-semibold tracking-tight md:text-4xl">A persona, not a chatbot.</h2>
+        </motion.div>
+        <div className="mt-10 grid gap-4 sm:grid-cols-2">
+          {features.map((f, i) => (
+            <motion.div key={f.t} {...fade} transition={{ ...fade.transition, delay: i * 0.06 }} className="clay flex gap-5 p-7">
+              <span className={`clay-sm grid h-11 w-11 shrink-0 place-items-center ${f.tone}`}><f.icon size={19} /></span>
+              <div><h3 className="font-semibold">{f.t}</h3><p className="mt-1 text-sm leading-relaxed text-ink-soft">{f.d}</p></div>
+            </motion.div>
           ))}
         </div>
-        <p className="mt-10 text-center text-sm text-ink-mute">Built for the Great Indian AI Internship Challenge by Gnani AI.</p>
+        <motion.div {...fade} className="glass mt-4 flex items-center gap-4 p-6">
+          <span className="clay-sm grid h-11 w-11 shrink-0 place-items-center bg-butter"><Hand size={19} /></span>
+          <p className="text-sm text-ink-soft"><span className="font-semibold text-ink">You stay in control.</span> Read every conversation as it happens and take over with one tap.</p>
+        </motion.div>
       </section>
+
+      <section className="mx-auto w-[min(1080px,calc(100%-2.5rem))] py-24 text-center">
+        <motion.div {...fade}>
+          <h2 className="text-3xl font-semibold tracking-tight md:text-5xl">Claim your link.</h2>
+          <p className="mx-auto mt-4 max-w-md text-ink-soft">Free while in beta. No card required.</p>
+          <div className="mt-8"><ClaimBar /></div>
+        </motion.div>
+      </section>
+
+      <footer className="mx-auto flex w-[min(1080px,calc(100%-2.5rem))] flex-col items-center justify-between gap-4 border-t border-ink/8 py-8 text-sm text-ink-mute sm:flex-row">
+        <div className="flex items-center gap-3"><Logo /><span>Built for the Gnani AI Internship Challenge</span></div>
+        <div className="flex gap-5"><Link href="/p/hardik" className="hover:text-ink">Demo</Link><Link href="/login" className="hover:text-ink">Sign in</Link><a href="https://github.com" className="hover:text-ink">GitHub</a></div>
+      </footer>
     </main>
   );
 }

@@ -78,6 +78,7 @@ def me(o=Depends(current_owner)): return row(o) | {"google_tokens": bool(o.googl
 class PersonaIn(BaseModel):
     handle: str; name: str; headline: str = ""; bio: str = ""; rates: str = ""
     faqs: list = []; links: list = []; tone: str = "warm, concise, professional"; accent: str = "lilac"
+    languages: list = ["en", "hi"]; availability: dict = {}; published: bool = False; onboarding_step: int = 0
 
 def reindex_profile(s, p):
     for c in s.scalars(select(Chunk).where(Chunk.persona_id == p.id, Chunk.source.like("profile:%"))): s.delete(c)
@@ -87,6 +88,12 @@ def reindex_profile(s, p):
     for src, text in parts:
         if text.strip(): s.add(Chunk(persona_id=p.id, source=src, text=text, embedding=json.dumps(rag.embed(text))))
 
+@app.get("/api/handles/{h}")
+def handle_check(h: str, s=Depends(db)):
+    c = re.sub(r"[^a-z0-9-]", "", h.lower())
+    ok = 3 <= len(c) <= 30 and c not in ("api", "login", "studio", "dashboard", "onboarding", "admin") and not s.scalar(select(Persona).where(Persona.handle == c))
+    return {"handle": c, "available": ok}
+
 @app.get("/api/me/personas")
 def my_personas(o=Depends(current_owner), s=Depends(db)):
     return [p.to_dict() for p in s.scalars(select(Persona).where(Persona.owner_id == o.id))]
@@ -95,7 +102,7 @@ def my_personas(o=Depends(current_owner), s=Depends(db)):
 def create_persona(b: PersonaIn, o=Depends(current_owner), s=Depends(db)):
     h = re.sub(r"[^a-z0-9-]", "", b.handle.lower())
     if not h or s.scalar(select(Persona).where(Persona.handle == h)): raise HTTPException(409, "handle taken")
-    p = Persona(owner_id=o.id, **(b.model_dump() | {"handle": h, "faqs": json.dumps(b.faqs), "links": json.dumps(b.links)}))
+    p = Persona(owner_id=o.id, **(b.model_dump() | {"handle": h, "faqs": json.dumps(b.faqs), "links": json.dumps(b.links), "languages": json.dumps(b.languages), "availability": json.dumps(b.availability)}))
     s.add(p); s.flush(); reindex_profile(s, p); s.commit(); return p.to_dict()
 
 @app.put("/api/personas/{pid}")
@@ -103,7 +110,7 @@ def update_persona(pid: str, b: PersonaIn, o=Depends(current_owner), s=Depends(d
     p = owned(s, pid, o)
     for k, v in b.model_dump().items():
         if k == "handle": continue
-        setattr(p, k, json.dumps(v) if k in ("faqs", "links") else v)
+        setattr(p, k, json.dumps(v) if k in ("faqs", "links", "languages", "availability") else v)
     reindex_profile(s, p); s.commit(); return p.to_dict()
 
 @app.get("/api/personas/{pid}/docs")
