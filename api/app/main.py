@@ -5,7 +5,7 @@ from collections import defaultdict
 import httpx
 from fastapi import FastAPI, HTTPException, UploadFile, File, Form, Header, WebSocket, WebSocketDisconnect, Depends
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import RedirectResponse
+from fastapi.responses import RedirectResponse, StreamingResponse
 from pydantic import BaseModel
 from sqlalchemy import select
 from . import config, rag, llm, voice, calendar_svc
@@ -139,9 +139,29 @@ async def upload_voice(pid: str, file: UploadFile = File(...), o=Depends(current
     p = owned(s, pid, o); data = await file.read()
     path = config.UPLOAD_DIR / f"{p.id}-voice-{file.filename}"; path.write_bytes(data)
     p.voice_sample_path = str(path)
+    secs = voice.wav_seconds(data)
+    if secs is not None and not 5 <= secs <= 31: raise HTTPException(422, f"Sample is {secs:.0f}s. Gnani cloning needs 5 to 30 seconds.")
     try: p.voice_embedding = await voice.clone_embedding(data, file.filename)
-    except Exception as e: raise HTTPException(502, f"voice clone failed: {e}")
-    s.commit(); return {"ok": True, "mock": not config.GNANI_API_KEY}
+    except Exception as e: raise HTTPException(502, f"voice clone failed: {type(e).__name__}")
+    (config.UPLOAD_DIR / f"{p.id}-preview.wav").unlink(missing_ok=True)  # old preview no longer matches
+    s.commit(); return {"ok": True, "mock": not config.GNANI_API_KEY, "seconds": secs, "dims": (json.loads(p.voice_embedding).get("shape") if p.voice_embedding else None)}
+
+@app.post("/api/personas/{pid}/voice/preview")
+async def preview_voice(pid: str, o=Depends(current_owner), s=Depends(db)):
+    """Short line in the owner's cloned voice (Timbre vachana-vc-v1). Cached per embedding so
+    replaying the preview costs no extra credits."""
+    from fastapi.responses import Response
+    p = owned(s, pid, o)
+    if not p.voice_embedding: raise HTTPException(400, "No voice sample yet")
+    path = config.UPLOAD_DIR / f"{p.id}-preview.wav"
+    if not path.exists():
+        line = f"Hi, this is {p.name.split()[0] if p.name else 'me'}'s Proxy. Thanks for reaching out, how can I help you today?"
+        emb = "" if "mock" in p.voice_embedding else p.voice_embedding
+        try: wav, mock = await voice.tts(line, "en-IN", emb)
+        except Exception as e: raise HTTPException(502, f"preview failed: {type(e).__name__}")
+        if mock: return Response(wav, media_type="audio/wav", headers={"X-Mock": "1"})
+        path.write_bytes(wav)
+    return Response(path.read_bytes(), media_type="audio/wav")
 
 # ---------------- public persona + agent loop ----------------
 @app.get("/api/p/{handle}")
@@ -159,7 +179,7 @@ def system_prompt(p, ctx, lang, voice_mode):
     return f"""You are Proxy, the AI persona of {p.name} ({p.headline}). Speak in first person as {p.name}. Tone: {p.tone}.
 Answer ONLY from the knowledge below. If the answer is not there, say you do not know yet and offer to pass a message or book a call. Never invent prices, dates or facts.
 Reply in the caller's language: {LANG_NAMES.get(lang, lang)}. {"Keep replies under 2 short sentences; this will be spoken aloud." if voice_mode else "Keep replies short and clear."}
-No emojis, no markdown, no bullet lists, plain sentences. When offering times, name at most three. Use tools to check availability, book meetings and capture leads. Today is {dt.datetime.now(calendar_svc.IST).strftime('%A %d %B %Y')} (IST).
+No emojis, no markdown, no bullet lists, plain sentences. When offering times, name at most three, and copy each slot's 'say' text from check_availability exactly. Use tools to check availability, book meetings and capture leads. Today is {dt.datetime.now(calendar_svc.IST).strftime('%A %d %B %Y')} (IST).
 Knowledge:
 {k}"""
 
@@ -170,7 +190,10 @@ async def run_tool(s, p, conv, name, args):
     if name == "check_availability":
         days = min(int(args.get("days") or 7), 30)
         slots = calendar_svc.generate(rules, calendar_svc.all_busy(cal, bookings, days), days=days, limit=8, per_day=3)
-        return {"slots": slots, "meeting_minutes": dur, "note": "Offer only these exact slots." if slots else "No free slots in that range."}
+        lang = conv.language or "en-IN"
+        for x in slots: x["say"] = calendar_svc.local_label(dt.datetime.fromisoformat(x["start"]), lang)
+        return {"slots": [{"start": x["start"], "say": x["say"]} for x in slots], "meeting_minutes": dur,
+                "note": "When naming a slot, copy its 'say' text exactly, character for character. Do not translate, reorder or recompute days, dates or times." if slots else "No free slots in that range."}
     if name == "book_meeting":
         start = args["start"][:16]
         if not calendar_svc.is_valid(rules, calendar_svc.all_busy(cal, bookings, 30), start):
@@ -185,6 +208,25 @@ async def run_tool(s, p, conv, name, args):
         s.add(Lead(persona_id=p.id, conversation_id=conv.id, name=args.get("name", ""), contact=args.get("contact", ""), intent=args.get("intent", ""))); s.commit()
         return {"saved": True}
     return {"error": "unknown tool"}
+
+def repair_slots(text: str, tools) -> str:
+    """The LLM is told to copy each slot's 'say' string, but small models still mangle words
+    (seen: Tamil 'நவம்பர்' -> 'நாள்பர்'). Find near-copies that keep the same date number and time
+    and swap in the exact string, so the caller always hears the tool's day+date+time."""
+    import difflib
+    says = [x["say"] for t in tools or [] if t.get("name") == "check_availability" for x in (t.get("result") or {}).get("slots", [])]
+    for say in says:
+        if say in text: continue
+        nums = re.findall(r"\d+(?::\d+)?", say)
+        for n in range(len(say) + 4, len(say) - 5, -1):
+            best = None
+            for i in range(0, max(0, len(text) - n) + 1):
+                w = text[i:i + n]
+                if re.findall(r"\d+(?::\d+)?", w) != nums: continue
+                r = difflib.SequenceMatcher(None, w, say).ratio()
+                if r >= 0.8 and (not best or r > best[0]): best = (r, i)
+            if best: text = text[:best[1]] + say + text[best[1] + n:]; break
+    return text
 
 def plain(t: str) -> str:
     """Strip markdown so replies read as plain sentences in chat and TTS."""
@@ -255,9 +297,9 @@ async def handle_turn(s, p, conv, text, voice_mode=False):
     if conv.takeover:
         return None, [], "owner", []
     reply, tools, provider, sources = await agent_reply(s, p, conv, text, voice_mode)
-    reply = plain(reply)
+    reply = repair_slots(plain(reply), tools)
     if reply and conv.language in LANG_NAMES and not matches_lang(reply, conv.language):
-        reply = plain(await rewrite_lang(reply, conv.language) or reply)
+        reply = repair_slots(plain(await rewrite_lang(reply, conv.language) or reply), tools)
     s.add(Message(conversation_id=conv.id, role="persona", text=reply, meta=json.dumps({"tools": tools, "provider": provider, "sources": sources})))
     s.commit(); s.refresh(conv)
     await hub.send(conv.id, {"type": "message", "role": "persona", "text": reply, "tools": tools})
@@ -310,6 +352,140 @@ async def voice_turn(handle: str, audio: UploadFile = File(...), conversation_id
     return {"conversation_id": conv.id, "transcript": text, "language": conv.language, "reply": reply, "tools": tools,
             "provider": provider, "audio": segs[0] if segs else None, "segments": segs, "mock_stt": r["mock"], "mock_tts": mock_audio,
             "fallback": fallback, "latency": {"stt_ms": stt_ms, "llm_ms": llm_ms, "tts_ms": tts_ms, "total_ms": ms(t0)}}
+
+FILLERS = {"en-IN": "One sec, checking the calendar.", "hinglish": "Ek second, calendar dekh raha hoon.",
+           "hi-IN": "एक सेकंड, कैलेंडर देख रहा हूँ।", "ta-IN": "ஒரு நிமிடம், காலெண்டரைப் பார்க்கிறேன்.",
+           "te-IN": "ఒక్క క్షణం, క్యాలెండర్ చూస్తున్నాను.", "kn-IN": "ಒಂದು ಕ್ಷಣ, ಕ್ಯಾಲೆಂಡರ್ ನೋಡುತ್ತಿದ್ದೇನೆ.", "bn-IN": "এক সেকেন্ড, ক্যালেন্ডার দেখছি।"}
+FILLER_CACHE = {}
+SENT_END = re.compile(r"[.!?\u0964](?=\s)|[.!?\u0964]$")
+
+def split_ready(buf, first):
+    """Return (speakable, rest). A sentence is ready at . ! ? or the Devanagari danda followed by
+    space. The first chunk may also break at a comma once it is long enough, so audio starts sooner."""
+    m = None
+    for m in SENT_END.finditer(buf): pass
+    if m and m.end() >= 12: return buf[:m.end()].strip(), buf[m.end():]
+    if first and len(buf) > 70:
+        i = buf.rfind(", ", 30)
+        if i > 0: return buf[:i + 1].strip(), buf[i + 1:]
+    return "", buf
+
+async def agent_stream(s, p, conv, text, voice_mode=True):
+    """Like agent_reply, but yields ("text", delta) tokens from the final answer round."""
+    history = [m for m in conv.messages if m.role in ("visitor", "persona", "owner")][-12:]
+    ctx = rag.search(list(s.scalars(select(Chunk).where(Chunk.persona_id == p.id))), text)
+    msgs = [{"role": "system", "content": system_prompt(p, ctx, conv.language, voice_mode)}]
+    msgs += [{"role": "user" if m.role == "visitor" else "assistant", "content": m.text} for m in history[:-1]]
+    msgs.append({"role": "user", "content": text})
+    tools_used = []
+    for _ in range(4):
+        final = None
+        async for kind, val in llm.stream(msgs, llm.TOOLS):
+            if kind == "text": yield "text", val
+            else: final = val
+        calls = final["tool_calls"]
+        if not calls:
+            yield "done", {"content": final["content"], "tools": tools_used, "provider": final["provider"], "sources": [c.source for _, c in ctx]}; return
+        msgs.append({"role": "assistant", "content": final["content"] or None, "tool_calls": calls})
+        for c in calls:
+            try: args = json.loads(c["function"].get("arguments") or "{}")
+            except Exception: args = {}
+            res = await run_tool(s, p, conv, c["function"]["name"], args)
+            yield "tool", {"name": c["function"]["name"], "result": res}
+            tools_used.append({"name": c["function"]["name"], "args": args, "result": res})
+            msgs.append({"role": "tool", "tool_call_id": c["id"] or "call_0", "content": json.dumps(res, ensure_ascii=False)})
+    yield "text", "Let me get back to you on that."
+    yield "done", {"content": "Let me get back to you on that.", "tools": tools_used, "provider": "fallback", "sources": []}
+
+@app.post("/api/p/{handle}/voice/stream")
+async def voice_stream(handle: str, audio: UploadFile = File(...), conversation_id: str = Form(""), text_hint: str = Form("")):
+    """Streaming voice turn as NDJSON events: transcript, text (LLM tokens), audio (raw PCM16
+    chunks from Timbre SSE, sentence by sentence), done (latency). TTS of sentence 1 starts as
+    soon as the LLM finishes it, while later tokens are still arriving."""
+    data = await audio.read(); fname = audio.filename or "audio.wav"
+    async def gen():
+        s = SessionLocal(); t0 = time.perf_counter(); ms = lambda: round((time.perf_counter() - t0) * 1000)
+        ev = lambda o: json.dumps(o, ensure_ascii=False) + "\n"
+        lat = {}; fallback = []
+        try:
+            p = s.scalar(select(Persona).where(Persona.handle == handle))
+            if not p: yield ev({"type": "error", "message": "not found"}); return
+            try: r = await voice.stt(data, fname)
+            except Exception as e:
+                log.warning("STT failed: %s", e); fallback.append(f"stt:{type(e).__name__}"); r = {"transcript": "", "language": "en-IN", "mock": True}
+            lat["stt_ms"] = ms()
+            text = r["transcript"] or text_hint or ("Hi, are you free for a quick call this week?" if r["mock"] else "")
+            if not text: yield ev({"type": "done", "reply": "", "fallback": fallback or ["stt:empty"], "latency": lat}); return
+            conv = get_conv(s, p, conversation_id, "Voice caller", "voice"); conv.channel = "voice"; conv.language = voice_lang(text, r)
+            s.add(Message(conversation_id=conv.id, role="visitor", text=text)); conv.updated_at = now(); s.commit(); s.refresh(conv)
+            await hub.send(conv.id, {"type": "message", "role": "visitor", "text": text})
+            yield ev({"type": "transcript", "text": text, "language": conv.language, "conversation_id": conv.id, "mock_stt": r["mock"], "rate": voice.STREAM_RATE})
+            if conv.takeover:
+                yield ev({"type": "done", "reply": "", "takeover": True, "latency": lat | {"total_ms": ms()}}); return
+            emb = p.voice_embedding if p.voice_embedding and "mock" not in p.voice_embedding else ""
+            out = asyncio.Queue(); sentences_q = asyncio.Queue()
+            async def tts_worker():
+                seq = 0; mock = not config.GNANI_API_KEY
+                while (sent := await sentences_q.get()) is not None:
+                    key = None
+                    if isinstance(sent, tuple):  # cached filler: same text every time, so pay for it once
+                        sent = sent[1]; key = (sent, conv.language, emb[:32])
+                        if key in FILLER_CACHE:
+                            if "first_audio_ms" not in lat: lat["first_audio_ms"] = ms()
+                            for pcm in FILLER_CACHE[key]:
+                                await out.put({"type": "audio", "seq": seq, "pcm": base64.b64encode(pcm).decode(), "mock": mock}); seq += 1
+                            continue
+                    got = []
+                    try:
+                        async for pcm in voice.tts_stream(sent, conv.language, emb):
+                            got.append(pcm)
+                            if "first_audio_ms" not in lat: lat["first_audio_ms"] = ms()
+                            await out.put({"type": "audio", "seq": seq, "pcm": base64.b64encode(pcm).decode(), "mock": mock}); seq += 1
+                    except Exception as e:
+                        log.warning("stream TTS failed: %s", e); fallback.append(f"tts:{type(e).__name__}")
+                        await out.put({"type": "speak_fallback", "text": sent})  # client speaks it with the browser voice
+                    else:
+                        if key and not mock: FILLER_CACHE[key] = got
+                await out.put(None)
+            worker = asyncio.create_task(tts_worker())
+            async def llm_worker():
+                buf, first, info, filled, seen = "", True, None, False, []
+                try:
+                    async for kind, val in agent_stream(s, p, conv, text):
+                        if kind == "text":
+                            if "first_token_ms" not in lat: lat["first_token_ms"] = ms()
+                            await out.put({"type": "text", "delta": val}); buf += val
+                            ready, buf = split_ready(buf, first)
+                            if ready:
+                                if first: lat["first_sentence_ms"] = ms()
+                                first = False; await sentences_q.put(repair_slots(plain(ready), seen))
+                        elif kind == "tool":
+                            seen.append(val)
+                            if first and not buf.strip() and not filled:
+                                filled = True; lat["filler_ms"] = ms(); await sentences_q.put(("filler", FILLERS.get(conv.language, FILLERS["en-IN"])))
+                        else: info = val
+                except Exception as e:
+                    log.warning("LLM stream failed: %s", e); fallback.append(f"llm:{type(e).__name__}")
+                    info = {"content": buf or "Sorry, I missed that. Could you say it again?", "tools": [], "provider": "fallback", "sources": []}
+                    if not buf: await out.put({"type": "text", "delta": info["content"]}); buf = info["content"]
+                if buf.strip(): await sentences_q.put(repair_slots(plain(buf.strip()), seen))
+                lat["llm_ms"] = ms() - lat["stt_ms"]
+                await sentences_q.put(None)
+                return info
+            llm_task = asyncio.create_task(llm_worker())
+            while (item := await out.get()) is not None:
+                yield ev(item)
+            info = await llm_task; await worker
+            reply = repair_slots(plain(info["content"]), info["tools"])
+            s.add(Message(conversation_id=conv.id, role="persona", text=reply, meta=json.dumps({"tools": info["tools"], "provider": info["provider"], "sources": info["sources"], "latency": lat})))
+            s.commit()
+            await hub.send(conv.id, {"type": "message", "role": "persona", "text": reply, "tools": info["tools"]})
+            lat["total_ms"] = ms()
+            yield ev({"type": "done", "reply": reply, "tools": info["tools"], "provider": info["provider"], "fallback": fallback, "latency": lat, "conversation_id": conv.id})
+            s.refresh(conv); conv.summary = await llm.summarize("\n".join(f"{m.role}: {m.text}" for m in conv.messages)); s.commit()
+        finally:
+            s.close()
+    return StreamingResponse(gen(), media_type="application/x-ndjson", headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
 
 # ---------------- dashboard ----------------
 @app.get("/api/personas/{pid}/overview")

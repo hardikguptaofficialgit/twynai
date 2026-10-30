@@ -14,6 +14,27 @@ def rules_of(persona):
 def _hm(s): h, m = s.split(":"); return int(h), int(m)
 def label(st): return st.strftime("%a %d %b, %I:%M %p IST")
 
+# Localized slot strings. The LLM is told to copy these verbatim so the weekday can never drift from the date.
+_L = {
+ "en-IN": (["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"], ["January","February","March","April","May","June","July","August","September","October","November","December"], "{wd} {d} {mo}, {t}"),
+ "hinglish": (["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"], ["January","February","March","April","May","June","July","August","September","October","November","December"], "{wd}, {d} {mo}, {t} baje"),
+ "hi-IN": (["सोमवार","मंगलवार","बुधवार","गुरुवार","शुक्रवार","शनिवार","रविवार"], ["जनवरी","फ़रवरी","मार्च","अप्रैल","मई","जून","जुलाई","अगस्त","सितंबर","अक्टूबर","नवंबर","दिसंबर"], "{wd}, {d} {mo}, {t} बजे"),
+ "ta-IN": (["திங்கள்","செவ்வாய்","புதன்","வியாழன்","வெள்ளி","சனி","ஞாயிறு"], ["ஜனவரி","பிப்ரவரி","மார்ச்","ஏப்ரல்","மே","ஜூன்","ஜூலை","ஆகஸ்ட்","செப்டம்பர்","அக்டோபர்","நவம்பர்","டிசம்பர்"], "{wd}, {mo} {d}, {t}"),
+ "te-IN": (["సోమవారం","మంగళవారం","బుధవారం","గురువారం","శుక్రవారం","శనివారం","ఆదివారం"], ["జనవరి","ఫిబ్రవరి","మార్చి","ఏప్రిల్","మే","జూన్","జూలై","ఆగస్టు","సెప్టెంబర్","అక్టోబర్","నవంబర్","డిసెంబర్"], "{wd}, {mo} {d}, {t}"),
+ "kn-IN": (["ಸೋಮವಾರ","ಮಂಗಳವಾರ","ಬುಧವಾರ","ಗುರುವಾರ","ಶುಕ್ರವಾರ","ಶನಿವಾರ","ಭಾನುವಾರ"], ["ಜನವರಿ","ಫೆಬ್ರವರಿ","ಮಾರ್ಚ್","ಏಪ್ರಿಲ್","ಮೇ","ಜೂನ್","ಜುಲೈ","ಆಗಸ್ಟ್","ಸೆಪ್ಟೆಂಬರ್","ಅಕ್ಟೋಬರ್","ನವೆಂಬರ್","ಡಿಸೆಂಬರ್"], "{wd}, {mo} {d}, {t}"),
+ "bn-IN": (["সোমবার","মঙ্গলবার","বুধবার","বৃহস্পতিবার","শুক্রবার","শনিবার","রবিবার"], ["জানুয়ারি","ফেব্রুয়ারি","মার্চ","এপ্রিল","মে","জুন","জুলাই","আগস্ট","সেপ্টেম্বর","অক্টোবর","নভেম্বর","ডিসেম্বর"], "{wd}, {d} {mo}, {t}"),
+}
+
+def local_label(st, lang="en-IN"):
+    wds, mos, fmt = _L.get(lang, _L["en-IN"])
+    h = st.hour % 12 or 12
+    t = f"{h}:{st.minute:02d} {'AM' if st.hour < 12 else 'PM'}" if lang == "en-IN" else f"{h}:{st.minute:02d}"
+    if lang not in ("en-IN",):  # spoken day-part, so 4:00 is unambiguous
+        part = {"hinglish": ["subah", "dopahar", "shaam"], "hi-IN": ["सुबह", "दोपहर", "शाम"], "ta-IN": ["காலை", "மதியம்", "மாலை"],
+                "te-IN": ["ఉదయం", "మధ్యాహ్నం", "సాయంత్రం"], "kn-IN": ["ಬೆಳಿಗ್ಗೆ", "ಮಧ್ಯಾಹ್ನ", "ಸಂಜೆ"], "bn-IN": ["সকাল", "দুপুর", "সন্ধ্যা"]}.get(lang)
+        if part: t = f"{part[0 if st.hour < 12 else 1 if st.hour < 16 else 2]} {t}"
+    return fmt.format(wd=wds[st.weekday()], d=st.day, mo=mos[st.month - 1], t=t)
+
 def generate(rules, busy, days=7, now=None, limit=12, per_day=None):
     """busy: list of (start, end) aware datetimes. Returns [{start:'YYYY-MM-DDTHH:MM', label}] in IST."""
     now = now or dt.datetime.now(IST)

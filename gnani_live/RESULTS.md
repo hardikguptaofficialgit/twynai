@@ -22,3 +22,18 @@ Scripts: `probe.py` (model checks), `e2e.py` (full /api/p/hardik/voice turns). A
 | Tamil | ta-IN | 1.0-1.7 s | 1.6-1.9 s | 3.0-6.3 s | 6.5-9.3 s |
 
 TTS is the bottleneck. The next step is Timbre SSE streaming so first audio plays in about 1 s.
+
+## Round 3: streaming voice (Timbre SSE, 30 Oct 2026)
+Endpoint `POST /api/p/{handle}/voice/stream` (NDJSON). Prisma STT, then Groq tokens streamed. The first sentence (or a cached "checking the calendar" filler when a tool runs) goes straight to Timbre `/api/v1/tts/sse` (raw PCM16 at 24 kHz). The browser schedules the chunks with Web Audio.
+
+| Turn | STT | First LLM token | First audio (server) | First audio (browser) | Full turn |
+|---|---|---|---|---|---|
+| Hinglish (old, batch REST) | 0.7 s | n/a | 6.5–9.3 s | 6.5–9.3 s | 6.5–9.3 s |
+| Hinglish, stream | 0.71 s | 1.98 s | 1.84 s | 1.85 s | 6.5 s |
+| Tamil, stream | 1.62 s | 2.73 s | 2.48 s | 2.51 s | 8.7 s |
+| Hinglish, stream (UI run) | 0.82 s | 2.28 s | 2.10 s | 2.1 s | 7.1 s |
+| Tamil, stream (UI run) | 0.97 s | 2.04 s | 1.98 s | n/a | 8.6 s |
+
+On its own, Timbre SSE delivers its first chunk in 0.56 s. First audio comes about 1.1 s after the transcript is ready. Measured from the end of the caller's speech, the remaining floor is STT (0.7–1.6 s) plus one LLM tool round.
+
+Clone: the 14 s synthetic clip `v30_clone_src.wav` produced an embedding of shape [1,768] in 1.45 s. The preview line took 4.2 s on the first call and 3 ms when cached.

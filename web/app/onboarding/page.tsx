@@ -2,9 +2,9 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { AnimatePresence, motion } from "framer-motion";
-import { ArrowLeft, ArrowRight, Check, Copy, FileText, Link2, Loader2, Mic, Plus, Square, Trash2, Upload, X, CalendarDays, ExternalLink } from "lucide-react";
+import { ArrowLeft, ArrowRight, Check, Copy, FileText, Link2, Loader2, Mic, Plus, Square, Trash2, Upload, X, CalendarDays, ExternalLink, Volume2 } from "lucide-react";
 import clsx from "clsx";
-import { api, API, encodeWav, Persona } from "@/lib/api";
+import { api, API, encodeWav, Persona, token } from "@/lib/api";
 import { useOwner } from "@/lib/useOwner";
 import { Logo } from "@/components/ui";
 import { Orb } from "@/components/Orb";
@@ -291,6 +291,7 @@ function KnowledgeStep({ d, set, errs }: any) {
 function VoiceStep({ d, set }: any) {
   const [rec, setRec] = useState(false); const [secs, setSecs] = useState(0); const [level, setLevel] = useState(0);
   const [blob, setBlob] = useState<Blob | null>(null); const [busy, setBusy] = useState(false); const [msg, setMsg] = useState("");
+  const [preview, setPreview] = useState(""); const [pBusy, setPBusy] = useState(false);
   const mr = useRef<MediaRecorder | null>(null); const timer = useRef<any>(null);
   const url = useMemo(() => (blob ? URL.createObjectURL(blob) : ""), [blob]);
   async function start() {
@@ -305,8 +306,17 @@ function VoiceStep({ d, set }: any) {
   function stop() { mr.current?.state === "recording" && mr.current.stop(); setRec(false); }
   async function save(b: Blob, name = "sample.wav") {
     setBusy(true); setMsg(""); const fd = new FormData(); fd.append("file", b, name);
-    try { const r = await api(`/api/personas/${d.id}/voice`, { method: "POST", body: fd }); set({ has_voice: true }); setMsg(r.mock ? "Saved. Cloning runs when a Gnani key is added." : "Voice cloned."); }
-    catch (e: any) { setMsg("Cloning failed. Try a cleaner 10 to 30 second clip."); } finally { setBusy(false); }
+    try { const r = await api(`/api/personas/${d.id}/voice`, { method: "POST", body: fd }); set({ has_voice: true }); setPreview("");
+      setMsg(r.mock ? "Saved. Cloning runs when a Gnani key is added." : `Voice cloned from a ${Math.round(r.seconds || 0)}s sample with Gnani Timbre.`); }
+    catch (e: any) { setMsg(String(e?.message || "").includes("5 to 30") ? "Use a clip between 5 and 30 seconds." : "Cloning failed. Try a cleaner 10 to 30 second clip."); } finally { setBusy(false); }
+  }
+  async function listen() {
+    setPBusy(true);
+    try {
+      const r = await fetch(`${API}/api/personas/${d.id}/voice/preview`, { method: "POST", headers: token() ? { Authorization: `Bearer ${token()}` } : {} });
+      if (!r.ok) throw 0; const u = URL.createObjectURL(await r.blob()); setPreview(u);
+      setTimeout(() => (document.getElementById("clone-preview") as HTMLAudioElement | null)?.play().catch(() => {}), 50);
+    } catch { setMsg("Preview failed. Try again in a moment."); } finally { setPBusy(false); }
   }
   return (
     <div>
@@ -330,6 +340,12 @@ function VoiceStep({ d, set }: any) {
             </div>
           )}
           {(msg || d.has_voice) && <p className="mt-3 flex items-center gap-1.5 text-sm text-mint-deep"><Check size={14} />{msg || "A voice sample is saved."}</p>}
+          {d.has_voice && !rec && (
+            <div className="mt-4 flex flex-wrap items-center gap-3">
+              <button onClick={listen} disabled={pBusy} className="clay-sm inline-flex items-center gap-2 bg-mint px-4 py-2.5 text-sm font-medium">{pBusy ? <Loader2 size={14} className="animate-spin" /> : <Volume2 size={15} />}Hear my Proxy voice</button>
+              {preview && <audio id="clone-preview" src={preview} controls className="h-10" />}
+            </div>
+          )}
         </div>
       </div>
     </div>

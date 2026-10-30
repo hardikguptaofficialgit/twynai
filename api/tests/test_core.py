@@ -85,3 +85,51 @@ def test_split_streamed_wav():
     raw = bytearray(b.getvalue()); raw[4:8] = b"\xff\xff\xff\xff"; raw[40:44] = b"\xff\xff\xff\xff"  # streamed header
     parts = _split_wav(bytes(raw))
     assert len(parts) == 3 and all(wave.open(io.BytesIO(p)).getnframes() <= 8000 * 29 for p in parts)
+
+# ---- streaming + localized slots + cloning ----
+import datetime as _dt, io as _io, wave as _wave
+from app.calendar_svc import local_label
+from app.main import split_ready
+
+@pytest.mark.parametrize("lang,day", [("en-IN", "Tuesday"), ("hinglish", "Tuesday"), ("hi-IN", "मंगलवार"), ("ta-IN", "செவ்வாய்")])
+def test_local_label_weekday_matches_date(lang, day):
+    for d in range(7):  # every weekday of a week maps to its own name, never shifted
+        st = _dt.datetime(2026, 11, 2 + d, 10, 45)
+        lab = local_label(st, lang)
+        assert "10:45" in lab and str(st.day) in lab
+    assert local_label(_dt.datetime(2026, 11, 3, 10, 45), lang).startswith(day)
+
+def test_split_ready_sentences():
+    assert split_ready("Haan ji, main free hoon. Tues", True) == ("Haan ji, main free hoon.", " Tues")
+    assert split_ready("Slot at 10.45 is", True)[0] == ""          # no break inside a time
+    assert split_ready("ok. ", True)[0] == ""                      # too short to be worth a TTS call
+    long = "Thursday ki shaam ka slot abhi available nahi hai, lekin free discovery call ke liye ye"
+    ready, rest = split_ready(long, True); assert ready.endswith(",") and long.startswith(ready)
+    assert split_ready(long, False)[0] == ""                       # comma break only for sentence 1
+    assert split_ready("मैं फ्री हूँ। कल", True)[0] == "मैं फ्री हूँ।"
+
+def test_wav_seconds():
+    b = _io.BytesIO(); w = _wave.open(b, "wb"); w.setnchannels(1); w.setsampwidth(2); w.setframerate(16000); w.writeframes(b"\0\0" * 16000 * 3); w.close()
+    assert abs(voice.wav_seconds(b.getvalue()) - 3) < 0.01 and voice.wav_seconds(b"OggS....") is None
+
+def test_tts_stream_mock(monkeypatch):
+    monkeypatch.setattr(voice.config, "GNANI_API_KEY", "")
+    async def go(): return [c async for c in voice.tts_stream("Hello there.", "en-IN")]
+    assert sum(map(len, asyncio.run(go()))) > 1000
+
+@live
+@pytest.mark.parametrize("q,lang", [("Bhai is week Tuesday ko call ho sakti hai kya? Slots batao", "hinglish"), ("இந்த வாரம் அழைப்புக்கு எந்த நேரம் இருக்கிறது?", "ta-IN")])
+def test_live_slots_copied_verbatim(q, lang):
+    import httpx
+    r = httpx.post("http://localhost:8100/api/p/hardik/chat", json={"text": q}, timeout=90).json()
+    says = [s["say"] for t in r["tools"] if t["name"] == "check_availability" for s in t["result"]["slots"]]
+    assert says, r
+    used = [s for s in says if s in r["reply"]]
+    assert used, (r["reply"], says[:3])
+
+def test_repair_slots_fixes_mangled_copy():
+    from app.main import repair_slots
+    tools = [{"name": "check_availability", "result": {"slots": [{"say": "திங்கள், நவம்பர் 2, காலை 10:00"}, {"say": "Tuesday, 3 November, subah 10:45 baje"}]}}]
+    out = repair_slots("நேரங்கள்: திங்கள், நாள்பர் 2, காலை 10:00; ya Tuesday, 3 Nov, subah 10:45 baje", tools)
+    assert "திங்கள், நவம்பர் 2, காலை 10:00" in out and "நாள்பர்" not in out
+    assert repair_slots("Monday 2 November 10:00", tools) == "Monday 2 November 10:00"  # different text left alone

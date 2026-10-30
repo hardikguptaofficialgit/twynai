@@ -1,5 +1,5 @@
 """Gnani (vachana.ai) voice: Prisma v3 STT, Timbre TTS, voice-clone embeddings. Mock mode when GNANI_API_KEY is unset."""
-import io, json, math, re, struct, wave, time, asyncio, httpx, logging
+import io, base64, json, math, re, struct, wave, time, asyncio, httpx, logging
 from . import config
 log = logging.getLogger("voice")
 H = lambda: {"X-API-Key-ID": config.GNANI_API_KEY}
@@ -109,6 +109,15 @@ async def clone_embedding(audio: bytes, filename="sample.wav"):
     r.raise_for_status()
     return json.dumps(r.json()["data"]["voice_clone_embedding"])
 
+def wav_seconds(data: bytes):
+    """Duration of a WAV clip from its bytes (None when it is not a WAV we can read)."""
+    if data[:4] != b"RIFF": return None
+    try:
+        w = wave.open(io.BytesIO(data)); rate, ch, sw = w.getframerate(), w.getnchannels(), w.getsampwidth()
+        i = data.find(b"data", 12)
+        return (len(data) - i - 8) / (rate * ch * sw) if i > 0 else w.getnframes() / rate
+    except Exception: return None
+
 def _mock_wav(text: str):
     """Soft syllable-like hum so the voice orb has real audio to react to without a key."""
     rate = 16000; dur = min(6.0, 0.35 + len(text) * 0.045)
@@ -121,3 +130,40 @@ def _mock_wav(text: str):
         frames += struct.pack("<h", int(s * 32767 * 0.6))
     w.writeframes(bytes(frames)); w.close()
     return b.getvalue()
+
+STREAM_RATE = 24000
+
+async def tts_stream(text: str, language="hi-IN", speaker_embedding: str = ""):
+    """Timbre SSE: yields raw 16-bit mono PCM at STREAM_RATE as chunks are generated, so the
+    browser can start playing well before the sentence is fully synthesized."""
+    if not config.GNANI_API_KEY:
+        w = wave.open(io.BytesIO(_mock_wav(text))); yield w.readframes(w.getnframes()); return
+    language = {"hinglish": "hi-IN"}.get(language, language) or "hi-IN"
+    body = {"text": text, "audio_config": {"sample_rate": STREAM_RATE, "encoding": "linear_pcm", "container": "raw", "num_channels": 1, "sample_width": 2}}
+    if speaker_embedding:
+        body.update(model="vachana-vc-v1", speaker_embedding=json.loads(speaker_embedding), language=language)
+    else:
+        body.update(model=config.GNANI_TTS_MODEL, voice=pick_voice(config.GNANI_TTS_MODEL, language), language=language)
+    for attempt in range(3):
+        got = False
+        try:
+            async with httpx.AsyncClient(timeout=httpx.Timeout(20, read=20)) as c:
+                async with c.stream("POST", f"{config.GNANI_BASE}/api/v1/tts/sse", headers=H(), json=body) as r:
+                    if r.status_code == 429 or r.status_code >= 500:
+                        await r.aread(); raise httpx.HTTPStatusError("retryable", request=r.request, response=r)
+                    r.raise_for_status()
+                    event = ""
+                    async for line in r.aiter_lines():
+                        if line.startswith("event:"): event = line[6:].strip()
+                        elif line.startswith("data:"):
+                            d = json.loads(line[5:].strip() or "{}")
+                            if event == "error": raise RuntimeError(d.get("message", "tts error"))
+                            if d.get("audio"):
+                                a = base64.b64decode(d["audio"])
+                                if a[:4] == b"RIFF": a = a[44:]  # guard: some servers prepend a WAV header
+                                got = True; yield a
+                            if d.get("is_final"): return
+            return
+        except httpx.HTTPStatusError as e:
+            if got or attempt == 2 or e.response.status_code not in (429,) and e.response.status_code < 500: raise
+            await asyncio.sleep(0.8 * (attempt + 1))

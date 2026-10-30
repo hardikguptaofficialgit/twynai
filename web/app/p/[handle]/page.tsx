@@ -104,12 +104,68 @@ export default function PublicPersona() {
     });
   }
 
+  /** Streaming voice turn: reads NDJSON from /voice/stream, shows LLM tokens as they arrive and
+   *  schedules raw PCM16 chunks (Timbre SSE) back to back on one AudioContext, so the first
+   *  sentence plays while the rest is still being generated. Falls back to the batch endpoint. */
   async function voiceTurn(blob: Blob, hint = "") {
-    setOrb("thinking");
+    setOrb("thinking"); setNote("");
     const fd = new FormData();
     try { fd.append("audio", await encodeWav(blob), "turn.wav"); } catch { fd.append("audio", blob, "turn.webm"); }
     fd.append("conversation_id", cid); fd.append("text_hint", hint);
     const t0 = performance.now();
+    let res: Response;
+    try { res = await fetch(`${API}/api/p/${handle}/voice/stream`, { method: "POST", body: fd }); if (!res.ok || !res.body) throw 0; }
+    catch { return voiceTurnBatch(fd, t0); }
+    const ctx = new AudioContext(); const an = ctx.createAnalyser(); an.fftSize = 256; an.connect(ctx.destination);
+    const data = new Uint8Array(an.frequencyBinCount);
+    const tick = () => { an.getByteFrequencyData(data); setLevel(data.reduce((a, b) => a + b, 0) / data.length / 90); raf.current = requestAnimationFrame(tick); };
+    let rate = 24000, at = 0, firstAudio = 0, reply = "", language = "", mock = false, carry = new Uint8Array(0);
+    const speakLocal: string[] = [];
+    const play = (b64: string) => {
+      const raw = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
+      const bytes = new Uint8Array(carry.length + raw.length); bytes.set(carry); bytes.set(raw, carry.length);
+      const n = bytes.length >> 1; carry = bytes.slice(n * 2);
+      if (!n) return;
+      const dv = new DataView(bytes.buffer); const buf = ctx.createBuffer(1, n, rate); const ch = buf.getChannelData(0);
+      for (let i = 0; i < n; i++) ch[i] = dv.getInt16(i * 2, true) / 32768;
+      const src = ctx.createBufferSource(); src.buffer = buf; src.connect(an);
+      if (!firstAudio) { firstAudio = performance.now(); setOrb("speaking"); tick(); at = ctx.currentTime + 0.05; }
+      at = Math.max(at, ctx.currentTime); src.start(at); at += buf.duration;
+    };
+    const reader = res.body.getReader(); const dec = new TextDecoder(); let pending = "";
+    try {
+      for (;;) {
+        const { value, done } = await reader.read(); if (done) break;
+        pending += dec.decode(value, { stream: true });
+        let i; while ((i = pending.indexOf("\n")) >= 0) {
+          const line = pending.slice(0, i); pending = pending.slice(i + 1); if (!line.trim()) continue;
+          const e = JSON.parse(line);
+          if (e.type === "transcript") {
+            setCid(e.conversation_id); setLang(e.language); language = e.language; rate = e.rate || 24000;
+            setMsgs((m) => [...m, { role: "visitor", text: e.text }, { role: "persona", text: "" }]);
+          } else if (e.type === "text") {
+            reply += e.delta; const r = reply;
+            setMsgs((m) => { const c = [...m]; c[c.length - 1] = { ...c[c.length - 1], text: r }; return c; });
+          } else if (e.type === "audio") { if (e.mock) mock = true; else play(e.pcm); }
+          else if (e.type === "speak_fallback") speakLocal.push(e.text);
+          else if (e.type === "done") {
+            if (e.reply) setMsgs((m) => { const c = [...m]; c[c.length - 1] = { role: "persona", text: e.reply, tools: e.tools }; return c; });
+            if (e.fallback?.length) setNote(`Fallback: ${e.fallback.join(", ")}`);
+            else if (mock) setNote("Demo voice (browser speech) until the Gnani key is set");
+            const L = e.latency || {};
+            setLat({ stt_ms: L.stt_ms, llm_ms: L.first_token_ms ? L.first_token_ms - L.stt_ms : L.llm_ms, tts_ms: L.first_audio_ms && L.first_sentence_ms ? Math.max(0, L.first_audio_ms - Math.min(L.first_sentence_ms, L.filler_ms || 1e9)) : 0,
+              total_ms: L.total_ms, client_ms: Math.round((firstAudio || performance.now()) - t0), first_audio_ms: Math.round((firstAudio || performance.now()) - t0) });
+            reply = e.reply || reply;
+          }
+        }
+      }
+    } catch { setErr("Voice stream interrupted."); }
+    const finish = () => { cancelAnimationFrame(raf.current); setLevel(0); setOrb("idle"); ctx.close(); };
+    if (firstAudio) setTimeout(finish, Math.max(0, (at - ctx.currentTime) * 1000) + 150);
+    else { finish(); if (mock || speakLocal.length) playQueue(mock ? reply : speakLocal.join(" "), [], language); }
+  }
+
+  async function voiceTurnBatch(fd: FormData, t0: number) {
     try {
       const d = await api(`/api/p/${handle}/voice`, { method: "POST", body: fd });
       setCid(d.conversation_id); setLang(d.language || "");
@@ -165,7 +221,7 @@ export default function PublicPersona() {
               <div className="text-center">
                 <div className="text-lg font-medium">{{ idle: "Tap to talk", listening: "Listening", thinking: "Thinking", speaking: `${p.name.split(" ")[0]} is speaking` }[orb]}</div>
                 <div className="mt-1 text-sm text-ink-mute">Speak in any Indian language. {lang && `Detected: ${LANG[lang] || lang}`}</div>
-                {lat && <div className="mt-3 flex flex-wrap justify-center gap-1.5 text-xs">{([["Hear", lat.stt_ms], ["Think", lat.llm_ms], ["Speak", lat.tts_ms], ["First audio", lat.first_audio_ms]] as const).map(([k, v]) => (
+                {lat && <div className="mt-3 flex flex-wrap justify-center gap-1.5 text-xs">{([["Hear", lat.stt_ms], ["First token", lat.llm_ms], ["TTS first chunk", lat.tts_ms], ["First audio", lat.first_audio_ms]] as const).map(([k, v]) => (
                   <span key={k} className="rounded-full bg-white/70 px-2.5 py-1 text-ink-soft">{k} <span className="font-medium text-ink">{(v / 1000).toFixed(1)}s</span></span>))}</div>}
                 {note && <div className="mt-2 text-xs text-ink-mute">{note}</div>}
               </div>

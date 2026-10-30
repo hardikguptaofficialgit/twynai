@@ -46,7 +46,7 @@ def mock_complete(messages, tools=None):
         data = json.loads(last["content"])
         if "slots" in data:
             s = data["slots"][:3]
-            return {"role": "assistant", "content": "Here are a few open slots: " + "; ".join(x["label"] for x in s) + ". Tell me which works and your name and email, and I will book it."}
+            return {"role": "assistant", "content": "Here are a few open slots: " + "; ".join(x.get("say") or x.get("label", "") for x in s) + ". Tell me which works and your name and email, and I will book it."}
         if data.get("booked"):
             return {"role": "assistant", "content": f"Done. You are booked for {data['label']}. A calendar invite is on its way."}
         if data.get("saved"):
@@ -84,3 +84,38 @@ async def summarize(transcript: str):
     lines = [l for l in transcript.splitlines() if l.startswith("visitor:")]
     first = lines[0][8:].strip() if lines else "No visitor messages"
     return f"Visitor asked: {first[:140]}. {len(lines)} visitor message(s)."
+
+async def stream(messages, tools=None):
+    """Streaming chat completion. Yields ("text", delta) as tokens arrive, then exactly one
+    ("done", {"content", "tool_calls", "provider"}). Falls back to complete() if streaming fails
+    before any token was sent."""
+    for name, url, key, model in providers():
+        sent, content, calls = False, "", {}
+        try:
+            body = {"model": model, "messages": messages, "temperature": 0.4, "stream": True}
+            if tools: body["tools"] = tools
+            async with httpx.AsyncClient(timeout=httpx.Timeout(30, read=30)) as c:
+                async with c.stream("POST", url, headers={"Authorization": f"Bearer {key}"}, json=body) as r:
+                    r.raise_for_status()
+                    async for line in r.aiter_lines():
+                        if not line.startswith("data:"): continue
+                        data = line[5:].strip()
+                        if data == "[DONE]": break
+                        ch = (json.loads(data).get("choices") or [{}])[0].get("delta") or {}
+                        if ch.get("content"):
+                            content += ch["content"]; sent = True; yield "text", ch["content"]
+                        for tc in ch.get("tool_calls") or []:
+                            slot = calls.setdefault(tc.get("index", 0), {"id": "", "type": "function", "function": {"name": "", "arguments": ""}})
+                            if tc.get("id"): slot["id"] = tc["id"]
+                            f = tc.get("function") or {}
+                            slot["function"]["name"] += f.get("name") or ""
+                            slot["function"]["arguments"] += f.get("arguments") or ""
+            yield "done", {"content": content, "tool_calls": [calls[i] for i in sorted(calls)], "provider": name}
+            return
+        except Exception as e:
+            log.warning("stream %s failed: %s", name, e)
+            if sent:
+                yield "done", {"content": content, "tool_calls": [], "provider": name}; return
+    m, prov = await complete(messages, tools)
+    if m.get("content") and not m.get("tool_calls"): yield "text", m["content"]
+    yield "done", {"content": m.get("content") or "", "tool_calls": m.get("tool_calls") or [], "provider": prov}
