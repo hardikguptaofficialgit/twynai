@@ -71,3 +71,17 @@ def test_live_reply_language(q, lang):
 
 def test_plain_joins_line_lists():
     assert plain("Slots this week: Monday 10 AM IST\nTuesday 11 AM IST\nLet me know.") == "Slots this week: Monday 10 AM IST; Tuesday 11 AM IST; Let me know."
+
+def test_voice_lang_codemix():
+    from app.main import voice_lang
+    assert voice_lang("भाई, क्या हार्दिक is week एक quick call के लिए free है?", {"language": "hi-IN"}) == "hinglish"
+    assert voice_lang("नमस्ते, आप कैसे हैं?", {"language": "hi-IN"}) == "hi-IN"
+    assert voice_lang("வணக்கம்", {"language": "ta-IN"}) == "ta-IN"
+
+def test_split_streamed_wav():
+    import io, wave
+    from app.voice import _split_wav
+    b = io.BytesIO(); w = wave.open(b, "wb"); w.setnchannels(1); w.setsampwidth(2); w.setframerate(8000); w.writeframes(b"\0\0" * 8000 * 61); w.close()
+    raw = bytearray(b.getvalue()); raw[4:8] = b"\xff\xff\xff\xff"; raw[40:44] = b"\xff\xff\xff\xff"  # streamed header
+    parts = _split_wav(bytes(raw))
+    assert len(parts) == 3 and all(wave.open(io.BytesIO(p)).getnframes() <= 8000 * 29 for p in parts)

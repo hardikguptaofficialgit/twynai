@@ -1,0 +1,36 @@
+{
+ "q_hinglish": {
+  "transcript": "भाई, क्या हार्दिक is week एक quick call के लिए free है? Thursday शाम को slot है क्या?",
+  "language": "hinglish",
+  "reply": "Thursday ke liye koi slot nahi hai, par Monday 10:00, Tuesday 10:45, ya Wednesday 10:00 badiya rahenge. Free 30‑minute discovery call hai.",
+  "provider": "groq",
+  "mock_stt": false,
+  "mock_tts": false,
+  "fallback": [],
+  "latency": {
+   "stt_ms": 785,
+   "llm_ms": 2233,
+   "tts_ms": 4030,
+   "total_ms": 7057
+  },
+  "segments": 2,
+  "wall_ms": 7106
+ },
+ "q_tamil": {
+  "transcript": "வணக்கம் ஹார்திக் இந்த வாரம் ஒரு சிறிய அழைப்புக்கு நேரம் இருக்கிறதா.",
+  "language": "ta-IN",
+  "reply": "நிச்சயமாக, இந்த வாரம் இந்த நேரங்களில் அழைப்பை ஏற்பாடு செய்யலாம்: திங்கள் 02 நவம்பர் 10:00 மணி, செவ்வாய் 03 நவம்பர் 10:45 மணி, புதன் 04 நவம்பர் 10:00 மணி. எது உங்களுக்கு சிறப்பாக இருக்கும்?",
+  "provider": "groq",
+  "mock_stt": false,
+  "mock_tts": false,
+  "fallback": [],
+  "latency": {
+   "stt_ms": 1176,
+   "llm_ms": 1839,
+   "tts_ms": 6295,
+   "total_ms": 9319
+  },
+  "segments": 2,
+  "wall_ms": 9353
+ }
+}

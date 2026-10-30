@@ -6,3 +6,8 @@ node_modules/
 *.db
 api/uploads/
 shots/
+.gnani_key
+.gnani_verify_url
+*.env
+gnani_live/*.wav
+gnani_live/*.json

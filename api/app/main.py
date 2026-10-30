@@ -277,6 +277,13 @@ async def chat(handle: str, b: ChatIn, s=Depends(db)):
     reply, tools, provider, sources = await handle_turn(s, p, conv, b.text)
     return {"conversation_id": conv.id, "reply": reply, "tools": tools, "provider": provider, "sources": sources, "takeover": bool(conv.takeover)}
 
+def voice_lang(text, r):
+    """Prisma codemix writes Hindi in Devanagari and keeps English words in Latin. A Hindi
+    transcript with 2+ English words is a Hinglish caller, so the reply goes back in Hinglish."""
+    if r.get("mock") or r.get("language") == "en-IN": return guess_lang(text)
+    if r.get("language") == "hi-IN" and len(re.findall(r"\b[A-Za-z]{2,}\b", text)) >= 2: return "hinglish"
+    return r.get("language") or guess_lang(text)
+
 @app.post("/api/p/{handle}/voice")
 async def voice_turn(handle: str, audio: UploadFile = File(...), conversation_id: str = Form(""), text_hint: str = Form(""), s=Depends(db)):
     p = s.scalar(select(Persona).where(Persona.handle == handle))
@@ -291,7 +298,7 @@ async def voice_turn(handle: str, audio: UploadFile = File(...), conversation_id
     text = r["transcript"] or text_hint or ("Hi, are you free for a quick call this week?" if r["mock"] else "")
     if not text: return {"conversation_id": conversation_id, "transcript": "", "reply": "", "audio": None, "segments": [], "fallback": fallback or ["stt:empty"]}
     conv = get_conv(s, p, conversation_id, "Voice caller", "voice"); conv.channel = "voice"
-    conv.language = guess_lang(text) if r["mock"] or r["language"] in ("en-IN", "hi-IN") else r["language"]; s.commit()
+    conv.language = voice_lang(text, r); s.commit()
     t1 = time.perf_counter()
     reply, tools, provider, sources = await handle_turn(s, p, conv, text, voice_mode=True)
     llm_ms = ms(t1); segs, mock_audio, tts_ms = [], True, 0
