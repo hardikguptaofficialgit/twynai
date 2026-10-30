@@ -22,7 +22,7 @@ OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY", "")
 OPENROUTER_MODEL = os.getenv("OPENROUTER_MODEL", "openai/gpt-4o-mini")
 GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID", "")
 GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET", "")
-WEB_ORIGIN = os.getenv("WEB_ORIGIN", "http://localhost:3000")
+WEB_ORIGIN = os.getenv("WEB_ORIGIN", "http://localhost:3100")
 UPLOAD_DIR = Path(os.getenv("UPLOAD_DIR", str(Path(__file__).resolve().parents[1] / "uploads")))
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 

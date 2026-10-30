@@ -53,7 +53,7 @@ def dev_login(b: DevLogin, s=Depends(db)):
     return {"token": o.id, "owner": row(o) | {"google_tokens": bool(o.google_tokens)}}
 
 SCOPES = "openid email profile https://www.googleapis.com/auth/calendar.events https://www.googleapis.com/auth/calendar.freebusy"
-API_ORIGIN = "http://localhost:8000"
+API_ORIGIN = "http://localhost:8100"
 
 @app.get("/api/auth/google/start")
 def google_start():
