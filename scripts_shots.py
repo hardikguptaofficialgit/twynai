@@ -15,7 +15,7 @@ async def main():
         await pg.screenshot(path=O+"2-public-chat.png")
         await pg.get_by_text("Talk", exact=True).click(); await pg.wait_for_timeout(1200); await pg.screenshot(path=O+"3-public-voice.png")
         await pg.goto(B+"/login"); await pg.wait_for_timeout(1000); await pg.screenshot(path=O+"4-login.png")
-        await pg.get_by_role("button", name="Continue").click(); await pg.wait_for_url("**/studio"); await pg.wait_for_timeout(2000)
+        await pg.get_by_role("button", name="Continue").click(); await pg.wait_for_url("**/onboarding"); await pg.goto(B+"/studio"); await pg.wait_for_timeout(2500)
         await pg.screenshot(path=O+"5-studio.png", full_page=True)
         await pg.goto(B+"/dashboard"); await pg.wait_for_timeout(3000); await pg.screenshot(path=O+"6-dashboard.png", full_page=True)
         print("errors:", errs); await b.close()

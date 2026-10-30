@@ -1,5 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
+const DAYS = ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"];
+const DEF_AV = { days: [0,1,2,3,4], start: "10:00", end: "18:00", duration: 30, buffer: 15, notice: 12 };
 import { motion } from "framer-motion";
 import { Plus, Trash2, Upload, Mic, FileText, CalendarCheck, Check, Copy } from "lucide-react";
 import { api, API, Persona, ACCENTS } from "@/lib/api";
@@ -96,6 +98,21 @@ export default function Studio() {
               <h3 className="font-semibold">Google Calendar</h3><p className="mt-1 text-sm text-ink-soft">Free/busy and booking. Proxy only offers slots you are actually free.</p>
               <div className="mt-3">{me?.google_tokens ? <Pill tone="mint">Connected</Pill> : <Pill tone="butter">Demo calendar in use</Pill>}</div>
               <a href={`${API}/api/auth/google/start`} className="clay-sm mt-4 flex items-center justify-center bg-[#f7f7fb] px-4 py-3 text-sm font-medium">Connect Google Calendar</a>
+            </Card>
+            <Card>
+              <h3 className="font-semibold">Availability</h3><p className="mt-1 text-sm text-ink-soft">Proxy only offers slots inside these rules, minus busy times.</p>
+              {(() => { const av = { ...DEF_AV, ...(f.availability || {}) }; const up = (k: string, v: any) => set("availability", { ...av, [k]: v });
+                return (<div className="mt-4 space-y-3 text-sm">
+                  <div className="flex flex-wrap gap-1.5">{DAYS.map((d, i) => { const on = av.days.includes(i); return (
+                    <button key={d} onClick={() => up("days", on ? av.days.filter((x: number) => x !== i) : [...av.days, i].sort())} className={`rounded-full px-3 py-1.5 text-xs font-medium ${on ? "bg-ink text-white" : "clay-sm bg-[#f7f7fb]"}`}>{d}</button>); })}</div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <label className="text-xs text-ink-soft">From (IST)<input type="time" value={av.start} onChange={(e) => up("start", e.target.value)} className="field mt-1 w-full px-3 py-2 text-sm text-ink" /></label>
+                    <label className="text-xs text-ink-soft">To (IST)<input type="time" value={av.end} onChange={(e) => up("end", e.target.value)} className="field mt-1 w-full px-3 py-2 text-sm text-ink" /></label>
+                  </div>
+                  <div className="grid grid-cols-3 gap-2">{([["duration","Length"],["buffer","Buffer"],["notice","Notice h"]] as const).map(([k, l]) => (
+                    <label key={k} className="text-xs text-ink-soft">{l}<input type="number" min={0} value={av[k]} onChange={(e) => up(k, +e.target.value)} className="field mt-1 w-full px-3 py-2 text-sm text-ink" /></label>))}</div>
+                  <p className="text-xs text-ink-soft">Save changes to apply.</p>
+                </div>); })()}
             </Card>
             {msg && <p className="text-sm text-ink-soft">{msg}</p>}
           </div>

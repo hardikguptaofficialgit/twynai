@@ -1,3 +1,4 @@
+import re
 import json, base64, re, datetime as dt, asyncio, urllib.parse
 from collections import defaultdict
 import httpx
@@ -85,8 +86,8 @@ def reindex_profile(s, p):
     parts = [("profile:bio", f"About {p.name}: {p.headline}. {p.bio}"), ("profile:rates", f"Rates and pricing: {p.rates}")]
     parts += [(f"profile:faq", f"Q: {f.get('q','')} A: {f.get('a','')}") for f in json.loads(p.faqs)]
     parts += [("profile:links", "Links: " + ", ".join(f"{l.get('label')}: {l.get('url')}" for l in json.loads(p.links)))] if json.loads(p.links) else []
-    for src, text in parts:
-        if text.strip(): s.add(Chunk(persona_id=p.id, source=src, text=text, embedding=json.dumps(rag.embed(text))))
+    parts = [(a, t) for a, t in parts if t.strip()]
+    for (src, text), v in zip(parts, rag.embed_many([t for _, t in parts])): s.add(Chunk(persona_id=p.id, source=src, text=text, embedding=json.dumps(v)))
 
 @app.get("/api/handles/{h}")
 def handle_check(h: str, s=Depends(db)):
@@ -127,7 +128,7 @@ async def upload_doc(pid: str, file: UploadFile = File(...), o=Depends(current_o
         text = "\n".join((pg.extract_text() or "") for pg in PdfReader(io.BytesIO(data)).pages)
     else: text = data.decode("utf-8", "ignore")
     chunks = rag.chunk_text(text)
-    for c in chunks: s.add(Chunk(persona_id=p.id, source="doc:" + file.filename, text=c, embedding=json.dumps(rag.embed(c))))
+    for c, v in zip(chunks, rag.embed_many(chunks)): s.add(Chunk(persona_id=p.id, source="doc:" + file.filename, text=c, embedding=json.dumps(v)))
     s.commit(); return {"name": file.filename, "chunks": len(chunks)}
 
 @app.post("/api/personas/{pid}/voice")
@@ -154,25 +155,38 @@ def system_prompt(p, ctx, lang, voice_mode):
     return f"""You are Proxy, the AI persona of {p.name} ({p.headline}). Speak in first person as {p.name}. Tone: {p.tone}.
 Answer ONLY from the knowledge below. If the answer is not there, say you do not know yet and offer to pass a message or book a call. Never invent prices, dates or facts.
 Reply in the caller's language: {LANG_NAMES.get(lang, lang)}. {"Keep replies under 2 short sentences; this will be spoken aloud." if voice_mode else "Keep replies short and clear."}
-No emojis, no markdown, plain sentences. Use tools to check availability, book meetings and capture leads. Today is {dt.datetime.now(calendar_svc.IST).strftime('%A %d %B %Y')} (IST).
+No emojis, no markdown, no bullet lists, plain sentences. When offering times, name at most three. Use tools to check availability, book meetings and capture leads. Today is {dt.datetime.now(calendar_svc.IST).strftime('%A %d %B %Y')} (IST).
 Knowledge:
 {k}"""
 
 async def run_tool(s, p, conv, name, args):
     owner = s.get(Owner, p.owner_id); cal = calendar_svc.for_owner(owner)
+    rules = calendar_svc.rules_of(p); dur = int(rules["duration"])
+    bookings = list(s.scalars(select(Booking).where(Booking.persona_id == p.id)))
     if name == "check_availability":
-        return {"slots": cal.free_slots(int(args.get("days") or 5))[:8]}
+        days = min(int(args.get("days") or 7), 30)
+        slots = calendar_svc.generate(rules, calendar_svc.all_busy(cal, bookings, days), days=days, limit=8, per_day=3)
+        return {"slots": slots, "meeting_minutes": dur, "note": "Offer only these exact slots." if slots else "No free slots in that range."}
     if name == "book_meeting":
         start = args["start"][:16]
-        ev = cal.book(start, 30, f"{args.get('topic') or 'Meeting'} with {args.get('guest_name')}", args.get("guest_email", ""))
+        if not calendar_svc.is_valid(rules, calendar_svc.all_busy(cal, bookings, 30), start):
+            alt = calendar_svc.generate(rules, calendar_svc.all_busy(cal, bookings, 7), limit=4)
+            return {"booked": False, "error": "That time is outside availability or already taken.", "alternatives": alt}
+        ev = cal.book(start, dur, f"{args.get('topic') or 'Meeting'} with {args.get('guest_name')}", args.get("guest_email", ""))
         st = dt.datetime.fromisoformat(start)
         s.add(Booking(persona_id=p.id, conversation_id=conv.id, guest_name=args.get("guest_name", ""), guest_email=args.get("guest_email", ""),
-                      start=start, end=(st + dt.timedelta(minutes=30)).isoformat()[:16], topic=args.get("topic", ""), calendar_event_id=ev))
-        s.commit(); return {"booked": True, "label": st.strftime("%a %d %b, %I:%M %p IST")}
+                      start=start, end=(st + dt.timedelta(minutes=dur)).isoformat()[:16], topic=args.get("topic", ""), calendar_event_id=ev))
+        s.commit(); return {"booked": True, "label": st.strftime("%a %d %b, %I:%M %p IST"), "minutes": dur}
     if name == "capture_lead":
         s.add(Lead(persona_id=p.id, conversation_id=conv.id, name=args.get("name", ""), contact=args.get("contact", ""), intent=args.get("intent", ""))); s.commit()
         return {"saved": True}
     return {"error": "unknown tool"}
+
+def plain(t: str) -> str:
+    """Strip markdown so replies read as plain sentences in chat and TTS."""
+    t = re.sub(r"\*\*|__|`|^#+\s*", "", t or "", flags=re.M)
+    t = re.sub(r"\s*(?:^|\s)[-*\u2022]\s+(?=[A-Z0-9])", lambda m: "; " if m.start() else "", t)
+    return re.sub(r"\s{2,}", " ", t).replace(":;", ":").strip()
 
 async def agent_reply(s, p, conv, text, voice_mode=False):
     history = [m for m in conv.messages if m.role in ("visitor", "persona", "owner")][-12:]
@@ -211,6 +225,7 @@ async def handle_turn(s, p, conv, text, voice_mode=False):
     if conv.takeover:
         return None, [], "owner", []
     reply, tools, provider, sources = await agent_reply(s, p, conv, text, voice_mode)
+    reply = plain(reply)
     s.add(Message(conversation_id=conv.id, role="persona", text=reply, meta=json.dumps({"tools": tools, "provider": provider, "sources": sources})))
     s.commit(); s.refresh(conv)
     await hub.send(conv.id, {"type": "message", "role": "persona", "text": reply, "tools": tools})
@@ -309,4 +324,8 @@ def seed():
                              {"q": "Which languages can I talk to you in?", "a": "English, Hindi and Hinglish work best. My Proxy also understands Tamil, Telugu, Kannada and other Indian languages."}]),
             links=json.dumps([{"label": "GitHub", "url": "https://github.com/"}, {"label": "LinkedIn", "url": "https://linkedin.com/"}]))
         s.add(p); s.flush(); reindex_profile(s, p); s.commit()
+    h = s.scalar(select(Persona).where(Persona.handle == "hardik"))
+    if h and not h.published: h.published = True; h.onboarding_step = 6; s.commit()
+    n = rag.reembed_stale(s, Chunk)
+    if n: print(f"re-embedded {n} chunks with {rag.embedder().name}")
     s.close()

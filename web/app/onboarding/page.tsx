@@ -377,7 +377,7 @@ function PublishStep({ d, publish, saving }: any) {
   const rows: [string, string][] = [
     ["Persona", `${d.name} · ${d.headline}`], ["Tone", d.tone],
     ["Languages", d.languages.map((l: string) => LANGS.find((x) => x[0] === l)?.[1] || l).join(", ")],
-    ["Knowledge", `${d.faqs.length} FAQs · ${d.links.length} links${d.rates ? " · rates" : ""}`],
+    ["Knowledge", `${d.faqs.length} FAQ${d.faqs.length === 1 ? "" : "s"} · ${d.links.length} link${d.links.length === 1 ? "" : "s"}${d.rates ? " · rates" : ""}`],
     ["Voice", d.has_voice ? "Your cloned voice" : "Default voice (add yours later)"],
     ["Availability", `${a.days.map((i: number) => DAYS[i]).join(", ")} · ${a.start} to ${a.end} IST · ${a.duration} min`],
   ];
