@@ -43,8 +43,9 @@ export default function Dashboard() {
           <Card key={s.l} className="flex items-center gap-4 p-5"><div className={`clay-sm grid h-12 w-12 place-items-center ${s.t}`}><s.I size={19} /></div><div><div className="text-3xl font-semibold tracking-tight">{s.v}</div><div className="text-sm text-ink-mute">{s.l}</div></div></Card>))}</div>
 
         <div className="mt-6 grid gap-6 lg:grid-cols-[340px_1fr]">
-          <Card glass className="max-h-[640px] overflow-y-auto p-3">
-            <div className="px-3 py-2 text-xs font-medium uppercase tracking-wider text-ink-mute">Conversations</div>
+          <Card glass className="flex h-[640px] flex-col overflow-hidden p-0">
+            <div className="flex items-center justify-between border-b border-ink/5 px-6 py-4 text-xs font-medium uppercase tracking-wider text-ink-mute"><span>Conversations</span><span className="normal-case tracking-normal">{ov?.conversations.length ?? 0} total</span></div>
+            <div className="min-h-0 flex-1 overflow-y-auto p-3">
             {ov?.conversations.length === 0 && <p className="p-3 text-sm text-ink-soft">No conversations yet. Share your link.</p>}
             {ov?.conversations.map((c: any) => (
               <button key={c.id} onClick={() => setSel(c.id)} className={`mb-2 w-full rounded-2xl p-4 text-left transition ${sel === c.id ? "clay-sm bg-white" : "hover:bg-white/50"}`}>
@@ -52,14 +53,15 @@ export default function Dashboard() {
                 <p className="mt-1 line-clamp-2 text-sm text-ink-soft">{c.summary || c.last}</p>
                 <div className="mt-2 flex gap-1.5"><Pill tone={c.channel === "voice" ? "sky" : "lilac"}>{c.channel}</Pill><Pill tone="white">{c.language}</Pill>{c.takeover ? <Pill tone="peach">You</Pill> : null}</div>
               </button>))}
+            </div>
           </Card>
-          <Card className="flex min-h-[640px] flex-col p-0">
+          <Card className="flex h-[640px] flex-col overflow-hidden p-0">
             {conv ? <>
               <div className="flex items-center justify-between border-b border-ink/5 p-5">
                 <div><div className="font-semibold">{conv.visitor_name}</div><p className="mt-0.5 max-w-xl text-sm text-ink-soft">{conv.summary}</p></div>
                 <Button variant={conv.takeover ? "mint" : "primary"} onClick={() => takeover(!conv.takeover)}><Hand size={15} />{conv.takeover ? "Hand back to Proxy" : "Take over"}</Button>
               </div>
-              <div className="flex-1 space-y-3 overflow-y-auto p-5">{conv.messages.map((m: any) => (
+              <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-5">{conv.messages.map((m: any) => (
                 <motion.div key={m.id} initial={{ opacity: 0 }} animate={{ opacity: 1 }} className={m.role === "visitor" ? "flex justify-start" : "flex justify-end"}>
                   <div className="max-w-[75%]">
                     <div className="mb-1 text-xs text-ink-mute">{m.role === "visitor" ? conv.visitor_name : m.role === "owner" ? "You" : `Proxy${m.meta?.provider ? " · " + m.meta.provider : ""}`}</div>

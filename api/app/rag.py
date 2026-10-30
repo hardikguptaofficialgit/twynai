@@ -6,7 +6,7 @@ Select with EMBED_MODEL / VECTOR_STORE env vars."""
 import json, math, os, re, hashlib, logging
 log = logging.getLogger("rag")
 EMBED_MODEL = os.getenv("EMBED_MODEL", "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2")
-MIN_SCORE = float(os.getenv("RAG_MIN_SCORE", "0.2"))
+MIN_SCORE = float(os.getenv("RAG_MIN_SCORE", "0.27"))
 
 class HashEmbedder:
     name, dim = "hash-512", 512
@@ -38,6 +38,20 @@ def embedder():
         except Exception as e: log.warning("fastembed unavailable (%s); using hashing embeddings", e); _E = HashEmbedder()
     return _E
 
+# Romanised Hindi -> English glosses. The multilingual model is trained on native scripts, so
+# Latin-script Hinglish queries embed poorly; glossing them puts the query back in a space it knows.
+GLOSS = {"kya": "what", "kitna": "how much", "kitne": "how much", "kitni": "how much", "paisa": "price", "paise": "price", "fees": "fees",
+    "aap": "you", "aapka": "your", "aapki": "your", "apka": "your", "tum": "you", "tumhara": "your", "mera": "my", "mujhe": "me",
+    "kab": "when", "kahan": "where", "kaise": "how", "kaisa": "how", "kyun": "why", "kaun": "who", "hai": "is", "hain": "are", "ho": "are",
+    "karte": "do", "karta": "do", "karna": "do", "kar": "do", "sakte": "can", "sakta": "can", "milna": "meet", "milte": "meet", "baat": "talk",
+    "kaam": "work", "naukri": "job", "bhasha": "language", "bhashayein": "languages", "mausam": "weather", "khana": "food", "gaana": "song",
+    "free": "free", "kal": "tomorrow", "aaj": "today", "abhi": "now", "hafte": "week", "bhai": "", "yaar": "", "ji": "", "nahi": "not", "haan": "yes",
+    "ke": "", "ka": "", "ki": "", "ko": "", "se": "from", "mein": "in", "liye": "for", "par": "on", "bhi": "also", "toh": ""}
+def gloss(text):
+    w = re.findall(r"\w+|\W+", text)
+    hits = sum(t.lower() in GLOSS and GLOSS[t.lower()] != t.lower() for t in w)
+    return text if hits < 2 else "".join(GLOSS.get(t.lower(), t) for t in w)
+
 def embed(text): return embedder().embed([text])[0]
 def embed_many(texts): return embedder().embed(texts) if texts else []
 
@@ -53,7 +67,7 @@ def _cos(a, b):
 class SqlVectorStore:
     """Chunks live in the `chunks` table with JSON vectors; similarity computed in Python."""
     def search(self, chunks, query, k=4):
-        q = embed(query); scored = []
+        q = embed(gloss(query)); scored = []
         for c in chunks:
             v = json.loads(c.embedding)
             if len(v) == len(q): scored.append((_cos(q, v), c))

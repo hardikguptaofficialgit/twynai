@@ -11,7 +11,7 @@ type Msg = { role: "visitor" | "persona" | "owner"; text: string; tools?: any[] 
 const TOOL_LABEL: Record<string, [string, any, string]> = {
   check_availability: ["Checked calendar", Search, "sky"], book_meeting: ["Meeting booked", CalendarCheck, "mint"], capture_lead: ["Saved as lead", UserPlus, "butter"],
 };
-const LANG: Record<string, string> = { "hi-IN": "Hindi / Hinglish", "ta-IN": "Tamil", "en-IN": "English", "te-IN": "Telugu", "kn-IN": "Kannada", "bn-IN": "Bengali", "mr-IN": "Marathi" };
+const LANG: Record<string, string> = { hinglish: "Hinglish", "hi-IN": "Hindi", "ta-IN": "Tamil", "en-IN": "English", "te-IN": "Telugu", "kn-IN": "Kannada", "bn-IN": "Bengali", "mr-IN": "Marathi" };
 
 export default function PublicPersona() {
   const { handle } = useParams<{ handle: string }>();
@@ -26,6 +26,8 @@ export default function PublicPersona() {
   const [level, setLevel] = useState(0);
   const [lang, setLang] = useState("");
   const [err, setErr] = useState("");
+  const [lat, setLat] = useState<{ stt_ms: number; llm_ms: number; tts_ms: number; total_ms: number; client_ms: number; first_audio_ms: number } | null>(null);
+  const [note, setNote] = useState("");
   const rec = useRef<MediaRecorder | null>(null);
   const raf = useRef<number>(0);
   const end = useRef<HTMLDivElement>(null);
@@ -76,19 +78,46 @@ export default function PublicPersona() {
     } catch { setErr("Microphone is blocked. Type below instead, or allow mic access."); }
   }
 
+  /** Plays reply segments back to back (first one starts while later ones are queued).
+   *  With no real TTS audio it falls back to the browser's speech engine. Resolves with the time the first audio started. */
+  function playQueue(reply: string, segs: string[], language: string): Promise<number> {
+    return new Promise((resolve) => {
+      let started = 0; const mark = () => { if (!started) { started = performance.now(); resolve(started); } };
+      const done = () => { setOrb("idle"); mark(); };
+      if (!reply) return done();
+      setOrb("speaking");
+      if (!segs.length) {
+        if (typeof speechSynthesis === "undefined") return done();
+        const u = new SpeechSynthesisUtterance(reply); u.lang = language === "hinglish" ? "hi-IN" : language || "en-IN";
+        u.onstart = mark; u.onend = done; u.onerror = done; speechSynthesis.cancel(); speechSynthesis.speak(u);
+        let fake = 0; const pulse = () => { if (speechSynthesis.speaking) { setLevel(0.3 + 0.4 * Math.abs(Math.sin((fake += 0.25)))); raf.current = requestAnimationFrame(pulse); } else setLevel(0); };
+        pulse(); setTimeout(() => { if (!started) done(); }, 1500 + reply.length * 90); return;
+      }
+      const queue = segs.map((b) => { const el = new Audio(`data:audio/wav;base64,${b}`); el.preload = "auto"; return el; });
+      const next = (i: number) => {
+        if (i >= queue.length) return done();
+        const el = queue[i]; const stop = meter(null, el);
+        el.onplaying = mark; el.onended = () => { stop(); next(i + 1); }; el.onerror = () => { stop(); next(i + 1); };
+        el.play().catch(() => { stop(); next(i + 1); });
+      };
+      next(0);
+    });
+  }
+
   async function voiceTurn(blob: Blob, hint = "") {
     setOrb("thinking");
     const fd = new FormData();
     try { fd.append("audio", await encodeWav(blob), "turn.wav"); } catch { fd.append("audio", blob, "turn.webm"); }
     fd.append("conversation_id", cid); fd.append("text_hint", hint);
+    const t0 = performance.now();
     try {
       const d = await api(`/api/p/${handle}/voice`, { method: "POST", body: fd });
       setCid(d.conversation_id); setLang(d.language || "");
       setMsgs((m) => [...m, { role: "visitor", text: d.transcript }, ...(d.reply ? [{ role: "persona" as const, text: d.reply, tools: d.tools }] : [])]);
-      if (d.audio) {
-        const el = new Audio(`data:audio/wav;base64,${d.audio}`); const stop = meter(null, el);
-        setOrb("speaking"); el.onended = () => { stop(); setOrb("idle"); }; await el.play();
-      } else setOrb("idle");
+      setNote(d.fallback?.length ? `Fallback: ${d.fallback.join(", ")}` : d.mock_tts ? "Demo voice (browser speech) until the Gnani key is set" : "");
+      const segs: string[] = d.segments?.length ? d.segments : d.audio ? [d.audio] : [];
+      const first = await playQueue(d.reply, d.mock_tts ? [] : segs, d.language);
+      if (d.latency) setLat({ ...d.latency, client_ms: Math.round(first - t0), first_audio_ms: Math.round(first - t0) });
     } catch { setOrb("idle"); setErr("Voice request failed."); }
   }
 
@@ -136,8 +165,11 @@ export default function PublicPersona() {
               <div className="text-center">
                 <div className="text-lg font-medium">{{ idle: "Tap to talk", listening: "Listening", thinking: "Thinking", speaking: `${p.name.split(" ")[0]} is speaking` }[orb]}</div>
                 <div className="mt-1 text-sm text-ink-mute">Speak in any Indian language. {lang && `Detected: ${LANG[lang] || lang}`}</div>
+                {lat && <div className="mt-3 flex flex-wrap justify-center gap-1.5 text-xs">{([["Hear", lat.stt_ms], ["Think", lat.llm_ms], ["Speak", lat.tts_ms], ["First audio", lat.first_audio_ms]] as const).map(([k, v]) => (
+                  <span key={k} className="rounded-full bg-white/70 px-2.5 py-1 text-ink-soft">{k} <span className="font-medium text-ink">{(v / 1000).toFixed(1)}s</span></span>))}</div>}
+                {note && <div className="mt-2 text-xs text-ink-mute">{note}</div>}
               </div>
-              <motion.button whileTap={{ scale: 0.94 }} onClick={() => (orb === "listening" ? rec.current?.stop() : orb === "idle" && startTalk())}
+              <motion.button aria-label="Talk to Proxy" whileTap={{ scale: 0.94 }} onClick={() => (orb === "listening" ? rec.current?.stop() : orb === "idle" && startTalk())}
                 className="clay-sm grid h-16 w-16 place-items-center text-white" style={{ background: orb === "listening" ? accent.deep : "#24243a", borderRadius: 9999 }}>
                 {orb === "listening" ? <Square size={20} /> : <Mic size={22} />}
               </motion.button>

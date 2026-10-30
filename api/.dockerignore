@@ -1,0 +1,6 @@
+proxy.db
+uploads/
+tests/
+__pycache__/
+*.pyc
+.env

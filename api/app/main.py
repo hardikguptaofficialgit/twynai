@@ -1,3 +1,4 @@
+import time
 import re
 import json, base64, re, datetime as dt, asyncio, urllib.parse
 from collections import defaultdict
@@ -10,8 +11,10 @@ from sqlalchemy import select
 from . import config, rag, llm, voice, calendar_svc
 from .db import SessionLocal, init_db, Owner, Persona, Chunk, Conversation, Message, Lead, Booking, row, now
 
+import logging
+log = logging.getLogger("proxy")
 app = FastAPI(title="Proxy API")
-app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
+app.add_middleware(CORSMiddleware, allow_origins=[o.strip() for o in __import__("os").getenv("CORS_ORIGINS", "*").split(",")], allow_methods=["*"], allow_headers=["*"])
 
 # ---------------- realtime hub (visitor + owner sockets per conversation) ----------------
 class Hub:
@@ -147,7 +150,8 @@ def public_persona(handle: str, s=Depends(db)):
     if not p: raise HTTPException(404, "not found")
     return p.to_dict(public=True)
 
-LANG_NAMES = {"hi-IN": "Hindi or Hinglish (match the caller's mix of Hindi and English, Latin script if they used it)", "ta-IN": "Tamil", "te-IN": "Telugu",
+LANG_NAMES = {"hinglish": "Hinglish: Hindi and English mixed, written ONLY in Latin script (e.g. \"Haan, main free hoon, kal 10 baje call kar lete hain\"). Never Devanagari, never pure English",
+              "hi-IN": "Hindi in Devanagari script", "ta-IN": "Tamil", "te-IN": "Telugu",
               "kn-IN": "Kannada", "bn-IN": "Bengali", "mr-IN": "Marathi", "gu-IN": "Gujarati", "ml-IN": "Malayalam", "en-IN": "English"}
 
 def system_prompt(p, ctx, lang, voice_mode):
@@ -185,6 +189,8 @@ async def run_tool(s, p, conv, name, args):
 def plain(t: str) -> str:
     """Strip markdown so replies read as plain sentences in chat and TTS."""
     t = re.sub(r"\*\*|__|`|^#+\s*", "", t or "", flags=re.M)
+    t = re.sub(r"(?<![.!?:;,])[ \t]*\n+[ \t]*(?=\S)", "; ", t.strip())  # line-per-item lists become one sentence
+    t = re.sub(r"\n+", " ", t)
     t = re.sub(r"\s*(?:^|\s)[-*\u2022]\s+(?=[A-Z0-9])", lambda m: "; " if m.start() else "", t)
     return re.sub(r"\s{2,}", " ", t).replace(":;", ":").strip()
 
@@ -213,11 +219,35 @@ def get_conv(s, p, cid, visitor_name, channel):
         conv = Conversation(persona_id=p.id, visitor_name=visitor_name or "Visitor", channel=channel); s.add(conv); s.commit()
     return conv
 
+HINGLISH = set("""kya hai hain aap aapka aapki apka tum tera mera meri mujhe hum kitna kitne kaise kaisa kab kahan kyun kaun
+nahi nahin haan bhai yaar kar karo karna karte karta sakte sakta chahiye hoga hogi ho tha thi bata batao bolo dekho
+acha accha theek thik matlab abhi kal aaj wala wali liye se ko ka ki ke mein bhi toh par lekin aur ya jaldi baat milte""".split())
+
 def guess_lang(text):
     if re.search(r"[\u0B80-\u0BFF]", text): return "ta-IN"
+    if re.search(r"[\u0C00-\u0C7F]", text): return "te-IN"
+    if re.search(r"[\u0C80-\u0CFF]", text): return "kn-IN"
+    if re.search(r"[\u0980-\u09FF]", text): return "bn-IN"
     if re.search(r"[\u0900-\u097F]", text): return "hi-IN"
-    if any(w in text.lower().split() for w in ("kya", "hai", "aap", "kitna", "kaise", "mujhe", "bhai", "kar", "nahi", "hoga")): return "hi-IN"
-    return "en-IN"
+    return "hinglish" if is_hinglish(text) else "en-IN"
+
+def is_hinglish(text):
+    w = re.findall(r"[a-z]+", text.lower())
+    hits = sum(x in HINGLISH for x in w)
+    return hits >= 2 or (hits == 1 and len(w) <= 4)
+
+def matches_lang(reply, lang):
+    if lang == "hinglish": return not re.search(r"[\u0900-\u097F]", reply) and is_hinglish(reply)
+    if lang == "en-IN": return not re.search(r"[\u0900-\u0DFF]", reply) and not is_hinglish(reply)
+    return guess_lang(reply) == lang
+
+async def rewrite_lang(reply, lang):
+    """Second pass when the model drifts from the caller's language (e.g. Hinglish in, English out)."""
+    try:
+        m, prov = await llm.complete([{"role": "system", "content": f"Rewrite the message in {LANG_NAMES[lang]}. Keep every fact, number, time and name exactly. Output only the rewritten message."},
+                                  {"role": "user", "content": reply}], None)
+        return (m.get("content") or "").strip() if prov != "mock" else None
+    except Exception: return None
 
 async def handle_turn(s, p, conv, text, voice_mode=False):
     s.add(Message(conversation_id=conv.id, role="visitor", text=text)); conv.updated_at = now(); s.commit(); s.refresh(conv)
@@ -226,6 +256,8 @@ async def handle_turn(s, p, conv, text, voice_mode=False):
         return None, [], "owner", []
     reply, tools, provider, sources = await agent_reply(s, p, conv, text, voice_mode)
     reply = plain(reply)
+    if reply and conv.language in LANG_NAMES and not matches_lang(reply, conv.language):
+        reply = plain(await rewrite_lang(reply, conv.language) or reply)
     s.add(Message(conversation_id=conv.id, role="persona", text=reply, meta=json.dumps({"tools": tools, "provider": provider, "sources": sources})))
     s.commit(); s.refresh(conv)
     await hub.send(conv.id, {"type": "message", "role": "persona", "text": reply, "tools": tools})
@@ -241,7 +273,7 @@ async def chat(handle: str, b: ChatIn, s=Depends(db)):
     p = s.scalar(select(Persona).where(Persona.handle == handle))
     if not p: raise HTTPException(404)
     conv = get_conv(s, p, b.conversation_id, b.visitor_name, "chat")
-    if conv.language == "en-IN": conv.language = guess_lang(b.text)
+    conv.language = guess_lang(b.text)
     reply, tools, provider, sources = await handle_turn(s, p, conv, b.text)
     return {"conversation_id": conv.id, "reply": reply, "tools": tools, "provider": provider, "sources": sources, "takeover": bool(conv.takeover)}
 
@@ -249,23 +281,28 @@ async def chat(handle: str, b: ChatIn, s=Depends(db)):
 async def voice_turn(handle: str, audio: UploadFile = File(...), conversation_id: str = Form(""), text_hint: str = Form(""), s=Depends(db)):
     p = s.scalar(select(Persona).where(Persona.handle == handle))
     if not p: raise HTTPException(404)
-    data = await audio.read()
+    t0 = time.perf_counter(); ms = lambda a: round((time.perf_counter() - a) * 1000)
+    data = await audio.read(); fallback = []
     try: r = await voice.stt(data, audio.filename or "audio.wav")
-    except Exception as e: raise HTTPException(502, f"stt failed: {e}")
+    except Exception as e:
+        log.warning("STT failed: %s", e); fallback.append(f"stt:{type(e).__name__}")
+        r = {"transcript": "", "language": "en-IN", "mock": True}
+    stt_ms = ms(t0)
     text = r["transcript"] or text_hint or ("Hi, are you free for a quick call this week?" if r["mock"] else "")
-    if not text: return {"conversation_id": conversation_id, "transcript": "", "reply": "", "audio": None}
-    conv = get_conv(s, p, conversation_id, "Voice caller", "voice")
-    conv.language = r["language"] if not r["mock"] else guess_lang(text); s.commit()
+    if not text: return {"conversation_id": conversation_id, "transcript": "", "reply": "", "audio": None, "segments": [], "fallback": fallback or ["stt:empty"]}
+    conv = get_conv(s, p, conversation_id, "Voice caller", "voice"); conv.channel = "voice"
+    conv.language = guess_lang(text) if r["mock"] or r["language"] in ("en-IN", "hi-IN") else r["language"]; s.commit()
+    t1 = time.perf_counter()
     reply, tools, provider, sources = await handle_turn(s, p, conv, text, voice_mode=True)
-    audio_b64, mock_audio = None, True
+    llm_ms = ms(t1); segs, mock_audio, tts_ms = [], True, 0
     if reply:
-        try:
-            wav, mock_audio = await voice.tts(reply, conv.language, p.voice_embedding if p.voice_embedding and "mock" not in p.voice_embedding else "")
-            audio_b64 = base64.b64encode(wav).decode()
-        except Exception as e:
-            audio_b64 = None
+        emb = p.voice_embedding if p.voice_embedding and "mock" not in p.voice_embedding else ""
+        wavs, mock_audio, fb, tts_ms = await voice.speak(reply, conv.language, emb)
+        if fb: fallback.append(fb)
+        segs = [base64.b64encode(w).decode() for w in wavs]
     return {"conversation_id": conv.id, "transcript": text, "language": conv.language, "reply": reply, "tools": tools,
-            "provider": provider, "audio": audio_b64, "mock_stt": r["mock"], "mock_tts": mock_audio}
+            "provider": provider, "audio": segs[0] if segs else None, "segments": segs, "mock_stt": r["mock"], "mock_tts": mock_audio,
+            "fallback": fallback, "latency": {"stt_ms": stt_ms, "llm_ms": llm_ms, "tts_ms": tts_ms, "total_ms": ms(t0)}}
 
 # ---------------- dashboard ----------------
 @app.get("/api/personas/{pid}/overview")
