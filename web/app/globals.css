@@ -36,7 +36,7 @@ h1, h2, h3 { font-family: var(--font-display); font-weight: 400; letter-spacing:
 p { text-wrap: pretty; }
 .tnum { font-variant-numeric: tabular-nums; }
 ::selection { background: var(--color-lilac); color: var(--color-ink); }
-:focus-visible { outline: 2px solid var(--color-lilac-deep); outline-offset: 2px; }
+:focus-visible { outline: 2px solid var(--color-ink-mute); outline-offset: 2px; }
 
 @layer components {
 /* Clay: soft raised surfaces. Outer shadows only (no inset, no glow). */
@@ -74,7 +74,7 @@ p { text-wrap: pretty; }
   transition: border-color .12s, background-color .12s;
 }
 textarea.field { height: auto; padding: 0.55rem 0.75rem; line-height: 1.5; }
-.field:focus { border-color: var(--color-lilac-deep); background: white; }
+.field:focus { border-color: var(--color-rule); background: white; }
 .label { font-size: 0.75rem; color: var(--color-ink-mute); }
 .eyebrow { font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.04em; text-transform: uppercase; color: var(--color-ink-mute); }
 .display { font-family: var(--font-display); font-weight: 400; letter-spacing: -0.015em; line-height: 1.05; }
