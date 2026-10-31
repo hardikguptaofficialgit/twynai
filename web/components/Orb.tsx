@@ -16,7 +16,7 @@ export function Orb({ level = 0, state = "idle", color = "var(--color-lilac)", d
       ))}
       <motion.div className="relative rounded-full"
         style={{ width: size, height: size, background: color,
-          boxShadow: `18px 22px 40px oklch(45% 0.04 70 / .2), -12px -12px 28px rgba(255,255,255,.9), inset 10px 12px 22px rgba(255,255,255,.65), inset -14px -16px 26px oklch(40% 0.05 290 / .14)` }}
+          boxShadow: `18px 22px 40px oklch(45% 0.04 70 / .2), -12px -12px 28px rgba(255,255,255,.9)` }}
         animate={{ scale: 1 + l * 0.12 + (state === "thinking" ? 0.02 : 0) }}
         transition={{ type: "spring", stiffness: 260, damping: 18 }}>
         <div className="absolute left-[22%] top-[18%] h-[22%] w-[30%] rounded-full bg-white/55" />
