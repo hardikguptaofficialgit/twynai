@@ -9,6 +9,8 @@ import { api, API, encodeWav, Persona, token } from "@/lib/api";
 import { useOwner } from "@/lib/useOwner";
 import { Logo , Backdrop } from "@/components/ui";
 import { Orb } from "@/components/Orb";
+import { VoiceCloner } from "@/components/VoiceCloner";
+import { AiImport } from "@/components/AiImport";
 
 const STEPS = ["Handle", "Basics", "Knowledge", "Voice", "Calendar", "Availability", "Publish"];
 const LANGS: [string, string][] = [["en", "English"], ["hi", "Hindi"], ["hinglish", "Hinglish"], ["ta", "Tamil"], ["te", "Telugu"], ["kn", "Kannada"], ["bn", "Bengali"], ["mr", "Marathi"], ["gu", "Gujarati"], ["ml", "Malayalam"], ["pa", "Punjabi"]];
@@ -248,6 +250,9 @@ function KnowledgeStep({ d, set, errs }: any) {
   return (
     <div>
       <Head k="Knowledge" t="What should it know?" d="Twyn only answers from what you add here. Anything else, it will say it does not know." />
+      <div className="glass mb-6 p-4" style={{ borderRadius: 18 }}>
+        <AiImport pid={d.id} compact onApplied={(p, o) => set({ ...(o.bio ? { bio: p.bio } : {}), ...(o.tone ? { tone: p.tone } : {}), faqs: [...d.faqs.filter((f: any) => f.q.trim()), ...p.faqs] })} />
+      </div>
       <Label t="Rates and pricing" hint="optional"><input className={input} value={d.rates} onChange={(e) => set({ rates: e.target.value })} placeholder="MVP builds from 25,000 rupees per week. Discovery calls are free." /></Label>
 
       <div className="mt-7 flex items-center justify-between"><span className="text-sm font-medium">FAQs</span>
@@ -294,67 +299,7 @@ function KnowledgeStep({ d, set, errs }: any) {
 }
 
 function VoiceStep({ d, set }: any) {
-  const [rec, setRec] = useState(false); const [secs, setSecs] = useState(0); const [level, setLevel] = useState(0);
-  const [blob, setBlob] = useState<Blob | null>(null); const [busy, setBusy] = useState(false); const [msg, setMsg] = useState("");
-  const [preview, setPreview] = useState(""); const [pBusy, setPBusy] = useState(false);
-  const mr = useRef<MediaRecorder | null>(null); const timer = useRef<any>(null);
-  const url = useMemo(() => (blob ? URL.createObjectURL(blob) : ""), [blob]);
-  async function start() {
-    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-    const ctx = new AudioContext(); const an = ctx.createAnalyser(); ctx.createMediaStreamSource(stream).connect(an); const buf = new Uint8Array(an.fftSize);
-    const parts: Blob[] = []; const m = new MediaRecorder(stream); mr.current = m;
-    m.ondataavailable = (e) => parts.push(e.data);
-    m.onstop = async () => { stream.getTracks().forEach((t) => t.stop()); ctx.close(); clearInterval(timer.current); setLevel(0); setBlob(await encodeWav(new Blob(parts))); };
-    m.start(); setRec(true); setSecs(0); const t0 = Date.now();
-    timer.current = setInterval(() => { an.getByteTimeDomainData(buf); let s = 0; buf.forEach((v) => (s += Math.abs(v - 128))); setLevel(Math.min(1, s / buf.length / 30)); const el = (Date.now() - t0) / 1000; setSecs(el); if (el >= 30) stop(); }, 80);
-  }
-  function stop() { mr.current?.state === "recording" && mr.current.stop(); setRec(false); }
-  async function save(b: Blob, name = "sample.wav") {
-    setBusy(true); setMsg(""); const fd = new FormData(); fd.append("file", b, name);
-    try { const r = await api(`/api/personas/${d.id}/voice`, { method: "POST", body: fd }); set({ has_voice: true }); setPreview("");
-      setMsg(r.mock ? "Saved. Cloning runs when a Gnani key is added." : `Voice cloned from a ${Math.round(r.seconds || 0)}s sample with Gnani Timbre.`); }
-    catch (e: any) { setMsg(String(e?.message || "").includes("5 to 30") ? "Use a clip between 5 and 30 seconds." : "Cloning failed. Try a cleaner 10 to 30 second clip."); } finally { setBusy(false); }
-  }
-  async function listen() {
-    setPBusy(true);
-    try {
-      const r = await fetch(`${API}/api/personas/${d.id}/voice/preview`, { method: "POST", headers: token() ? { Authorization: `Bearer ${token()}` } : {} });
-      if (!r.ok) throw 0; const u = URL.createObjectURL(await r.blob()); setPreview(u);
-      setTimeout(() => (document.getElementById("clone-preview") as HTMLAudioElement | null)?.play().catch(() => {}), 50);
-    } catch { setMsg("Preview failed. Try again in a moment."); } finally { setPBusy(false); }
-  }
-  return (
-    <div>
-      <Head k="Voice" t="Teach it your voice" d="Read anything out loud for 10 to 30 seconds in a quiet room. Twyn uses this sample to speak like you." />
-      <div className="grid items-center gap-8 md:grid-cols-[auto_1fr]">
-        <div className="grid place-items-center"><Orb size={88} state={rec ? "listening" : busy ? "thinking" : "idle"} level={level} /></div>
-        <div>
-          <div className="glass p-5 text-sm leading-relaxed text-ink-soft" style={{ borderRadius: 20 }}>
-            "Hi, this is {d.name || "me"}. Thanks for reaching out. I work as a {(d.headline || "freelancer").toLowerCase()}, and I am happy to help you figure out if we are a good fit. Tell me what you are working on."
-          </div>
-          <div className="mt-5 flex flex-wrap items-center gap-3">
-            {!rec ? <button onClick={start} className="inline-flex items-center gap-2 rounded-full bg-ink h-9 px-4 text-[13.5px] font-medium text-canvas"><Mic size={15} />{blob ? "Record again" : "Start recording"}</button>
-              : <button onClick={stop} className="inline-flex items-center gap-2 rounded-2xl bg-peach h-9 px-4 text-[13.5px] font-medium"><Square size={13} />Stop · {secs.toFixed(0)}s</button>}
-            <label className="clay-sm inline-flex cursor-pointer items-center gap-2 bg-white h-9 px-4 text-[13.5px]"><Upload size={15} />Upload audio
-              <input type="file" accept="audio/*" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) { setBlob(f); } }} /></label>
-          </div>
-          {blob && !rec && (
-            <div className="mt-5 flex flex-wrap items-center gap-3">
-              <audio src={url} controls className="h-10" />
-              <button onClick={() => save(blob)} disabled={busy} className="clay-sm inline-flex items-center gap-2 bg-lilac h-9 px-4 text-[13.5px] font-medium">{busy && <Loader2 size={14} className="animate-spin" />}Use this sample</button>
-            </div>
-          )}
-          {(msg || d.has_voice) && <p className="mt-3 flex items-center gap-1.5 text-sm text-mint-deep"><Check size={14} />{msg || "A voice sample is saved."}</p>}
-          {d.has_voice && !rec && (
-            <div className="mt-4 flex flex-wrap items-center gap-3">
-              <button onClick={listen} disabled={pBusy} className="clay-sm inline-flex items-center gap-2 bg-mint h-9 px-4 text-[13.5px] font-medium">{pBusy ? <Loader2 size={14} className="animate-spin" /> : <Volume2 size={15} />}Hear my Twyn voice</button>
-              {preview && <audio id="clone-preview" src={preview} controls className="h-10" />}
-            </div>
-          )}
-        </div>
-      </div>
-    </div>
-  );
+  return (<div><Head k="Voice" t="Teach it your voice" d="Read the script below out loud for 15 to 30 seconds in a quiet room, or upload a clip. Twyn uses it to speak like you." /><VoiceCloner d={d} set={set} /></div>);
 }
 
 function CalendarStep({ me }: any) {
@@ -366,7 +311,7 @@ function CalendarStep({ me }: any) {
         <span className="clay-sm grid h-12 w-12 place-items-center bg-white"><Image src="/brands/google-calendar.svg" alt="Google Calendar" width={22} height={22} /></span>
         <div className="flex-1"><p className="font-medium">Google Calendar</p><p className="text-sm text-ink-soft">{on ? `Connected as ${me.email}` : "Free/busy and event creation only"}</p></div>
         {on ? <span className="inline-flex items-center gap-1.5 rounded-full bg-mint px-3 py-1.5 text-sm font-medium"><Check size={14} />Connected</span>
-          : <a href={`${API}/api/auth/google/start`} className="rounded-full bg-ink h-9 px-4 text-[13.5px] font-medium text-canvas">Connect</a>}
+          : <a href={`${API}/api/auth/google/login`} className="rounded-full bg-ink h-9 px-4 text-[13.5px] font-medium text-canvas">Connect</a>}
       </div>
       {!on && <p className="mt-4 text-sm text-ink-mute">Skip this and Twyn will offer slots from your availability rules, then email you each booking to confirm.</p>}
     </div>

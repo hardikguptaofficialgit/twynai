@@ -1,124 +1,43 @@
 "use client";
-import Image from "next/image";
-import { useEffect, useState } from "react";
-const DAYS = ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"];
-const DEF_AV = { days: [0,1,2,3,4], start: "10:00", end: "18:00", duration: 30, buffer: 15, notice: 12 };
-import { motion } from "motion/react";
-import { Plus, Trash as Trash2, UploadSimple as Upload, Microphone as Mic, FileText, CalendarCheck, Check, Copy } from "@phosphor-icons/react";
-import { api, API, Persona, ACCENTS } from "@/lib/api";
-import { useOwner } from "@/lib/useOwner";
-import { Backdrop, Button, Card, Field, Pill } from "@/components/ui";
-import { AppNav } from "@/components/AppNav";
+import Link from "next/link";
+import { ChatCircle, Users, CalendarCheck, Waveform, Copy, ArrowRight } from "@phosphor-icons/react";
+import { Card, Pill } from "@/components/ui";
+import { useStudio, Page, Empty, Skeleton, ago, fmtIST } from "./ctx";
 
-const blank = { handle: "", name: "", headline: "", bio: "", rates: "", faqs: [{ q: "", a: "" }], links: [{ label: "", url: "" }], tone: "warm, concise, professional", accent: "lilac" };
-
-export default function Studio() {
-  const { me, personas, reload } = useOwner();
-  const [f, setF] = useState<any>(blank);
-  const [saved, setSaved] = useState("");
-  const [docs, setDocs] = useState<{ name: string; chunks: number }[]>([]);
-  const [msg, setMsg] = useState("");
-  const p: Persona | undefined = personas[0];
-
-  useEffect(() => { if (p) { setF({ ...p, faqs: p.faqs.length ? p.faqs : blank.faqs, links: p.links.length ? p.links : blank.links }); api(`/api/personas/${p.id}/docs`).then(setDocs); } }, [p]);
-  const set = (k: string, v: any) => setF((x: any) => ({ ...x, [k]: v }));
-
-  async function save() {
-    const body = JSON.stringify({ ...f, faqs: f.faqs.filter((x: any) => x.q), links: f.links.filter((x: any) => x.url) });
-    try { p ? await api(`/api/personas/${p.id}`, { method: "PUT", body }) : await api("/api/personas", { method: "POST", body });
-      await reload(); setSaved("Saved"); setTimeout(() => setSaved(""), 1800); } catch (e: any) { setMsg(e.message); }
-  }
-  async function upload(kind: "docs" | "voice", file?: File) {
-    if (!file || !p) return; const fd = new FormData(); fd.append("file", file);
-    try { const d = await api(`/api/personas/${p.id}/${kind}`, { method: "POST", body: fd });
-      setMsg(kind === "docs" ? `Indexed ${d.chunks} chunks from ${d.name}` : d.mock ? "Voice sample saved. Cloning runs once the Gnani key is set." : "Voice cloned with Gnani.");
-      kind === "docs" ? setDocs(await api(`/api/personas/${p.id}/docs`)) : reload(); } catch (e: any) { setMsg(e.message); }
-  }
-  const link = p ? `${typeof window !== "undefined" ? location.origin : ""}/p/${p.handle}` : "";
-
+export default function Overview() {
+  const { persona: p, ov, toast, me } = useStudio();
+  const link = typeof window !== "undefined" ? `${location.origin}/p/${p.handle}` : "";
+  const upcoming = (ov?.bookings || []).filter((b: any) => new Date(b.start + "+05:30") > new Date());
+  const stats = [
+    { l: "Conversations", v: ov?.conversations?.length, I: ChatCircle, t: "bg-lilac" },
+    { l: "Leads", v: ov?.leads?.length, I: Users, t: "bg-butter" },
+    { l: "Upcoming meetings", v: upcoming.length, I: CalendarCheck, t: "bg-mint" },
+    { l: "Voice calls", v: ov?.conversations?.filter((c: any) => c.channel === "voice").length, I: Waveform, t: "bg-sky" },
+  ];
   return (
-    <main className="relative min-h-screen pb-24">
-      <Backdrop />
-      <AppNav handle={p?.handle} />
-      <div className="mx-auto mt-6 w-[min(1040px,calc(100%-2rem))]">
-        <div className="mb-8 flex flex-wrap items-end justify-between gap-4">
-          <div><div className="eyebrow">Persona studio</div><h1 className="display mt-1 text-[28px]">{p ? `Tune ${p.name.split(" ")[0]}'s Twyn` : "Create your Twyn"}</h1></div>
-          <div className="flex items-center gap-3">{saved && <Pill tone="mint"><Check size={12} />{saved}</Pill>}<Button onClick={save}>{p ? "Save changes" : "Create persona"}</Button></div>
-        </div>
-        <div className="grid gap-6 lg:grid-cols-[1fr_380px]">
-          <div className="space-y-6">
-            <Card>
-              <h2 className="mb-5 text-2xl">Identity</h2>
-              <div className="grid gap-4 md:grid-cols-2">
-                <Field label="Display name"><input className="field clay-pressed" value={f.name} onChange={(e) => set("name", e.target.value)} placeholder="Hardik Gupta" /></Field>
-                <Field label="Handle" hint="twyn.ai/handle"><input className="field clay-pressed" disabled={!!p} value={f.handle} onChange={(e) => set("handle", e.target.value)} placeholder="hardik" /></Field>
-                <div className="md:col-span-2"><Field label="Headline"><input className="field clay-pressed" value={f.headline} onChange={(e) => set("headline", e.target.value)} placeholder="Full-stack and AI engineer" /></Field></div>
-                <div className="md:col-span-2"><Field label="Bio" hint="Twyn speaks from this"><textarea rows={4} className="field clay-pressed resize-none" value={f.bio} onChange={(e) => set("bio", e.target.value)} /></Field></div>
-                <Field label="Rates"><textarea rows={3} className="field clay-pressed resize-none" value={f.rates} onChange={(e) => set("rates", e.target.value)} /></Field>
-                <Field label="Tone of voice"><textarea rows={3} className="field clay-pressed resize-none" value={f.tone} onChange={(e) => set("tone", e.target.value)} /></Field>
-              </div>
-              <div className="mt-5"><div className="mb-2 text-sm font-medium">Accent</div>
-                <div className="flex gap-3">{Object.entries(ACCENTS).map(([k, c]) => <button key={k} onClick={() => set("accent", k)} className="clay-sm h-10 w-10 rounded-full" style={{ background: c.soft, outline: f.accent === k ? `2px solid ${c.deep}` : "none", outlineOffset: 3, borderRadius: 999 }} />)}</div></div>
-            </Card>
-            <Card>
-              <div className="mb-5 flex items-center justify-between"><h2 className="text-2xl">FAQs</h2><Button variant="clay" onClick={() => set("faqs", [...f.faqs, { q: "", a: "" }])}><Plus size={15} />Add</Button></div>
-              <div className="space-y-3">{f.faqs.map((x: any, i: number) => (
-                <motion.div layout key={i} className="clay-pressed grid gap-2 p-3 md:grid-cols-[1fr_1.4fr_auto]">
-                  <input className="field bg-transparent" placeholder="Question" value={x.q} onChange={(e) => set("faqs", f.faqs.map((y: any, j: number) => j === i ? { ...y, q: e.target.value } : y))} />
-                  <input className="field bg-transparent" placeholder="Answer" value={x.a} onChange={(e) => set("faqs", f.faqs.map((y: any, j: number) => j === i ? { ...y, a: e.target.value } : y))} />
-                  <button className="px-3 text-ink-mute hover:text-ink" onClick={() => set("faqs", f.faqs.filter((_: any, j: number) => j !== i))}><Trash2 size={16} /></button>
-                </motion.div>))}</div>
-            </Card>
-            <Card>
-              <div className="mb-5 flex items-center justify-between"><h2 className="text-2xl">Links</h2><Button variant="clay" onClick={() => set("links", [...f.links, { label: "", url: "" }])}><Plus size={15} />Add</Button></div>
-              <div className="space-y-3">{f.links.map((x: any, i: number) => (
-                <div key={i} className="clay-pressed grid gap-2 p-3 md:grid-cols-[1fr_2fr]">
-                  <input className="field bg-transparent" placeholder="Label" value={x.label} onChange={(e) => set("links", f.links.map((y: any, j: number) => j === i ? { ...y, label: e.target.value } : y))} />
-                  <input className="field bg-transparent" placeholder="https://" value={x.url} onChange={(e) => set("links", f.links.map((y: any, j: number) => j === i ? { ...y, url: e.target.value } : y))} />
-                </div>))}</div>
-            </Card>
-          </div>
-          <div className="space-y-6">
-            {p && <Card glass><div className="text-sm font-medium">Your share link</div>
-              <div className="clay-pressed mt-3 flex items-center justify-between gap-2 p-3 text-sm"><span className="truncate font-mono">{link.replace(/^https?:\/\//, "")}</span>
-                <button onClick={() => navigator.clipboard.writeText(link)} className="text-ink-soft hover:text-ink"><Copy size={16} /></button></div></Card>}
-            <Card>
-              <div className="clay-sm mb-4 grid h-11 w-11 place-items-center bg-peach"><FileText size={18} /></div>
-              <h3 className="text-xl">Knowledge</h3><p className="mt-1 text-sm text-ink-soft">PDF, Markdown or text. Twyn only answers from what you add.</p>
-              <label className={`clay-sm mt-4 flex cursor-pointer items-center justify-center gap-2 bg-canvas px-4 py-3 text-sm font-medium ${!p && "pointer-events-none opacity-50"}`}><Upload size={15} />Upload document<input type="file" accept=".pdf,.txt,.md" className="hidden" onChange={(e) => upload("docs", e.target.files?.[0])} /></label>
-              <div className="mt-3 space-y-2">{docs.map((d) => <div key={d.name} className="flex justify-between text-sm"><span className="truncate">{d.name}</span><span className="text-ink-mute">{d.chunks} chunks</span></div>)}</div>
-            </Card>
-            <Card>
-              <div className="clay-sm mb-4 grid h-11 w-11 place-items-center bg-lilac"><Mic size={18} /></div>
-              <h3 className="text-xl">Voice clone</h3><p className="mt-1 text-sm text-ink-soft">5 to 30 seconds of clean speech. Gnani builds a speaker embedding from it.</p>
-              <div className="mt-3">{p?.has_voice ? <Pill tone="mint"><Check size={12} />Voice sample on file</Pill> : <Pill tone="white">No voice yet</Pill>}</div>
-              <label className={`clay-sm mt-4 flex cursor-pointer items-center justify-center gap-2 bg-canvas px-4 py-3 text-sm font-medium ${!p && "pointer-events-none opacity-50"}`}><Upload size={15} />Upload voice sample<input type="file" accept="audio/*" className="hidden" onChange={(e) => upload("voice", e.target.files?.[0])} /></label>
-            </Card>
-            <Card>
-              <div className="clay-sm mb-4 grid h-11 w-11 place-items-center bg-sky"><CalendarCheck size={18} /></div>
-              <h3 className="text-xl">Google Calendar</h3><p className="mt-1 text-sm text-ink-soft">Free/busy and booking. Twyn only offers slots you are actually free.</p>
-              <div className="mt-3">{me?.google_tokens ? <Pill tone="mint">Connected</Pill> : <Pill tone="butter">Demo calendar in use</Pill>}</div>
-              <a href={`${API}/api/auth/google/start`} className="clay-sm mt-4 flex items-center justify-center gap-2 bg-canvas px-4 py-3 text-sm font-medium"><Image src="/brands/google-calendar.svg" alt="" width={18} height={18} />Connect Google Calendar</a>
-            </Card>
-            <Card>
-              <h3 className="text-xl">Availability</h3><p className="mt-1 text-sm text-ink-soft">Twyn only offers slots inside these rules, minus busy times.</p>
-              {(() => { const av = { ...DEF_AV, ...(f.availability || {}) }; const up = (k: string, v: any) => set("availability", { ...av, [k]: v });
-                return (<div className="mt-4 space-y-3 text-sm">
-                  <div className="flex flex-wrap gap-1.5">{DAYS.map((d, i) => { const on = av.days.includes(i); return (
-                    <button key={d} onClick={() => up("days", on ? av.days.filter((x: number) => x !== i) : [...av.days, i].sort())} className={`rounded-full px-3 py-1.5 text-xs font-medium ${on ? "bg-ink text-canvas" : "clay-sm bg-canvas"}`}>{d}</button>); })}</div>
-                  <div className="grid grid-cols-2 gap-2">
-                    <label className="text-xs text-ink-soft">From (IST)<input type="time" value={av.start} onChange={(e) => up("start", e.target.value)} className="field mt-1 w-full px-3 py-2 text-sm text-ink" /></label>
-                    <label className="text-xs text-ink-soft">To (IST)<input type="time" value={av.end} onChange={(e) => up("end", e.target.value)} className="field mt-1 w-full px-3 py-2 text-sm text-ink" /></label>
-                  </div>
-                  <div className="grid grid-cols-3 gap-2">{([["duration","Length"],["buffer","Buffer"],["notice","Notice h"]] as const).map(([k, l]) => (
-                    <label key={k} className="text-xs text-ink-soft">{l}<input type="number" min={0} value={av[k]} onChange={(e) => up(k, +e.target.value)} className="field mt-1 w-full px-3 py-2 text-sm text-ink" /></label>))}</div>
-                  <p className="text-xs text-ink-soft">Save changes to apply.</p>
-                </div>); })()}
-            </Card>
-            {msg && <p className="text-sm text-ink-soft">{msg}</p>}
-          </div>
-        </div>
+    <Page title={`Hi ${(me.name || "there").split(" ")[0]}`} sub="What your Twyn has been up to."
+      actions={<button onClick={() => { navigator.clipboard.writeText(link); toast("Link copied"); }} className="clay-sm inline-flex h-8 items-center gap-1.5 bg-white px-3 text-[13px] font-medium"><Copy size={14} /><span className="font-mono text-[12px]">{link.replace(/^https?:\/\//, "")}</span></button>}>
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        {stats.map(({ l, v, I, t }) => (
+          <Card key={l} className="p-4"><span className={`clay-sm grid h-8 w-8 place-items-center ${t}`}><I size={15} /></span>
+            <div className="mt-3 text-[22px] font-semibold tnum">{ov ? v ?? 0 : "–"}</div><div className="text-[12.5px] text-ink-soft">{l}</div></Card>))}
       </div>
-    </main>
+      <div className="mt-3 grid gap-3 lg:grid-cols-2">
+        <Card className="p-4">
+          <div className="mb-3 flex items-center justify-between"><h2 className="text-[14px] font-medium">Recent chats</h2><Link href="/studio/conversations" className="inline-flex items-center gap-1 text-[12.5px] text-ink-soft hover:text-ink">All<ArrowRight size={12} /></Link></div>
+          {!ov ? <Skeleton /> : ov.error ? <p className="text-[13px] text-peach-deep">Could not load. It will retry shortly.</p> : ov.conversations.length === 0 ? <Empty icon={<ChatCircle size={18} />} title="No chats yet" sub="Share your link and they will show up here." /> :
+            <div className="space-y-1.5">{ov.conversations.slice(0, 5).map((c: any) => (
+              <Link key={c.id} href={`/studio/conversations?c=${c.id}`} className="clay-pressed block px-3 py-2">
+                <div className="flex items-center justify-between text-[13px]"><span className="font-medium">{c.visitor_name}</span><span className="text-[11.5px] text-ink-mute">{ago(c.updated_at)}</span></div>
+                <p className="line-clamp-1 text-[12.5px] text-ink-soft">{c.summary || c.last}</p></Link>))}</div>}
+        </Card>
+        <Card className="p-4">
+          <div className="mb-3 flex items-center justify-between"><h2 className="text-[14px] font-medium">Upcoming bookings</h2><Link href="/studio/bookings" className="inline-flex items-center gap-1 text-[12.5px] text-ink-soft hover:text-ink">All<ArrowRight size={12} /></Link></div>
+          {!ov ? <Skeleton /> : upcoming.length === 0 ? <Empty icon={<CalendarCheck size={18} />} title="Nothing booked yet" sub="Visitors can book from your page or by asking your Twyn." /> :
+            <div className="space-y-1.5">{upcoming.slice(0, 5).map((b: any) => (
+              <div key={b.id} className="clay-pressed flex items-center justify-between gap-3 px-3 py-2 text-[13px]"><div className="min-w-0"><div className="truncate font-medium">{b.guest_name}</div><div className="truncate text-[12px] text-ink-soft">{b.topic || "Meeting"}</div></div><Pill tone="mint">{fmtIST(b.start + "+05:30")}</Pill></div>))}</div>}
+        </Card>
+      </div>
+    </Page>
   );
 }

@@ -23,6 +23,12 @@ class Owner(Base):
     google_tokens: Mapped[str] = mapped_column(Text, default="")
     created_at: Mapped[dt.datetime] = mapped_column(DateTime, default=now)
 
+class AuthSession(Base):
+    __tablename__ = "sessions"
+    id: Mapped[str] = mapped_column(String, primary_key=True, default=lambda: uuid.uuid4().hex + uuid.uuid4().hex)
+    owner_id: Mapped[str] = mapped_column(ForeignKey("owners.id"))
+    created_at: Mapped[dt.datetime] = mapped_column(DateTime, default=now)
+
 class Persona(Base):
     __tablename__ = "personas"
     id: Mapped[str] = mapped_column(String, primary_key=True, default=uid)

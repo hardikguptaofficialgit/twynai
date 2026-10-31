@@ -63,30 +63,93 @@ class MockCalendar:
     def busy(self, t0, t1): return []
     def book(self, start, minutes, summary, attendee): return "mock-" + start.replace(":", "")
 
+TOKEN_URL = "https://oauth2.googleapis.com/token"
+
+def classify(e):
+    """Map a Google failure to a status the dashboard can show: revoked | api_disabled | error."""
+    r = getattr(e, "response", None)
+    if r is None: return "error"
+    body = r.text or ""
+    if r.status_code in (400, 401) and ("invalid_grant" in body or r.status_code == 401): return "revoked"
+    if r.status_code == 403 and ("accessNotConfigured" in body or "SERVICE_DISABLED" in body or "has not been used" in body): return "api_disabled"
+    if r.status_code == 403 and "insufficient" in body.lower(): return "revoked"
+    return "error"
+
 class GoogleCalendar(MockCalendar):
+    """Owner's primary Google Calendar. Refreshes the access token with the stored refresh token and
+    persists the new one through `save` (a callback that writes back to the owner row)."""
     connected = True
-    def __init__(self, tokens: dict): self.tok = tokens.get("access_token", "")
-    def _h(self): return {"Authorization": f"Bearer {self.tok}"}
+    def __init__(self, tokens: dict, save=None):
+        self.t = dict(tokens); self.save = save
+    def _token(self):
+        import time
+        from . import config
+        if self.t.get("access_token") and self.t.get("expires_at", 0) > time.time() + 60: return self.t["access_token"]
+        if not self.t.get("refresh_token"): return self.t.get("access_token", "")
+        r = httpx.post(TOKEN_URL, data={"client_id": config.GOOGLE_CLIENT_ID, "client_secret": config.GOOGLE_CLIENT_SECRET,
+                       "refresh_token": self.t["refresh_token"], "grant_type": "refresh_token"}, timeout=15)
+        r.raise_for_status(); d = r.json()
+        self.t["access_token"] = d["access_token"]; self.t["expires_at"] = int(time.time()) + int(d.get("expires_in", 3600))
+        if self.save:
+            try: self.save(self.t)
+            except Exception: pass
+        return self.t["access_token"]
+    def _h(self): return {"Authorization": f"Bearer {self._token()}"}
     def busy(self, t0, t1):
         r = httpx.post("https://www.googleapis.com/calendar/v3/freeBusy", headers=self._h(), json={"timeMin": t0.isoformat(), "timeMax": t1.isoformat(), "items": [{"id": "primary"}]}, timeout=15)
         r.raise_for_status()
         return [(dt.datetime.fromisoformat(b["start"].replace("Z", "+00:00")), dt.datetime.fromisoformat(b["end"].replace("Z", "+00:00"))) for b in r.json()["calendars"]["primary"]["busy"]]
     def book(self, start, minutes, summary, attendee):
+        import uuid
         st = dt.datetime.fromisoformat(start).replace(tzinfo=IST)
-        ev = {"summary": summary, "start": {"dateTime": st.isoformat()}, "end": {"dateTime": (st + dt.timedelta(minutes=minutes)).isoformat()}}
+        ev = {"summary": summary, "description": "Booked through Twyn AI.",
+              "start": {"dateTime": st.isoformat(), "timeZone": "Asia/Kolkata"},
+              "end": {"dateTime": (st + dt.timedelta(minutes=minutes)).isoformat(), "timeZone": "Asia/Kolkata"},
+              "conferenceData": {"createRequest": {"requestId": uuid.uuid4().hex, "conferenceSolutionKey": {"type": "hangoutsMeet"}}}}
         if attendee: ev["attendees"] = [{"email": attendee}]
-        r = httpx.post("https://www.googleapis.com/calendar/v3/calendars/primary/events?sendUpdates=all", headers=self._h(), json=ev, timeout=15); r.raise_for_status()
-        return r.json()["id"]
+        r = httpx.post("https://www.googleapis.com/calendar/v3/calendars/primary/events?sendUpdates=all&conferenceDataVersion=1", headers=self._h(), json=ev, timeout=15)
+        r.raise_for_status(); d = r.json()
+        self.meet_link = d.get("hangoutLink", "")
+        return d["id"]
 
-def for_owner(owner):
+def for_owner(owner, session=None):
     if owner and owner.google_tokens:
-        try: return GoogleCalendar(json.loads(owner.google_tokens))
+        try:
+            tok = json.loads(owner.google_tokens)
+            if tok.get("status") in ("revoked", "disconnected") or (not tok.get("refresh_token") and not tok.get("access_token")): return MockCalendar()
+            def save(t):
+                owner.google_tokens = json.dumps(t)
+                if session is not None: session.add(owner); session.commit()
+            g = GoogleCalendar(tok, save)
+            def mark(status):
+                if status == "error": return
+                t = dict(g.t); t["status"] = status; owner.google_tokens = json.dumps(t)
+                if session is not None:
+                    try: session.add(owner); session.commit()
+                    except Exception: session.rollback()
+            g.mark = mark
+            return g
         except Exception: pass
     return MockCalendar()
+
+def book_safe(cal, *a):
+    """Book on Google; if Google fails (revoked token, API off), keep the booking locally so the visitor isn't lost."""
+    try: return cal.book(*a)
+    except Exception as e:
+        if hasattr(cal, "mark"): cal.mark(classify(e))
+        return MockCalendar().book(*a)
 
 def all_busy(cal, bookings, days):
     now = dt.datetime.now(IST)
     busy = [(dt.datetime.fromisoformat(b.start).replace(tzinfo=IST), dt.datetime.fromisoformat(b.end).replace(tzinfo=IST)) for b in bookings]
     try: busy += cal.busy(now, now + dt.timedelta(days=days + 1))
-    except Exception: pass  # expired token etc.: fall back to rules + local bookings
+    except Exception as e:  # revoked token / API off: fall back to rules + local bookings and flag it for the dashboard
+        if hasattr(cal, "mark"): cal.mark(classify(e))
     return busy
+
+def status_of(owner):
+    if not owner or not owner.google_tokens: return "not_connected"
+    try: t = json.loads(owner.google_tokens)
+    except Exception: return "not_connected"
+    if t.get("status"): return t["status"]
+    return "connected" if t.get("refresh_token") else "needs_reconnect"

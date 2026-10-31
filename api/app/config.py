@@ -31,6 +31,7 @@ OPENROUTER_MODEL = os.getenv("OPENROUTER_MODEL", "openai/gpt-4o-mini")
 GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID", "")
 GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET", "")
 WEB_ORIGIN = os.getenv("WEB_ORIGIN", "http://localhost:3100")
+GOOGLE_REDIRECT_URI = os.getenv("GOOGLE_REDIRECT_URI", "http://localhost:8100/api/auth/google/callback")
 UPLOAD_DIR = Path(os.getenv("UPLOAD_DIR", str(Path(__file__).resolve().parents[1] / "uploads")))
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -39,6 +40,8 @@ def modes():
         "llm": "groq" if GROQ_API_KEY else ("openrouter" if OPENROUTER_API_KEY else "mock"),
         "voice": "gnani" if GNANI_API_KEY else "mock",
         "calendar": "google" if GOOGLE_CLIENT_ID else "mock",
+        "google_login": bool(GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET),
+        "dev_login": ALLOW_DEV_LOGIN,
         "db": DATABASE_URL.split(":")[0],
     }
 ALLOW_DEV_LOGIN = os.getenv("ALLOW_DEV_LOGIN", "1") == "1"   # set 0 in production once Google sign-in is live
@@ -46,3 +49,4 @@ RATE_LIMIT_PER_MIN = int(os.getenv("RATE_LIMIT_PER_MIN", "30"))  # public chat/v
 MAX_AUDIO_BYTES = int(os.getenv("MAX_AUDIO_BYTES", str(8 * 1024 * 1024)))
 MAX_DOC_BYTES = int(os.getenv("MAX_DOC_BYTES", str(10 * 1024 * 1024)))
 MAX_TEXT_CHARS = int(os.getenv("MAX_TEXT_CHARS", "1500"))
+SESSION_DAYS = int(os.getenv("SESSION_DAYS", "30"))

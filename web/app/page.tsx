@@ -96,7 +96,7 @@ export default function Landing() {
       <div className="relative isolate">
       <HeroAscii />
       <section className={`${W} grid items-center gap-10 pb-14 pt-14 md:pt-20 lg:grid-cols-[1.1fr_0.9fr]`}>
-        <div>
+        <div className="rounded-[28px] bg-white/55 p-5 backdrop-blur-md md:-ml-5 md:p-6" style={{ boxShadow: "0 10px 30px -12px rgba(60,50,110,.18)" }}>
           <motion.a href="/p/hardik" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="inline-flex h-6 items-center gap-1.5 rounded-full bg-white/70 pl-1 pr-2.5 text-[12px] text-ink-soft hairline hover:text-ink">
             <span className="rounded-full bg-mint px-1.5 text-[11px] font-medium text-ink">New</span> Voice in 8 Indian languages <ArrowRight size={11} />
           </motion.a>

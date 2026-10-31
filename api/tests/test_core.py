@@ -163,3 +163,43 @@ def test_rate_limit_returns_429(monkeypatch):
 def test_plain_bullets_after_colon():
     from app.main import plain
     assert plain("Open slots:\n- Monday 2 November, 10:00 AM\n- Tuesday 3 November, 10:00 AM\nLet me know.") == "Open slots: Monday 2 November, 10:00 AM; Tuesday 3 November, 10:00 AM. Let me know."
+
+def _client():
+    from fastapi.testclient import TestClient
+    from app.main import app
+    return TestClient(app)
+
+def test_google_login_redirect(monkeypatch):
+    from app import config
+    monkeypatch.setattr(config, "GOOGLE_CLIENT_ID", "cid.apps.googleusercontent.com")
+    monkeypatch.setattr(config, "GOOGLE_CLIENT_SECRET", "x")
+    r = _client().get("/api/auth/google/login", follow_redirects=False)
+    assert r.status_code == 302
+    loc = r.headers["location"]
+    assert loc.startswith("https://accounts.google.com/o/oauth2/v2/auth?") and "client_id=cid.apps" in loc
+    assert "access_type=offline" in loc and "prompt=consent" in loc and "state=" in loc and "calendar.readonly" in loc
+
+def test_google_callback_rejects_bad_state_and_denied():
+    c = _client()
+    r = c.get("/api/auth/google/callback?code=abc&state=forged", follow_redirects=False)
+    assert r.status_code == 302 and "/login?error=" in r.headers["location"]
+    r = c.get("/api/auth/google/callback?error=access_denied", follow_redirects=False)
+    assert "error=access_denied" in r.headers["location"]
+
+def test_classify_google_errors():
+    import httpx
+    from app.calendar_svc import classify
+    mk = lambda code, body: httpx.HTTPStatusError("x", request=httpx.Request("GET", "http://x"), response=httpx.Response(code, text=body))
+    assert classify(mk(400, '{"error":"invalid_grant"}')) == "revoked"
+    assert classify(mk(403, 'accessNotConfigured')) == "api_disabled"
+    assert classify(mk(500, 'boom')) == "error"
+
+def test_session_token_and_logout():
+    from app.db import init_db; init_db()
+    c = _client()
+    t = c.post("/api/auth/dev", json={"email": "sess-test@example.com"}).json()["token"]
+    h = {"Authorization": f"Bearer {t}"}
+    me = c.get("/api/me", headers=h).json()
+    assert "google_tokens" in me and me["calendar_status"] == "not_connected"
+    c.post("/api/auth/logout", headers=h)
+    assert c.get("/api/me", headers=h).status_code == 401

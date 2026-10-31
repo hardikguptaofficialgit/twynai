@@ -9,7 +9,7 @@ from fastapi.responses import RedirectResponse, StreamingResponse
 from pydantic import BaseModel
 from sqlalchemy import select
 from . import config, rag, llm, voice, calendar_svc
-from .db import SessionLocal, init_db, Owner, Persona, Chunk, Conversation, Message, Lead, Booking, row, now
+from .db import SessionLocal, init_db, Owner, Persona, Chunk, Conversation, Message, Lead, Booking, AuthSession, row, now
 
 import logging
 log = logging.getLogger("proxy")
@@ -56,7 +56,10 @@ def db():
 
 def current_owner(authorization: str = Header(default=""), s=Depends(db)):
     tok = authorization.replace("Bearer ", "").strip()
-    o = s.get(Owner, tok) if tok else None
+    sess = s.get(AuthSession, tok) if tok else None
+    if sess and (now() - sess.created_at).days >= config.SESSION_DAYS:
+        s.delete(sess); s.commit(); raise HTTPException(401, "session expired")
+    o = s.get(Owner, sess.owner_id) if sess else (s.get(Owner, tok) if tok and config.ALLOW_DEV_LOGIN else None)
     if not o: raise HTTPException(401, "sign in required")
     return o
 
@@ -66,6 +69,12 @@ def owned(s, pid, owner):
     return p
 
 # ---------------- auth ----------------
+def public_owner(o):
+    st = calendar_svc.status_of(o)
+    pic = ""
+    try: pic = json.loads(o.google_tokens or "{}").get("picture", "")
+    except Exception: pass
+    return {k: v for k, v in row(o).items() if k != "google_tokens"} | {"google_tokens": st == "connected", "calendar_status": st, "picture": pic}
 class DevLogin(BaseModel):
     email: str
     name: str = ""
@@ -88,29 +97,91 @@ def dev_login(b: DevLogin, s=Depends(db)):
     o = s.scalar(select(Owner).where(Owner.email == b.email.lower()))
     if not o:
         o = Owner(email=b.email.lower(), name=b.name or b.email.split("@")[0]); s.add(o); s.commit()
-    return {"token": o.id, "owner": row(o) | {"google_tokens": bool(o.google_tokens)}}
+    sess = AuthSession(owner_id=o.id); s.add(sess); s.commit()
+    return {"token": sess.id, "owner": public_owner(o)}
 
-SCOPES = "openid email profile https://www.googleapis.com/auth/calendar.events https://www.googleapis.com/auth/calendar.freebusy"
-API_ORIGIN = "http://localhost:8100"
+SCOPES = "openid email profile https://www.googleapis.com/auth/calendar.events https://www.googleapis.com/auth/calendar.readonly"
+_oauth_states: dict = {}   # state -> expiry (CSRF protection for the OAuth round trip)
 
-@app.get("/api/auth/google/start")
-def google_start():
-    if not config.GOOGLE_CLIENT_ID: return RedirectResponse(config.WEB_ORIGIN + "/login?mock=1")
-    q = urllib.parse.urlencode({"client_id": config.GOOGLE_CLIENT_ID, "redirect_uri": API_ORIGIN + "/api/auth/google/callback",
-        "response_type": "code", "scope": SCOPES, "access_type": "offline", "prompt": "consent"})
-    return RedirectResponse("https://accounts.google.com/o/oauth2/v2/auth?" + q)
+def _redirect_uri(): return config.GOOGLE_REDIRECT_URI
+
+@app.get("/api/auth/google/login")
+def google_login(next: str = ""):
+    if not (config.GOOGLE_CLIENT_ID and config.GOOGLE_CLIENT_SECRET): return RedirectResponse(config.WEB_ORIGIN + "/login?mock=1", status_code=302)
+    import secrets
+    st = secrets.token_urlsafe(24); nowt = time.time()
+    for k in [k for k, v in _oauth_states.items() if v < nowt]: _oauth_states.pop(k, None)
+    _oauth_states[st] = nowt + 600
+    q = urllib.parse.urlencode({"client_id": config.GOOGLE_CLIENT_ID, "redirect_uri": _redirect_uri(), "response_type": "code",
+        "scope": SCOPES, "access_type": "offline", "prompt": "consent", "include_granted_scopes": "true", "state": st})
+    return RedirectResponse("https://accounts.google.com/o/oauth2/v2/auth?" + q, status_code=302)
+
+app.get("/api/auth/google/start")(google_login)   # old links in the web app keep working
 
 @app.get("/api/auth/google/callback")
-def google_callback(code: str, s=Depends(db)):
-    t = httpx.post("https://oauth2.googleapis.com/token", data={"code": code, "client_id": config.GOOGLE_CLIENT_ID,
-        "client_secret": config.GOOGLE_CLIENT_SECRET, "redirect_uri": API_ORIGIN + "/api/auth/google/callback", "grant_type": "authorization_code"}).json()
-    info = httpx.get("https://openidconnect.googleapis.com/v1/userinfo", headers={"Authorization": f"Bearer {t['access_token']}"}).json()
-    o = s.scalar(select(Owner).where(Owner.email == info["email"].lower())) or Owner(email=info["email"].lower(), name=info.get("name", ""))
-    o.google_tokens = json.dumps(t); s.add(o); s.commit()
-    return RedirectResponse(f"{config.WEB_ORIGIN}/login?token={o.id}")
+def google_callback(code: str = "", state: str = "", error: str = "", s=Depends(db)):
+    fail = lambda why: RedirectResponse(f"{config.WEB_ORIGIN}/login?error={urllib.parse.quote(why)}", status_code=302)
+    if error: return fail(error)
+    if not code or _oauth_states.pop(state, 0) < time.time(): return fail("Sign-in expired, please try again.")
+    try:
+        r = httpx.post("https://oauth2.googleapis.com/token", data={"code": code, "client_id": config.GOOGLE_CLIENT_ID,
+            "client_secret": config.GOOGLE_CLIENT_SECRET, "redirect_uri": _redirect_uri(), "grant_type": "authorization_code"}, timeout=15)
+        r.raise_for_status(); t = r.json()
+        info = httpx.get("https://openidconnect.googleapis.com/v1/userinfo", headers={"Authorization": f"Bearer {t['access_token']}"}, timeout=15).json()
+    except Exception:
+        log.exception("google oauth exchange failed"); return fail("Google sign-in failed, please try again.")
+    email = (info.get("email") or "").lower()
+    if not email or not info.get("email_verified", True): return fail("Google account has no verified email.")
+    o = s.scalar(select(Owner).where(Owner.email == email))
+    if not o: o = Owner(email=email, name=info.get("name", "") or email.split("@")[0]); s.add(o); s.flush()
+    old = json.loads(o.google_tokens or "{}") if o.google_tokens else {}
+    if not t.get("refresh_token") and not old.get("refresh_token"):
+        return fail("Google did not grant offline access. Please sign in again and allow calendar access.")
+    granted = t.get("scope", "")
+    tok = {"access_token": t.get("access_token", ""), "refresh_token": t.get("refresh_token") or old.get("refresh_token", ""),
+           "expires_at": int(time.time()) + int(t.get("expires_in", 3600)), "scope": t.get("scope", ""), "picture": info.get("picture", "")}
+    if "calendar" not in granted: tok["status"] = "needs_reconnect"   # user unticked calendar on the consent screen
+    o.google_tokens = json.dumps(tok)   # server-side only; never returned to the browser
+    sess = AuthSession(owner_id=o.id); s.add(sess); s.commit()
+    has = s.scalar(select(Persona).where(Persona.owner_id == o.id))
+    nxt = "/studio" if has and has.published else "/onboarding"
+    return RedirectResponse(f"{config.WEB_ORIGIN}/login?token={sess.id}&next={nxt}", status_code=302)
+
+@app.post("/api/me/google/disconnect")
+def google_disconnect(o=Depends(current_owner), s=Depends(db)):
+    try:
+        t = json.loads(o.google_tokens or "{}")
+        if t.get("refresh_token") or t.get("access_token"):
+            httpx.post("https://oauth2.googleapis.com/revoke", data={"token": t.get("refresh_token") or t.get("access_token")}, timeout=10)
+    except Exception: pass
+    o = s.get(Owner, o.id); pic = ""
+    try: pic = json.loads(o.google_tokens or "{}").get("picture", "")
+    except Exception: pass
+    o.google_tokens = json.dumps({"status": "disconnected", "picture": pic}); s.commit()
+    return public_owner(o)
+
+@app.delete("/api/me")
+def delete_account(o=Depends(current_owner), s=Depends(db)):
+    from sqlalchemy import delete
+    pids = [p.id for p in s.scalars(select(Persona).where(Persona.owner_id == o.id))]
+    for M in (Chunk, Lead, Booking):
+        s.execute(delete(M).where(M.persona_id.in_(pids)))
+    cids = [c.id for c in s.scalars(select(Conversation).where(Conversation.persona_id.in_(pids)))]
+    s.execute(delete(Message).where(Message.conversation_id.in_(cids)))
+    s.execute(delete(Conversation).where(Conversation.id.in_(cids)))
+    s.execute(delete(Persona).where(Persona.id.in_(pids)))
+    s.execute(delete(AuthSession).where(AuthSession.owner_id == o.id))
+    s.execute(delete(Owner).where(Owner.id == o.id)); s.commit()
+    return {"deleted": True}
+
+@app.post("/api/auth/logout")
+def logout(authorization: str = Header(default=""), s=Depends(db)):
+    x = s.get(AuthSession, authorization.replace("Bearer ", "").strip())
+    if x: s.delete(x); s.commit()
+    return {"ok": True}
 
 @app.get("/api/me")
-def me(o=Depends(current_owner)): return row(o) | {"google_tokens": bool(o.google_tokens)}
+def me(o=Depends(current_owner)): return public_owner(o)
 
 # ---------------- personas ----------------
 class PersonaIn(BaseModel):
@@ -156,6 +227,27 @@ def list_docs(pid: str, o=Depends(current_owner), s=Depends(db)):
     owned(s, pid, o); out = defaultdict(int)
     for c in s.scalars(select(Chunk).where(Chunk.persona_id == pid, Chunk.source.like("doc:%"))): out[c.source[4:]] += 1
     return [{"name": k, "chunks": v} for k, v in out.items()]
+
+class KnowledgeIn(BaseModel):
+    entries: list   # [{title, text}]
+
+@app.post("/api/personas/{pid}/knowledge")
+def import_knowledge(pid: str, b: KnowledgeIn, o=Depends(current_owner), s=Depends(db)):
+    """Pasted answers from ChatGPT/Claude/etc, already split into sections client-side. Re-imports replace earlier ones."""
+    p = owned(s, pid, o)
+    items = [(str(e.get("title", "")).strip()[:80] or "Note", str(e.get("text", "")).strip()[:4000]) for e in b.entries[:60] if isinstance(e, dict)]
+    items = [(t, x) for t, x in items if x]
+    if not items: raise HTTPException(422, "Nothing to import.")
+    for c in s.scalars(select(Chunk).where(Chunk.persona_id == p.id, Chunk.source.like("doc:AI import%"))): s.delete(c)
+    texts = [f"{t}: {x}" for t, x in items]
+    for t, v in zip(texts, rag.embed_many(texts)): s.add(Chunk(persona_id=p.id, source="doc:AI import", text=t, embedding=json.dumps(v)))
+    s.commit(); return {"name": "AI import", "chunks": len(texts)}
+
+@app.delete("/api/personas/{pid}/docs/{name}")
+def delete_doc(pid: str, name: str, o=Depends(current_owner), s=Depends(db)):
+    p = owned(s, pid, o); n = 0
+    for c in s.scalars(select(Chunk).where(Chunk.persona_id == p.id, Chunk.source == "doc:" + name)): s.delete(c); n += 1
+    s.commit(); return {"deleted": n}
 
 @app.post("/api/personas/{pid}/docs")
 async def upload_doc(pid: str, file: UploadFile = File(...), o=Depends(current_owner), s=Depends(db)):
@@ -211,7 +303,7 @@ class DirectBook(BaseModel):
 def public_slots(handle: str, s=Depends(db)):
     p = s.scalar(select(Persona).where(Persona.handle == handle))
     if not p or not p.published: raise HTTPException(404, "not found")
-    owner = s.get(Owner, p.owner_id); cal = calendar_svc.for_owner(owner); rules = calendar_svc.rules_of(p)
+    owner = s.get(Owner, p.owner_id); cal = calendar_svc.for_owner(owner, s); rules = calendar_svc.rules_of(p)
     bookings = list(s.scalars(select(Booking).where(Booking.persona_id == p.id)))
     slots = calendar_svc.generate(rules, calendar_svc.all_busy(cal, bookings, 7), days=7, limit=18, per_day=4)
     return {"minutes": int(rules["duration"]), "slots": [{"start": x["start"], "label": calendar_svc.label(dt.datetime.fromisoformat(x["start"]))} for x in slots]}
@@ -222,17 +314,17 @@ def public_book(handle: str, b: DirectBook, s=Depends(db)):
     if not p or not p.published: raise HTTPException(404, "not found")
     name, email = b.name.strip()[:60], b.email.strip()[:120]
     if not name or not re.fullmatch(r"[^@\s]+@[^@\s]+\.[^@\s]+", email): raise HTTPException(422, "Add your name and a valid email.")
-    owner = s.get(Owner, p.owner_id); cal = calendar_svc.for_owner(owner); rules = calendar_svc.rules_of(p); dur = int(rules["duration"])
+    owner = s.get(Owner, p.owner_id); cal = calendar_svc.for_owner(owner, s); rules = calendar_svc.rules_of(p); dur = int(rules["duration"])
     bookings = list(s.scalars(select(Booking).where(Booking.persona_id == p.id)))
     start = b.start[:16]
     if not calendar_svc.is_valid(rules, calendar_svc.all_busy(cal, bookings, 30), start): raise HTTPException(409, "That time was just taken. Pick another.")
     topic = b.topic.strip()[:120]
-    ev = cal.book(start, dur, f"{topic or 'Meeting'} with {name}", email)
+    ev = calendar_svc.book_safe(cal, start, dur, f"{topic or 'Meeting'} with {name}", email)
     st = dt.datetime.fromisoformat(start)
     s.add(Booking(persona_id=p.id, conversation_id="direct", guest_name=name, guest_email=email, start=start,
                   end=(st + dt.timedelta(minutes=dur)).isoformat()[:16], topic=topic, calendar_event_id=ev))
     s.add(Lead(persona_id=p.id, conversation_id="direct", name=name, contact=email, intent=topic or "Booked a meeting"))
-    s.commit(); return {"booked": True, "label": calendar_svc.label(st), "minutes": dur}
+    s.commit(); return {"booked": True, "label": calendar_svc.label(st), "minutes": dur, "meet": getattr(cal, "meet_link", "")}
 
 LANG_NAMES = {"hinglish": "Hinglish: Hindi and English mixed, written ONLY in Latin script (e.g. \"Haan, main free hoon, kal 10 baje call kar lete hain\"). Never Devanagari, never pure English",
               "hi-IN": "Hindi in Devanagari script", "ta-IN": "Tamil", "te-IN": "Telugu",
@@ -249,7 +341,7 @@ Knowledge:
 {k}"""
 
 async def run_tool(s, p, conv, name, args):
-    owner = s.get(Owner, p.owner_id); cal = calendar_svc.for_owner(owner)
+    owner = s.get(Owner, p.owner_id); cal = calendar_svc.for_owner(owner, s)
     rules = calendar_svc.rules_of(p); dur = int(rules["duration"])
     bookings = list(s.scalars(select(Booking).where(Booking.persona_id == p.id)))
     if name == "check_availability":
@@ -264,7 +356,7 @@ async def run_tool(s, p, conv, name, args):
         if not calendar_svc.is_valid(rules, calendar_svc.all_busy(cal, bookings, 30), start):
             alt = calendar_svc.generate(rules, calendar_svc.all_busy(cal, bookings, 7), limit=4)
             return {"booked": False, "error": "That time is outside availability or already taken.", "alternatives": alt}
-        ev = cal.book(start, dur, f"{args.get('topic') or 'Meeting'} with {args.get('guest_name')}", args.get("guest_email", ""))
+        ev = calendar_svc.book_safe(cal, start, dur, f"{args.get('topic') or 'Meeting'} with {args.get('guest_name')}", args.get("guest_email", ""))
         st = dt.datetime.fromisoformat(start)
         s.add(Booking(persona_id=p.id, conversation_id=conv.id, guest_name=args.get("guest_name", ""), guest_email=args.get("guest_email", ""),
                       start=start, end=(st + dt.timedelta(minutes=dur)).isoformat()[:16], topic=args.get("topic", ""), calendar_event_id=ev))
