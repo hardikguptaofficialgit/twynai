@@ -106,7 +106,13 @@ async def clone_embedding(audio: bytes, filename="sample.wav"):
         return json.dumps({"embedding": "mock", "shape": [1, 768], "dtype": "torch.bfloat16"})
     async with httpx.AsyncClient(timeout=90) as c:
         r = await c.post(f"{config.GNANI_BASE}/api/v1/tts/voice-clone/embeddings", headers=H(), files={"audio_file": (filename, audio)})
-    r.raise_for_status()
+    if r.status_code != 200:
+        log.error("Gnani voice clone error %s: %s", r.status_code, r.text)
+        try:
+            err_msg = r.json().get("message") or r.text
+        except Exception:
+            err_msg = r.text
+        raise RuntimeError(f"Gnani API error ({r.status_code}): {err_msg}")
     return json.dumps(r.json()["data"]["voice_clone_embedding"])
 
 def wav_seconds(data: bytes):

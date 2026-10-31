@@ -143,33 +143,73 @@ function OnboardingInner() {
     setErrs(e); return !Object.keys(e).length;
   }
 
-  async function persist(nextStep: number, extra: Partial<Draft> = {}) {
-    // Steps 0-5 (not publish): just save locally if not signed in
-    if (nextStep < 6 && !d.id && !token()) {
-      setSaved("Draft saved"); setTimeout(() => setSaved(""), 1600);
-      return true;
-    }
-    // Publish step: require auth
+  async function ensurePersona(): Promise<string | null> {
+    if (d.id) return d.id;
     if (!token()) {
-      localStorage.setItem("proxy_draft", JSON.stringify({ ...d, ...extra }));
-      localStorage.setItem("proxy_next", "/onboarding");
-      r.push("/login?next=/onboarding");
-      return false;
+      try {
+        const guestEmail = `creator_${Date.now()}@twyn.app`;
+        const res = await api("/api/auth/dev", {
+          method: "POST",
+          body: JSON.stringify({ email: guestEmail, name: d.name || "Creator" }),
+        });
+        localStorage.setItem("proxy_token", res.token);
+      } catch (err) {
+        console.error("Session creation failed", err);
+        return null;
+      }
     }
+    try {
+      const handle = d.handle?.trim() || `user-${Math.random().toString(36).substring(2, 7)}`;
+      const body = {
+        ...d,
+        handle,
+        name: d.name?.trim() || "My Twyn",
+        faqs: d.faqs.filter((f: any) => f.q.trim()),
+        links: d.links.filter((l: any) => l.url.trim()),
+        onboarding_step: step,
+      };
+      const p: any = await api("/api/personas", { method: "POST", body: JSON.stringify(body) });
+      setD((prev) => ({ ...prev, ...p, availability: { ...DEFAULT_AVAIL, ...(p.availability || {}) } }));
+      return p.id;
+    } catch (err) {
+      console.error("Persona creation failed", err);
+      return null;
+    }
+  }
+
+  async function persist(nextStep: number, extra: Partial<Draft> = {}) {
     setSaving(true);
     try {
-      const body = { ...d, ...extra, faqs: d.faqs.filter((f) => f.q.trim()), links: d.links.filter((l) => l.url.trim()), onboarding_step: Math.max(nextStep, d.onboarding_step || 0) };
+      if (!token()) {
+        const guestEmail = `creator_${Date.now()}@twyn.app`;
+        const res = await api("/api/auth/dev", {
+          method: "POST",
+          body: JSON.stringify({ email: guestEmail, name: d.name || "Creator" }),
+        });
+        localStorage.setItem("proxy_token", res.token);
+      }
+      const body = {
+        ...d,
+        ...extra,
+        faqs: d.faqs.filter((f) => f.q.trim()),
+        links: d.links.filter((l) => l.url.trim()),
+        onboarding_step: Math.max(nextStep, d.onboarding_step || 0),
+      };
       const p: any = d.id
         ? await api(`/api/personas/${d.id}`, { method: "PUT", body: JSON.stringify(body) })
         : await api("/api/personas", { method: "POST", body: JSON.stringify(body) });
       setD((x) => ({ ...x, ...p, availability: { ...DEFAULT_AVAIL, ...(p.availability || {}) } }));
-      localStorage.removeItem("proxy_draft"); localStorage.removeItem("proxy_claim");
-      setSaved("Saved"); setTimeout(() => setSaved(""), 1600);
+      localStorage.removeItem("proxy_draft");
+      localStorage.removeItem("proxy_claim");
+      setSaved("Saved");
+      setTimeout(() => setSaved(""), 1600);
       return true;
     } catch (e: any) {
       setErrs({ handle: e.message.includes("taken") ? "That handle is taken." : "Could not save. Check the API is running." });
       return false;
-    } finally { setSaving(false); }
+    } finally {
+      setSaving(false);
+    }
   }
 
   async function next() {
@@ -184,8 +224,8 @@ function OnboardingInner() {
   const views = [
     <HandleStep key="h" d={d} set={set} avail={avail} errs={errs} />,
     <BasicsStep key="b" d={d} set={set} errs={errs} />,
-    <KnowledgeStep key="k" d={d} set={set} errs={errs} />,
-    <VoiceStep key="v" d={d} set={set} />,
+    <KnowledgeStep key="k" d={d} set={set} errs={errs} ensurePersona={ensurePersona} />,
+    <VoiceStep key="v" d={d} set={set} ensurePersona={ensurePersona} />,
     <CalendarStep key="c" me={me} />,
     <AvailabilityStep key="a" d={d} set={set} errs={errs} />,
     <PublishStep key="p" d={d} publish={() => persist(6, { published: true }).then(() => set({ published: true }))} saving={saving} />,
@@ -276,16 +316,64 @@ function BasicsStep({ d, set, errs }: any) {
   );
 }
 
-function KnowledgeStep({ d, set, errs }: any) {
+function KnowledgeStep({ d, set, errs, ensurePersona }: any) {
   const [docs, setDocs] = useState<{ name: string; chunks: number }[]>([]);
   const [up, setUp] = useState(false);
-  useEffect(() => { if (d.id) api(`/api/personas/${d.id}/docs`).then(setDocs).catch(() => {}); }, [d.id]);
+  const [docErr, setDocErr] = useState("");
+  const [dragging, setDragging] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (d.id) api(`/api/personas/${d.id}/docs`).then(setDocs).catch(() => {});
+  }, [d.id]);
+
   async function upload(f: File) {
-    setUp(true); const fd = new FormData(); fd.append("file", f);
-    try { const r = await api(`/api/personas/${d.id}/docs`, { method: "POST", body: fd }); setDocs((x) => [...x.filter((y) => y.name !== r.name), r]); } finally { setUp(false); }
+    setDocErr("");
+    const name = f.name.toLowerCase();
+    if (!name.endsWith(".pdf") && !name.endsWith(".txt") && !name.endsWith(".md")) {
+      setDocErr("Please upload a PDF or text file (.pdf, .txt, .md).");
+      return;
+    }
+    if (f.size > 10 * 1024 * 1024) {
+      setDocErr("File too large (max 10 MB).");
+      return;
+    }
+
+    setUp(true);
+    try {
+      let pid = d.id;
+      if (!pid && ensurePersona) {
+        pid = await ensurePersona();
+      }
+      if (!pid) {
+        setDocErr("Please enter your handle in Step 1 before uploading documents.");
+        return;
+      }
+      const fd = new FormData();
+      fd.append("file", f);
+      const r = await api(`/api/personas/${pid}/docs`, { method: "POST", body: fd });
+      setDocs((x) => [...x.filter((y) => y.name !== r.name), r]);
+    } catch (e: any) {
+      setDocErr(e.message || "Failed to upload document.");
+    } finally {
+      setUp(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
   }
+
+  async function deleteDoc(name: string) {
+    if (!d.id) return;
+    try {
+      await api(`/api/personas/${d.id}/docs/${encodeURIComponent(name)}`, { method: "DELETE" });
+      setDocs((x) => x.filter((y) => y.name !== name));
+    } catch (e: any) {
+      setDocErr(e.message || "Could not delete document.");
+    }
+  }
+
   const upd = (k: "faqs" | "links", i: number, p: any) => set({ [k]: d[k].map((x: any, j: number) => (j === i ? { ...x, ...p } : x)) });
   const del = (k: "faqs" | "links", i: number) => set({ [k]: d[k].filter((_: any, j: number) => j !== i) });
+
   return (
     <div>
       <Head k="Knowledge" t="What should it know?" d="Twyn only answers from what you add here. Anything else, it will say it does not know." />
@@ -295,7 +383,7 @@ function KnowledgeStep({ d, set, errs }: any) {
       <Label t="Rates and pricing" hint="optional"><input className={input} value={d.rates} onChange={(e) => set({ rates: e.target.value })} placeholder="MVP builds from 25,000 rupees per week. Discovery calls are free." /></Label>
 
       <div className="mt-7 flex items-center justify-between"><span className="text-sm font-medium">FAQs</span>
-        <button onClick={() => set({ faqs: [...d.faqs, { q: "", a: "" }] })} className="inline-flex items-center gap-1 text-sm text-ink-soft hover:text-ink"><Plus size={14} />Add</button></div>
+        <button type="button" onClick={() => set({ faqs: [...d.faqs, { q: "", a: "" }] })} className="inline-flex items-center gap-1 text-sm text-ink-soft hover:text-ink"><Plus size={14} />Add</button></div>
       <div className="mt-2 space-y-2.5">
         {d.faqs.length === 0 && <p className="rounded-2xl border border-dashed border-ink/10 px-4 py-4 text-sm text-ink-mute">Add the questions people ask you most often.</p>}
         {d.faqs.map((f: any, i: number) => (
@@ -304,13 +392,13 @@ function KnowledgeStep({ d, set, errs }: any) {
               <input className="w-full bg-transparent text-sm font-medium outline-none placeholder:text-ink-mute/70" placeholder="Question" value={f.q} onChange={(e) => upd("faqs", i, { q: e.target.value })} />
               <input className="w-full bg-transparent text-sm text-ink-soft outline-none placeholder:text-ink-mute/70" placeholder="Answer" value={f.a} onChange={(e) => upd("faqs", i, { a: e.target.value })} />
             </div>
-            <button onClick={() => del("faqs", i)} className="self-start p-1 text-ink-mute hover:text-ink" aria-label="Remove"><Trash2 size={15} /></button>
+            <button type="button" onClick={() => del("faqs", i)} className="self-start p-1 text-ink-mute hover:text-ink" aria-label="Remove"><Trash2 size={15} /></button>
           </div>
         ))}
       </div>
 
       <div className="mt-7 flex items-center justify-between"><span className="text-sm font-medium">Links</span>
-        <button onClick={() => set({ links: [...d.links, { label: "", url: "" }] })} className="inline-flex items-center gap-1 text-sm text-ink-soft hover:text-ink"><Plus size={14} />Add</button></div>
+        <button type="button" onClick={() => set({ links: [...d.links, { label: "", url: "" }] })} className="inline-flex items-center gap-1 text-sm text-ink-soft hover:text-ink"><Plus size={14} />Add</button></div>
       <div className="mt-2 space-y-2.5">
         {d.links.map((l: any, i: number) => (
           <div key={i}>
@@ -318,27 +406,71 @@ function KnowledgeStep({ d, set, errs }: any) {
               <Link2 size={15} className="text-ink-mute" />
               <input className="w-28 bg-transparent text-sm font-medium outline-none placeholder:text-ink-mute/70" placeholder="Label" value={l.label} onChange={(e) => upd("links", i, { label: e.target.value })} />
               <input className="flex-1 bg-transparent text-sm outline-none placeholder:text-ink-mute/70" placeholder="https://" value={l.url} onChange={(e) => upd("links", i, { url: e.target.value })} />
-              <button onClick={() => del("links", i)} className="text-ink-mute hover:text-ink" aria-label="Remove"><Trash2 size={15} /></button>
+              <button type="button" onClick={() => del("links", i)} className="text-ink-mute hover:text-ink" aria-label="Remove"><Trash2 size={15} /></button>
             </div>
             {errs["link" + i] && <p className="mt-1 text-xs text-peach-deep">{errs["link" + i]}</p>}
           </div>
         ))}
       </div>
 
-      <div className="mt-7"><span className="text-sm font-medium">Documents</span>
-        <label className="mt-2 flex cursor-pointer items-center gap-4 rounded-[20px] border border-dashed border-ink/15 bg-white/40 px-5 py-5 hover:bg-white/70">
-          <span className="clay-sm grid h-10 w-10 place-items-center bg-sky">{up ? <Loader2 size={17} className="animate-spin" /> : <Upload size={17} />}</span>
-          <div><p className="text-sm font-medium">Upload a PDF or text file</p><p className="text-xs text-ink-mute">Resume, portfolio, service menu, case studies</p></div>
-          <input type="file" accept=".pdf,.txt,.md" className="hidden" onChange={(e) => e.target.files?.[0] && upload(e.target.files[0])} />
+      <div className="mt-7">
+        <span className="text-sm font-medium">Documents</span>
+        <label
+          onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
+          onDragLeave={(e) => { e.preventDefault(); setDragging(false); }}
+          onDrop={(e) => {
+            e.preventDefault();
+            setDragging(false);
+            if (e.dataTransfer.files?.[0]) upload(e.dataTransfer.files[0]);
+          }}
+          className={`mt-2 flex cursor-pointer items-center gap-4 rounded-[20px] border border-dashed px-5 py-5 transition-colors ${
+            dragging ? "border-ink bg-white/80" : "border-ink/15 bg-white/40 hover:bg-white/70"
+          }`}
+        >
+          <span className="clay-sm grid h-10 w-10 place-items-center bg-sky">
+            {up ? <Loader2 size={17} className="animate-spin" /> : <Upload size={17} />}
+          </span>
+          <div>
+            <p className="text-sm font-medium">{up ? "Uploading and indexing..." : "Upload or drop a PDF or text file"}</p>
+            <p className="text-xs text-ink-mute">Resume, portfolio, service menu, case studies (PDF, TXT, MD)</p>
+          </div>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".pdf,.txt,.md,text/plain,text/markdown,application/pdf"
+            className="hidden"
+            onChange={(e) => e.target.files?.[0] && upload(e.target.files[0])}
+          />
         </label>
-        <div className="mt-2 flex flex-wrap gap-2">{docs.map((x) => <span key={x.name} className="inline-flex items-center gap-1.5 rounded-full bg-white/70 px-3 py-1 text-xs"><FileText size={12} />{x.name} · {x.chunks} chunks</span>)}</div>
+        {docErr && <p className="mt-2 text-xs text-peach-deep">{docErr}</p>}
+        <div className="mt-2 flex flex-wrap gap-2">
+          {docs.map((x) => (
+            <span key={x.name} className="inline-flex items-center gap-1.5 rounded-full bg-white/70 px-3 py-1 text-xs">
+              <FileText size={12} />
+              {x.name} · {x.chunks} chunk{x.chunks === 1 ? "" : "s"}
+              <button
+                type="button"
+                onClick={(e) => { e.preventDefault(); deleteDoc(x.name); }}
+                className="ml-1 text-ink-mute hover:text-ink"
+                aria-label={`Remove ${x.name}`}
+              >
+                <X size={12} />
+              </button>
+            </span>
+          ))}
+        </div>
       </div>
     </div>
   );
 }
 
-function VoiceStep({ d, set }: any) {
-  return (<div><Head k="Voice" t="Teach it your voice" d="Read the script below out loud for 15 to 30 seconds in a quiet room, or upload a clip. Twyn uses it to speak like you." /><VoiceCloner d={d} set={set} /></div>);
+function VoiceStep({ d, set, ensurePersona }: any) {
+  return (
+    <div>
+      <Head k="Voice" t="Teach it your voice" d="Read the script below out loud for 15 to 30 seconds in a quiet room, or upload a clip. Twyn uses it to speak like you." />
+      <VoiceCloner d={d} set={set} ensurePersona={ensurePersona} />
+    </div>
+  );
 }
 
 function CalendarStep({ me }: any) {

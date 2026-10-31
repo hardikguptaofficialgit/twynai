@@ -256,6 +256,7 @@ async def upload_doc(pid: str, file: UploadFile = File(...), o=Depends(current_o
         import io; from pypdf import PdfReader
         text = "\n".join((pg.extract_text() or "") for pg in PdfReader(io.BytesIO(data)).pages)
     else: text = data.decode("utf-8", "ignore")
+    if not text.strip(): raise HTTPException(422, "No readable text found in document.")
     chunks = rag.chunk_text(text)
     for c, v in zip(chunks, rag.embed_many(chunks)): s.add(Chunk(persona_id=p.id, source="doc:" + file.filename, text=c, embedding=json.dumps(v)))
     s.commit(); return {"name": file.filename, "chunks": len(chunks)}
@@ -268,7 +269,9 @@ async def upload_voice(pid: str, file: UploadFile = File(...), o=Depends(current
     secs = voice.wav_seconds(data)
     if secs is not None and not 5 <= secs <= 31: raise HTTPException(422, f"Sample is {secs:.0f}s. Gnani cloning needs 5 to 30 seconds.")
     try: p.voice_embedding = await voice.clone_embedding(data, file.filename)
-    except Exception as e: raise HTTPException(502, f"voice clone failed: {type(e).__name__}")
+    except Exception as e:
+        log.exception("Voice clone error: %s", e)
+        raise HTTPException(502, f"voice clone failed: {getattr(e, 'message', str(e)) or type(e).__name__}")
     (config.UPLOAD_DIR / f"{p.id}-preview.wav").unlink(missing_ok=True)  # old preview no longer matches
     s.commit(); return {"ok": True, "mock": not config.GNANI_API_KEY, "seconds": secs, "dims": (json.loads(p.voice_embedding).get("shape") if p.voice_embedding else None)}
 
