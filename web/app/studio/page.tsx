@@ -3,7 +3,7 @@ import Image from "next/image";
 import { useEffect, useState } from "react";
 const DAYS = ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"];
 const DEF_AV = { days: [0,1,2,3,4], start: "10:00", end: "18:00", duration: 30, buffer: 15, notice: 12 };
-import { motion } from "framer-motion";
+import { motion } from "motion/react";
 import { Plus, Trash as Trash2, UploadSimple as Upload, Microphone as Mic, FileText, CalendarCheck, Check, Copy } from "@phosphor-icons/react";
 import { api, API, Persona, ACCENTS } from "@/lib/api";
 import { useOwner } from "@/lib/useOwner";
@@ -40,9 +40,9 @@ export default function Studio() {
     <main className="relative min-h-screen pb-24">
       <Backdrop />
       <AppNav handle={p?.handle} />
-      <div className="mx-auto mt-10 w-[min(1200px,calc(100%-2.5rem))]">
+      <div className="mx-auto mt-6 w-[min(1040px,calc(100%-2rem))]">
         <div className="mb-8 flex flex-wrap items-end justify-between gap-4">
-          <div><div className="text-sm text-ink-mute">Persona studio</div><h1 className="display mt-1 text-5xl md:text-6xl">{p ? `Tune ${p.name.split(" ")[0]}'s Twyn` : "Create your Twyn"}</h1></div>
+          <div><div className="eyebrow">Persona studio</div><h1 className="display mt-1 text-[28px]">{p ? `Tune ${p.name.split(" ")[0]}'s Twyn` : "Create your Twyn"}</h1></div>
           <div className="flex items-center gap-3">{saved && <Pill tone="mint"><Check size={12} />{saved}</Pill>}<Button onClick={save}>{p ? "Save changes" : "Create persona"}</Button></div>
         </div>
         <div className="grid gap-6 lg:grid-cols-[1fr_380px]">

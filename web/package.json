@@ -11,10 +11,14 @@
   "dependencies": {
     "@phosphor-icons/react": "^2.1.10",
     "clsx": "^2.1.1",
+    "cn": "^0.5.1",
     "framer-motion": "^14.8.0",
+    "motion": "^14.9.0",
     "next": "15.5.28",
+    "radix-ui": "^1.8.1",
     "react": "19.1.0",
-    "react-dom": "19.1.0"
+    "react-dom": "19.1.0",
+    "tailwind-merge": "^3.7.0"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3",

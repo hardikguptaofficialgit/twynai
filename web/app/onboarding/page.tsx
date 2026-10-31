@@ -2,7 +2,7 @@
 import Image from "next/image";
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { AnimatePresence, motion } from "framer-motion";
+import { AnimatePresence, motion } from "motion/react";
 import { ArrowLeft, ArrowRight, Check, Copy, FileText, Link as Link2, CircleNotch as Loader2, Microphone as Mic, Plus, Stop as Square, Trash as Trash2, UploadSimple as Upload, X, ArrowSquareOut as ExternalLink, SpeakerHigh as Volume2 } from "@phosphor-icons/react";
 import clsx from "clsx";
 import { api, API, encodeWav, Persona, token } from "@/lib/api";
@@ -24,7 +24,7 @@ const input = "field clay-pressed text-ink placeholder:text-ink-mute/70";
 function Label({ t, hint, children, err }: any) {
   return (
     <div className="block">
-      <div className="mb-2 flex items-baseline justify-between"><span className="text-sm font-medium">{t}</span>{hint && <span className="text-xs text-ink-mute">{hint}</span>}</div>
+      <div className="mb-1.5 flex items-baseline justify-between"><span className="text-[13px] font-medium">{t}</span>{hint && <span className="text-[11px] text-ink-mute">{hint}</span>}</div>
       {children}
       {err && <p className="mt-1.5 text-xs text-peach-deep">{err}</p>}
     </div>
@@ -34,7 +34,7 @@ function Label({ t, hint, children, err }: any) {
 function Chip({ on, children, onClick }: any) {
   return (
     <button type="button" onClick={onClick}
-      className={clsx("rounded-full px-3.5 py-1.5 text-sm transition-all", on ? "clay-sm bg-lilac font-medium text-ink" : "bg-white/60 text-ink-soft hover:bg-white")}>
+      className={clsx("h-7 rounded-full px-3 text-[12.5px] transition-colors", on ? "bg-ink font-medium text-canvas" : "hairline bg-white/70 text-ink-soft hover:bg-white hover:text-ink")}>
       {children}
     </button>
   );
@@ -43,19 +43,22 @@ function Chip({ on, children, onClick }: any) {
 function Progress({ step, max, go }: { step: number; max: number; go: (i: number) => void }) {
   return (
     <div>
-      <div className="clay-pressed h-2 overflow-hidden rounded-full p-0">
-        <motion.div className="h-full rounded-full bg-lilac-deep" animate={{ width: `${((step + 1) / STEPS.length) * 100}%` }} transition={{ type: "spring", stiffness: 120, damping: 20 }} />
+      <div className="h-1 overflow-hidden rounded-full bg-paper-3 md:hidden">
+        <motion.div className="h-full rounded-full bg-ink" animate={{ width: `${((step + 1) / STEPS.length) * 100}%` }} transition={{ type: "spring", stiffness: 120, damping: 20 }} />
       </div>
-      <ol className="mt-4 hidden grid-cols-7 gap-1 md:grid">
-        {STEPS.map((s, i) => (
-          <li key={s}>
-            <button disabled={i > max} onClick={() => go(i)} className={clsx("flex items-center gap-1.5 text-xs", i === step ? "font-semibold text-ink" : i <= max ? "text-ink-soft hover:text-ink" : "text-ink-mute/60")}>
-              <span className={clsx("grid h-5 w-5 place-items-center rounded-full text-[10px]", i < step || (i <= max && i !== step) ? "bg-mint text-mint-deep" : i === step ? "bg-ink text-canvas" : "bg-white/60")}>
-                {i < step || (i <= max && i !== step) ? <Check size={11} weight="bold" /> : i + 1}
-              </span>{s}
-            </button>
-          </li>
-        ))}
+      <ol className="hidden space-y-0.5 md:block">
+        {STEPS.map((s, i) => {
+          const done = i < step || (i <= max && i !== step);
+          return (
+            <li key={s}>
+              <button disabled={i > max} onClick={() => go(i)} className={clsx("flex h-8 w-full items-center gap-2.5 rounded-lg px-2 text-[13px] transition-colors", i === step ? "bg-white font-medium text-ink hairline" : i <= max ? "text-ink-soft hover:bg-white/60 hover:text-ink" : "text-ink-mute/60")}>
+                <span className={clsx("grid h-[18px] w-[18px] place-items-center rounded-full text-[10px] tnum", done ? "bg-mint text-mint-deep" : i === step ? "bg-ink text-canvas" : "hairline bg-white/60")}>
+                  {done ? <Check size={10} weight="bold" /> : i + 1}
+                </span>{s}
+              </button>
+            </li>
+          );
+        })}
       </ol>
     </div>
   );
@@ -152,18 +155,18 @@ export default function Onboarding() {
   return (
     <main className="relative min-h-screen">
       <Backdrop />
-      <div className="sticky top-0 z-30 border-b border-rule bg-canvas/70 backdrop-blur-xl"><header className="mx-auto flex h-16 w-[min(1200px,calc(100%-2.5rem))] items-center justify-between">
+      <div className="sticky top-0 z-30 border-b border-rule bg-canvas/70 backdrop-blur-xl"><header className="mx-auto flex h-12 w-[min(1040px,calc(100%-2rem))] items-center justify-between">
         <Logo />
-        <div className="flex items-center gap-3 text-sm text-ink-mute">
+        <div className="flex items-center gap-3 text-[12.5px] text-ink-mute">
           <AnimatePresence>{saved && <motion.span initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="flex items-center gap-1 text-mint-deep"><Check size={14} />{saved}</motion.span>}</AnimatePresence>
           <span>Step {step + 1} of {STEPS.length}</span>
-          <Link href="/studio" className="rounded-xl px-3 py-2 hover:text-ink">Exit</Link>
+          <Link href="/studio" className="rounded-full px-2.5 py-1 hover:text-ink">Exit</Link>
         </div>
       </header></div>
-      <div className="mx-auto w-[min(880px,calc(100%-2.5rem))] pb-16 pt-10">
-        <Progress step={step} max={max} go={go} />
-        <div className="clay relative mt-8 overflow-hidden p-8 md:p-10">
-          {!loaded ? <div className="grid h-80 place-items-center text-ink-mute"><Loader2 className="animate-spin" /></div> : (
+      <div className="mx-auto grid w-[min(1040px,calc(100%-2rem))] gap-6 pb-16 pt-8 md:grid-cols-[180px_minmax(0,1fr)]">
+        <aside className="md:sticky md:top-20 md:self-start"><p className="eyebrow mb-3 hidden px-2 md:block">Set up your Twyn</p><Progress step={step} max={max} go={go} /></aside>
+        <div className="clay relative overflow-hidden p-6 md:p-8">
+          {!loaded ? <div className="grid h-64 place-items-center text-ink-mute"><Loader2 className="animate-spin" /></div> : (
             <AnimatePresence mode="wait" custom={dir} initial={false}>
               <motion.div key={step} custom={dir}
                 initial={{ opacity: 0, x: dir * 36 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: dir * -36 }}
@@ -173,12 +176,12 @@ export default function Onboarding() {
             </AnimatePresence>
           )}
           {loaded && step < 6 && (
-            <div className="mt-10 flex items-center justify-between border-t border-ink/5 pt-6">
+            <div className="mt-8 flex items-center justify-between border-t border-rule pt-5">
               <button onClick={back} disabled={step === 0} className="inline-flex items-center gap-1.5 rounded-xl px-3 py-2 text-sm text-ink-soft hover:text-ink disabled:invisible"><ArrowLeft size={15} />Back</button>
               <div className="flex items-center gap-2">
-                {[3, 4].includes(step) && <button onClick={next} className="rounded-xl px-4 py-2.5 text-sm text-ink-soft hover:text-ink">Skip for now</button>}
+                {[3, 4].includes(step) && <button onClick={next} className="rounded-xl h-9 px-4 text-[13.5px] text-ink-soft hover:text-ink">Skip for now</button>}
                 <motion.button whileTap={{ scale: 0.97 }} onClick={next} disabled={saving}
-                  className="inline-flex items-center gap-2 rounded-full bg-ink px-5 py-3 text-sm font-medium text-canvas hover:bg-ink-soft disabled:opacity-60">
+                  className="inline-flex items-center gap-2 rounded-full bg-ink h-9 px-4 text-[13.5px] font-medium text-canvas hover:bg-ink-soft disabled:opacity-60">
                   {saving ? <Loader2 size={15} className="animate-spin" /> : null}{step === 5 ? "Review" : "Continue"}<ArrowRight size={15} />
                 </motion.button>
               </div>
@@ -191,7 +194,7 @@ export default function Onboarding() {
 }
 
 function Head({ k, t, d }: { k: string; t: string; d: string }) {
-  return <div className="mb-8"><p className="text-xs font-medium text-ink-mute">{k}</p><h1 className="display mt-2 text-4xl md:text-5xl">{t}</h1><p className="mt-2 max-w-lg text-ink-soft">{d}</p></div>;
+  return <div className="mb-6"><p className="eyebrow">{k}</p><h1 className="display mt-1.5 text-[26px]">{t}</h1><p className="mt-1 max-w-lg text-[13.5px] text-ink-soft">{d}</p></div>;
 }
 
 function HandleStep({ d, set, avail, errs }: any) {
@@ -202,7 +205,7 @@ function HandleStep({ d, set, avail, errs }: any) {
         <div className="clay-pressed flex items-center px-4">
           <span className="text-ink-mute">twyn.ai/</span>
           <input autoFocus disabled={!!d.id} value={d.handle} onChange={(e) => set({ handle: e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, "") })}
-            placeholder="yourname" className="min-w-0 flex-1 bg-transparent py-3.5 font-medium outline-none placeholder:text-ink-mute/70" />
+            placeholder="yourname" className="min-w-0 flex-1 bg-transparent py-2 text-[14px] font-medium outline-none placeholder:text-ink-mute/70" />
           {d.id ? <span className="text-xs text-ink-mute">locked</span> : avail === true ? <span className="flex items-center gap-1 text-xs text-mint-deep"><Check size={13} />Available</span> : avail === false ? <span className="flex items-center gap-1 text-xs text-peach-deep"><X size={13} />Taken</span> : null}
         </div>
       </Label>
@@ -324,27 +327,27 @@ function VoiceStep({ d, set }: any) {
     <div>
       <Head k="Voice" t="Teach it your voice" d="Read anything out loud for 10 to 30 seconds in a quiet room. Twyn uses this sample to speak like you." />
       <div className="grid items-center gap-8 md:grid-cols-[auto_1fr]">
-        <div className="grid place-items-center"><Orb size={130} state={rec ? "listening" : busy ? "thinking" : "idle"} level={level} /></div>
+        <div className="grid place-items-center"><Orb size={88} state={rec ? "listening" : busy ? "thinking" : "idle"} level={level} /></div>
         <div>
           <div className="glass p-5 text-sm leading-relaxed text-ink-soft" style={{ borderRadius: 20 }}>
             "Hi, this is {d.name || "me"}. Thanks for reaching out. I work as a {(d.headline || "freelancer").toLowerCase()}, and I am happy to help you figure out if we are a good fit. Tell me what you are working on."
           </div>
           <div className="mt-5 flex flex-wrap items-center gap-3">
-            {!rec ? <button onClick={start} className="inline-flex items-center gap-2 rounded-full bg-ink px-5 py-3 text-sm font-medium text-canvas"><Mic size={15} />{blob ? "Record again" : "Start recording"}</button>
-              : <button onClick={stop} className="inline-flex items-center gap-2 rounded-2xl bg-peach px-5 py-3 text-sm font-medium"><Square size={13} />Stop · {secs.toFixed(0)}s</button>}
-            <label className="clay-sm inline-flex cursor-pointer items-center gap-2 bg-white px-4 py-3 text-sm"><Upload size={15} />Upload audio
+            {!rec ? <button onClick={start} className="inline-flex items-center gap-2 rounded-full bg-ink h-9 px-4 text-[13.5px] font-medium text-canvas"><Mic size={15} />{blob ? "Record again" : "Start recording"}</button>
+              : <button onClick={stop} className="inline-flex items-center gap-2 rounded-2xl bg-peach h-9 px-4 text-[13.5px] font-medium"><Square size={13} />Stop · {secs.toFixed(0)}s</button>}
+            <label className="clay-sm inline-flex cursor-pointer items-center gap-2 bg-white h-9 px-4 text-[13.5px]"><Upload size={15} />Upload audio
               <input type="file" accept="audio/*" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) { setBlob(f); } }} /></label>
           </div>
           {blob && !rec && (
             <div className="mt-5 flex flex-wrap items-center gap-3">
               <audio src={url} controls className="h-10" />
-              <button onClick={() => save(blob)} disabled={busy} className="clay-sm inline-flex items-center gap-2 bg-lilac px-4 py-2.5 text-sm font-medium">{busy && <Loader2 size={14} className="animate-spin" />}Use this sample</button>
+              <button onClick={() => save(blob)} disabled={busy} className="clay-sm inline-flex items-center gap-2 bg-lilac h-9 px-4 text-[13.5px] font-medium">{busy && <Loader2 size={14} className="animate-spin" />}Use this sample</button>
             </div>
           )}
           {(msg || d.has_voice) && <p className="mt-3 flex items-center gap-1.5 text-sm text-mint-deep"><Check size={14} />{msg || "A voice sample is saved."}</p>}
           {d.has_voice && !rec && (
             <div className="mt-4 flex flex-wrap items-center gap-3">
-              <button onClick={listen} disabled={pBusy} className="clay-sm inline-flex items-center gap-2 bg-mint px-4 py-2.5 text-sm font-medium">{pBusy ? <Loader2 size={14} className="animate-spin" /> : <Volume2 size={15} />}Hear my Twyn voice</button>
+              <button onClick={listen} disabled={pBusy} className="clay-sm inline-flex items-center gap-2 bg-mint h-9 px-4 text-[13.5px] font-medium">{pBusy ? <Loader2 size={14} className="animate-spin" /> : <Volume2 size={15} />}Hear my Twyn voice</button>
               {preview && <audio id="clone-preview" src={preview} controls className="h-10" />}
             </div>
           )}
@@ -363,7 +366,7 @@ function CalendarStep({ me }: any) {
         <span className="clay-sm grid h-12 w-12 place-items-center bg-white"><Image src="/brands/google-calendar.svg" alt="Google Calendar" width={22} height={22} /></span>
         <div className="flex-1"><p className="font-medium">Google Calendar</p><p className="text-sm text-ink-soft">{on ? `Connected as ${me.email}` : "Free/busy and event creation only"}</p></div>
         {on ? <span className="inline-flex items-center gap-1.5 rounded-full bg-mint px-3 py-1.5 text-sm font-medium"><Check size={14} />Connected</span>
-          : <a href={`${API}/api/auth/google/start`} className="rounded-full bg-ink px-5 py-3 text-sm font-medium text-canvas">Connect</a>}
+          : <a href={`${API}/api/auth/google/start`} className="rounded-full bg-ink h-9 px-4 text-[13.5px] font-medium text-canvas">Connect</a>}
       </div>
       {!on && <p className="mt-4 text-sm text-ink-mute">Skip this and Twyn will offer slots from your availability rules, then email you each booking to confirm.</p>}
     </div>
@@ -372,7 +375,7 @@ function CalendarStep({ me }: any) {
 
 function AvailabilityStep({ d, set, errs }: any) {
   const a = d.availability; const up = (p: any) => set({ availability: { ...a, ...p } });
-  const sel = "clay-pressed rounded-xl bg-transparent px-3 py-2.5 text-sm outline-none";
+  const sel = "clay-pressed rounded-lg bg-white h-9 px-2.5 text-[13px] outline-none";
   return (
     <div>
       <Head k="Availability" t="When can people book you?" d="Twyn only offers times inside these rules, and skips anything already on your calendar." />
@@ -404,19 +407,19 @@ function PublishStep({ d, publish, saving }: any) {
       {!d.published ? (<>
         <Head k="Review" t="Ready to go live" d="Check the details below. You can change any of them later in the Studio." />
         <dl className="divide-y divide-ink/5">{rows.map(([k, v]) => <div key={k} className="flex gap-6 py-3 text-sm"><dt className="w-28 shrink-0 text-ink-mute">{k}</dt><dd className="text-ink">{v}</dd></div>)}</dl>
-        <motion.button whileTap={{ scale: 0.97 }} onClick={publish} disabled={saving} className="mt-8 inline-flex items-center gap-2 rounded-full bg-ink px-6 py-3.5 text-sm font-medium text-canvas">{saving && <Loader2 size={15} className="animate-spin" />}Publish my Twyn</motion.button>
+        <motion.button whileTap={{ scale: 0.97 }} onClick={publish} disabled={saving} className="mt-8 inline-flex items-center gap-2 rounded-full bg-ink h-9 px-5 text-[13.5px] font-medium text-canvas">{saving && <Loader2 size={15} className="animate-spin" />}Publish my Twyn</motion.button>
       </>) : (
         <motion.div initial={{ opacity: 0, scale: 0.98 }} animate={{ opacity: 1, scale: 1 }} className="text-center">
-          <div className="mx-auto grid place-items-center"><Orb size={110} state="speaking" level={0.3} /></div>
-          <h1 className="display text-5xl">Your Twyn is live.</h1>
+          <div className="mx-auto grid place-items-center"><Orb size={72} state="speaking" level={0.3} /></div>
+          <h1 className="display text-[32px]">Your Twyn is live.</h1>
           <p className="mx-auto mt-2 max-w-sm text-ink-soft">Share this link anywhere. Conversations, leads and bookings show up in your dashboard.</p>
           <div className="clay-pressed mx-auto mt-7 flex max-w-md items-center gap-2 py-2 pl-4 pr-2">
             <span className="flex-1 truncate text-left text-sm font-medium">{link.replace(/^https?:\/\//, "")}</span>
             <button onClick={copy} className="inline-flex items-center gap-1.5 rounded-full bg-ink px-3.5 py-2 text-sm text-canvas">{copied ? <Check size={14} /> : <Copy size={14} />}{copied ? "Copied" : "Copy"}</button>
           </div>
           <div className="mt-6 flex justify-center gap-3">
-            <Link href={`/p/${d.handle}`} className="clay-sm inline-flex items-center gap-1.5 bg-white px-4 py-2.5 text-sm"><ExternalLink size={14} />Open page</Link>
-            <Link href="/dashboard" className="clay-sm inline-flex items-center gap-1.5 bg-lilac px-4 py-2.5 text-sm font-medium">Go to dashboard</Link>
+            <Link href={`/p/${d.handle}`} className="clay-sm inline-flex items-center gap-1.5 bg-white h-9 px-4 text-[13.5px]"><ExternalLink size={14} />Open page</Link>
+            <Link href="/dashboard" className="clay-sm inline-flex items-center gap-1.5 bg-lilac h-9 px-4 text-[13.5px] font-medium">Go to dashboard</Link>
           </div>
         </motion.div>
       )}

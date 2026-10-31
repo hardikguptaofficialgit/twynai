@@ -1,80 +1,90 @@
 "use client";
 import Link from "next/link";
+import Image from "next/image";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { motion } from "framer-motion";
-import { ArrowRight, ArrowUpRight, CalendarCheck } from "@phosphor-icons/react";
+import { motion } from "motion/react";
+import { ArrowRight, ArrowUpRight, CalendarCheck, ChatCircle, Microphone, BookOpenText, Hand, Users, ShieldCheck, Translate, Waveform, UserPlus, MagnifyingGlass } from "@phosphor-icons/react";
 import { Backdrop, Logo, Nav, SectionHead, W } from "@/components/ui";
 import { Orb } from "@/components/Orb";
+import { Marquee } from "@/components/ui-kit/marquee";
+import { AnimatedList } from "@/components/ui-kit/animated-list";
+import { NumberTicker } from "@/components/ui-kit/number-ticker";
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui-kit/accordion";
 
 const ease = [0.22, 1, 0.36, 1] as [number, number, number, number];
+const fade = (d = 0) => ({ initial: { opacity: 0, y: 8 }, whileInView: { opacity: 1, y: 0 }, viewport: { once: true, margin: "-40px" }, transition: { duration: 0.5, delay: d, ease } });
 
-function ClaimBar() {
+function ClaimBar({ className = "" }: { className?: string }) {
   const r = useRouter(); const [h, setH] = useState("");
   const go = () => r.push(`/login?handle=${encodeURIComponent(h.toLowerCase().replace(/[^a-z0-9-]/g, ""))}`);
   return (
-    <form onSubmit={(e) => { e.preventDefault(); go(); }} className="clay flex w-full max-w-[26rem] items-center gap-1 p-1.5" style={{ borderRadius: 999 }}>
-      <label htmlFor="claim" className="pl-5 text-[15px] text-ink-mute">twyn.ai/</label>
+    <form onSubmit={(e) => { e.preventDefault(); go(); }} className={`clay flex w-full max-w-[22rem] items-center gap-1 p-1 ${className}`} style={{ borderRadius: 999 }}>
+      <label htmlFor="claim" className="pl-3.5 font-mono text-[12.5px] text-ink-mute">twyn.ai/</label>
       <input id="claim" name="handle" autoComplete="username" value={h} onChange={(e) => setH(e.target.value)} placeholder="yourname"
-        className="min-w-0 flex-1 bg-transparent py-2.5 text-[15px] font-medium text-ink outline-none placeholder:text-ink-mute/60" />
-      <button type="submit" className="inline-flex min-h-11 items-center gap-1.5 rounded-full bg-ink px-5 text-[15px] font-medium text-canvas transition-colors duration-150 hover:bg-ink-soft">
-        Claim it <ArrowRight size={16} />
+        className="min-w-0 flex-1 bg-transparent py-1.5 text-[13.5px] font-medium text-ink outline-none placeholder:text-ink-mute/60" />
+      <button type="submit" className="inline-flex h-8 items-center gap-1 rounded-full bg-ink px-3.5 text-[13px] font-medium text-canvas transition-colors hover:bg-ink-soft">
+        Claim <ArrowRight size={13} weight="bold" />
       </button>
     </form>
   );
 }
 
-function Call() {
+function CallCard() {
   const lines: [string, string][] = [
     ["them", "Bhai aapka rate kitna hai?"],
     ["twyn", "MVP builds 25,000 rupees per week se start hote hain. Discovery call free hai."],
     ["them", "Kal 3 baje ho sakta hai?"],
   ];
   return (
-    <div className="relative">
-            <div className="glass relative p-3" style={{ borderRadius: 34 }}>
-        <div className="clay flex items-center gap-4 p-4" style={{ borderRadius: 24 }}>
-          <div className="grid h-14 w-14 shrink-0 place-items-center overflow-visible"><Orb size={44} state="speaking" level={0.3} /></div>
-          <div className="min-w-0 flex-1">
-            <p className="font-medium">Hardik&rsquo;s Twyn</p>
-            <p className="text-sm text-ink-mute">On a call with Ravi, Hinglish</p>
-          </div>
-          <span className="tnum rounded-full bg-paper-2 px-3 py-1 font-mono text-[13px] text-ink-soft">01:42</span>
+    <div className="glass p-2" style={{ borderRadius: 22 }}>
+      <div className="clay flex items-center gap-3 p-3" style={{ borderRadius: 16 }}>
+        <div className="grid h-9 w-9 shrink-0 place-items-center"><Orb size={30} state="speaking" level={0.3} /></div>
+        <div className="min-w-0 flex-1">
+          <p className="text-[13px] font-medium">Hardik&rsquo;s Twyn</p>
+          <p className="text-[12px] text-ink-mute">On a call with Ravi · Hinglish</p>
         </div>
-        <ol className="space-y-2.5 px-3 pb-2 pt-5">
-          {lines.map(([who, t], i) => (
-            <motion.li key={i} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.45, delay: 0.25 + i * 0.09, ease }}
-              className={who === "them" ? "ml-auto w-fit max-w-[80%] rounded-[20px] rounded-br-md bg-ink px-4 py-2.5 text-[15px] text-canvas" : "w-fit max-w-[85%] rounded-[20px] rounded-bl-md bg-canvas px-4 py-2.5 text-[15px]"}>
-              {t}
-            </motion.li>
-          ))}
-        </ol>
-        <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.45, delay: 0.55, ease }}
-          className="clay-sm m-2 mt-3 flex items-center gap-3 bg-mint px-4 py-3.5">
-          <CalendarCheck size={18} className="shrink-0 text-mint-deep" />
-          <div className="min-w-0"><p className="font-medium">Discovery call booked</p><p className="text-sm text-ink-soft">Sun 1 Nov, 3:00 PM IST. Invite sent to Ravi.</p></div>
-        </motion.div>
+        <span className="tnum rounded-full bg-paper-2 px-2 py-0.5 font-mono text-[11px] text-ink-soft">01:42</span>
       </div>
+      <ol className="space-y-2 px-2 pb-1 pt-3">
+        {lines.map(([who, t], i) => (
+          <motion.li key={i} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4, delay: 0.3 + i * 0.12, ease }}
+            className={who === "them" ? "ml-auto w-fit max-w-[80%] rounded-2xl rounded-br-md bg-ink px-3 py-2 text-[13px] text-canvas" : "w-fit max-w-[85%] rounded-2xl rounded-bl-md bg-white px-3 py-2 text-[13px] hairline"}>
+            {t}
+          </motion.li>
+        ))}
+      </ol>
+      <motion.div initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4, delay: 0.7, ease }}
+        className="clay-sm m-1.5 mt-2.5 flex items-center gap-2.5 bg-mint px-3 py-2.5">
+        <CalendarCheck size={16} weight="duotone" className="shrink-0 text-mint-deep" />
+        <div className="min-w-0"><p className="text-[13px] font-medium">Discovery call booked</p><p className="text-[12px] text-ink-soft">Sun 1 Nov, 3:00 PM IST · invite sent</p></div>
+      </motion.div>
     </div>
   );
 }
 
-const langs: [string, boolean][] = [["English", true], ["हिन्दी", false], ["Hinglish", true], ["தமிழ்", false], ["मराठी", false], ["and more", true]];
+const langs = ["English", "हिन्दी", "Hinglish", "தமிழ்", "मराठी", "తెలుగు", "ಕನ್ನಡ", "বাংলা"];
 
-const steps: [string, string, string, string][] = [
-  ["Thirty seconds of you", "Read a short paragraph out loud. Gnani Timbre clones the voice, Prisma hears every caller.", "bg-lilac", "Voice"],
-  ["Your notes, nothing else", "Bio, rates, FAQs and docs. If the answer is not in there, it says so and takes a message.", "bg-peach", "Knowledge"],
-  ["Your calendar, your hours", "It reads free slots from Google Calendar and books the call before it hangs up.", "bg-sky", "Calendar"],
+const steps: [string, string, any][] = [
+  ["Record 30 seconds", "Read a paragraph aloud. Gnani Timbre clones your voice.", Microphone],
+  ["Add what you know", "Bio, rates, FAQs and docs. Unknowns become a message for you.", BookOpenText],
+  ["Share your link", "It answers, qualifies and books from your Google Calendar.", CalendarCheck],
 ];
 
-const features: [string, string][] = [
-  ["Live transcript", "Every chat and call lands on your dashboard as it happens."],
-  ["One-tap takeover", "Jump into a chat and reply as yourself."],
-  ["Leads, sorted", "Names, asks and follow-ups, without a spreadsheet."],
-  ["Credits guarded", "Rate limits stop strangers from burning your voice minutes."],
+const events: [string, string, any, string][] = [
+  ["Ravi asked about rates", "Hinglish · chat", ChatCircle, "bg-lilac"],
+  ["Checked your calendar", "3 free slots tomorrow", MagnifyingGlass, "bg-sky"],
+  ["Meeting booked", "Sun 3:00 PM IST", CalendarCheck, "bg-mint"],
+  ["New lead saved", "Priya · design agency", UserPlus, "bg-butter"],
+  ["Voice call answered", "Tamil · 2m 10s", Waveform, "bg-peach"],
 ];
 
-const fade = (d = 0) => ({ initial: { opacity: 0, y: 12 }, whileInView: { opacity: 1, y: 0 }, viewport: { once: true, margin: "-60px" }, transition: { duration: 0.6, delay: d, ease } });
+const faqs: [string, string][] = [
+  ["Does it really sound like me?", "Yes. Your 30 second sample is cloned with Gnani Timbre. Callers hear your voice, in their language."],
+  ["What if it doesn't know an answer?", "It only answers from what you gave it. Anything else, it says so and saves a message for you."],
+  ["Can I jump in?", "Any time. Open the dashboard, hit Take over, and you are replying live as yourself."],
+  ["Which languages work?", "English, Hindi, Hinglish, Tamil, Marathi, Telugu, Kannada and Bengali, detected automatically."],
+];
 
 export default function Landing() {
   return (
@@ -82,65 +92,109 @@ export default function Landing() {
       <Backdrop />
       <Nav />
 
-      <section className={`${W} grid items-center gap-14 py-16 md:py-20 lg:grid-cols-[minmax(0,1.05fr)_minmax(0,0.95fr)] lg:gap-16`}>
-        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.7, ease }}>
-          <h1 className="display min-w-0 max-w-[11ch] text-[clamp(3.1rem,6.8vw,6rem)] [overflow-wrap:break-word]">You, on call. Even when you&rsquo;re not.</h1>
-          <p className="mt-6 max-w-[34ch] text-lg leading-relaxed text-ink-soft md:text-xl">
-            Twyn AI is a link where anyone can talk to an AI you, in your voice and their language.
-          </p>
-          <div className="mt-9"><ClaimBar /></div>
-          <Link href="/p/hardik" className="mt-5 inline-flex items-center gap-1.5 text-[15px] text-ink-soft underline decoration-ink/25 underline-offset-4 transition-colors hover:text-ink">
-            Talk to Hardik&rsquo;s Twyn first <ArrowUpRight size={15} />
-          </Link>
-        </motion.div>
-        <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.8, delay: 0.1, ease }}><Call /></motion.div>
+      <section className={`${W} grid items-center gap-10 pb-14 pt-14 md:pt-20 lg:grid-cols-[1.1fr_0.9fr]`}>
+        <div>
+          <motion.a href="/p/hardik" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="inline-flex h-6 items-center gap-1.5 rounded-full bg-white/70 pl-1 pr-2.5 text-[12px] text-ink-soft hairline hover:text-ink">
+            <span className="rounded-full bg-mint px-1.5 text-[11px] font-medium text-ink">New</span> Voice in 8 Indian languages <ArrowRight size={11} />
+          </motion.a>
+          <h1 className="display mt-4 max-w-[14ch] text-[40px] md:text-[52px]">{"You, on call. Even when you’re not.".split(" ").map((w, i) => (
+            <motion.span key={i} className="mr-[0.22em] inline-block" initial={{ opacity: 0, y: 14, filter: "blur(6px)" }} animate={{ opacity: 1, y: 0, filter: "blur(0px)" }} transition={{ duration: 0.5, delay: 0.05 + i * 0.06, ease }}>{w}</motion.span>))}</h1>
+          <motion.p {...fade(0.15)} className="mt-4 max-w-[40ch] text-[15px] leading-relaxed text-ink-soft">
+            Twyn AI gives you a link where anyone can chat or talk to an AI you, in your voice and their language. It answers, qualifies and books calls while you work.
+          </motion.p>
+          <motion.div {...fade(0.25)} className="mt-6"><ClaimBar /></motion.div>
+          <motion.div {...fade(0.3)} className="mt-3 flex items-center gap-4 text-[12.5px] text-ink-mute">
+            <Link href="/p/hardik" className="inline-flex items-center gap-1 text-ink-soft underline decoration-ink/20 underline-offset-4 hover:text-ink">Try Hardik’s Twyn <ArrowUpRight size={12} /></Link>
+            <span>Free in beta · no card</span>
+          </motion.div>
+        </div>
+        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6, delay: 0.1, ease }} className="mx-auto w-full max-w-[400px]"><CallCard /></motion.div>
       </section>
 
-      <section aria-label="Languages" className="border-y border-rule bg-canvas/60">
-        <div className={`${W} grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-7`}>
-          <p className="col-span-2 flex items-center py-6 text-[15px] text-ink-mute sm:col-span-3 lg:col-span-1">It answers in</p>
-          {langs.map(([l, lat]) => <span key={l} className={`flex items-center border-rule py-6 lg:border-l lg:pl-6 ${lat ? "font-display text-2xl md:text-3xl" : "text-xl font-medium md:text-2xl"}`}>{l}</span>)}
+      <section aria-label="Languages" className="border-y border-rule bg-white/40">
+        <div className={`${W} flex items-center gap-6 py-3`}>
+          <p className="eyebrow shrink-0">Answers in</p>
+          <Marquee pauseOnHover className="[--duration:28s] [--gap:2.5rem] p-0">
+            {langs.map((l) => <span key={l} className="text-[15px] font-medium text-ink-soft">{l}</span>)}
+          </Marquee>
         </div>
       </section>
 
-      <section id="how" className={`${W} scroll-mt-20 py-24`}>
-        <motion.div {...fade()}><SectionHead n="01" title="Five minutes to a second you."><p className="max-w-[36ch] text-ink-soft">Teach it once. It handles the calls you would have missed.</p></SectionHead></motion.div>
-        <ol className="grid md:grid-cols-3">
-          {steps.map(([t, d, tone, tag], i) => (
-            <motion.li key={t} {...fade(i * 0.08)} className={`border-rule py-10 md:px-8 ${i ? "border-t md:border-l md:border-t-0" : "md:pl-0"} ${i === 2 ? "md:pr-0" : ""}`}>
-              <div className="flex items-center gap-3">
-                <span className={`clay-sm grid h-11 w-11 place-items-center font-display text-xl ${tone}`}>{i + 1}</span>
-                <span className="label">{tag}</span>
-              </div>
-              <h3 className="mt-7 text-[1.9rem] leading-tight">{t}</h3>
-              <p className="mt-3 max-w-[38ch] text-ink-soft">{d}</p>
+      <section id="how" className={`${W} scroll-mt-16 py-16`}>
+        <motion.div {...fade()}><SectionHead eyebrow="How it works" title="Five minutes to a second you.">Teach it once. It handles the calls you would have missed.</SectionHead></motion.div>
+        <ol className="grid overflow-hidden rounded-[18px] hairline bg-white/50 md:grid-cols-3">
+          {steps.map(([t, d, I], i) => (
+            <motion.li key={t} {...fade(i * 0.06)} className={`p-5 ${i ? "border-t border-rule md:border-l md:border-t-0" : ""}`}>
+              <div className="flex items-center justify-between"><span className="clay-sm grid h-8 w-8 place-items-center bg-white"><I size={16} weight="duotone" /></span><span className="tnum font-mono text-[11px] text-ink-mute">0{i + 1}</span></div>
+              <h3 className="mt-5 text-[15px] font-medium" style={{ fontFamily: "var(--font-sans)", letterSpacing: 0 }}>{t}</h3>
+              <p className="mt-1 text-[13.5px] text-ink-soft">{d}</p>
             </motion.li>
           ))}
         </ol>
       </section>
 
-      <section className="border-t border-rule">
-        <div className={`${W} grid gap-12 py-24 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]`}>
-          <motion.div {...fade()}>
-            <p className="tnum font-mono text-[13px] text-ink-mute">02</p>
-            <h2 className="display mt-3 max-w-[13ch] text-4xl md:text-5xl">Read every call. Take over any time.</h2>
-          </motion.div>
-          <dl className="grid sm:grid-cols-2">
-            {features.map(([t, d], i) => (
-              <motion.div key={t} {...fade(i * 0.06)} className={`border-t border-rule py-6 sm:pr-8 ${i % 2 ? "sm:border-l sm:pl-8" : ""}`}>
-                <dt className="font-bold">{t}</dt><dd className="mt-1.5 text-ink-soft">{d}</dd>
+      <section id="features" className="border-t border-rule">
+        <div className={`${W} scroll-mt-16 py-16`}>
+          <motion.div {...fade()}><SectionHead eyebrow="Features" title="Read every call. Take over any time." /></motion.div>
+          <div className="grid gap-3 md:grid-cols-6">
+            <motion.div {...fade()} className="clay p-5 md:col-span-3 md:row-span-2">
+              <p className="text-[15px] font-medium">Live activity</p>
+              <p className="mt-1 text-[13.5px] text-ink-soft">Every chat, call, lead and booking lands on your dashboard as it happens.</p>
+              <div className="mt-4 h-[236px] overflow-hidden">
+                <AnimatedList delay={1600}>
+                  {events.map(([t, s, I, bg]) => (
+                    <div key={t} className="flex w-full items-center gap-3 rounded-xl bg-white p-2.5 hairline">
+                      <span className={`grid h-8 w-8 shrink-0 place-items-center rounded-lg ${bg}`}><I size={15} /></span>
+                      <div className="min-w-0"><p className="text-[13px] font-medium">{t}</p><p className="text-[12px] text-ink-mute">{s}</p></div>
+                    </div>
+                  ))}
+                </AnimatedList>
+              </div>
+            </motion.div>
+            {([["One-tap takeover", "Jump into any conversation and reply as yourself, live.", Hand, "bg-peach"], ["Auto language", "Detects Hindi, Tamil or Hinglish and replies in kind, by voice or text.", Translate, "bg-sky"]] as const).map(([t, d, I, bg], i) => (
+              <motion.div key={t} {...fade(0.05 * i)} className="clay p-5 md:col-span-3">
+                <span className={`grid h-8 w-8 place-items-center rounded-lg ${bg}`}><I size={15} /></span>
+                <p className="mt-6 text-[14px] font-medium">{t}</p><p className="mt-0.5 text-[13px] text-ink-soft">{d}</p>
               </motion.div>
             ))}
-          </dl>
+          </div>
+          <div className="mt-3 grid gap-3 sm:grid-cols-2 md:grid-cols-4">
+            {([["Leads, sorted", "Names, asks and follow-ups.", Users, "bg-butter"], ["Credits guarded", "Rate limits on voice minutes.", ShieldCheck, "bg-lilac"]] as const).map(([t, d, I, bg]) => (
+              <motion.div key={t} {...fade()} className="clay p-4">
+                <span className={`grid h-8 w-8 place-items-center rounded-lg ${bg}`}><I size={15} /></span>
+                <p className="mt-3 text-[14px] font-medium">{t}</p><p className="mt-0.5 text-[13px] text-ink-soft">{d}</p>
+              </motion.div>
+            ))}
+            {([[1.2, "s", "to first audio"], [8, "", "Indian languages"]] as const).map(([v, u, l]) => (
+              <motion.div key={l} {...fade()} className="glass p-4">
+                <p className="display tnum text-[30px]"><NumberTicker value={v} decimalPlaces={v % 1 ? 1 : 0} className="tracking-tight text-ink" />{u}</p>
+                <p className="mt-1 text-[12.5px] text-ink-mute">{l}</p>
+              </motion.div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      <section id="faq" className="border-t border-rule">
+        <div className={`${W} grid scroll-mt-16 gap-8 py-16 md:grid-cols-[0.8fr_1.2fr]`}>
+          <SectionHead eyebrow="FAQ" title="Questions, answered." />
+          <Accordion type="single" collapsible defaultValue="0" className="rounded-[18px] bg-white/60 px-5 hairline">
+            {faqs.map(([q, a], i) => (
+              <AccordionItem key={q} value={String(i)}>
+                <AccordionTrigger className="py-3.5 text-[14px]">{q}</AccordionTrigger>
+                <AccordionContent className="text-[13.5px] text-ink-soft">{a}</AccordionContent>
+              </AccordionItem>
+            ))}
+          </Accordion>
         </div>
       </section>
 
       <section className="border-t border-rule">
-        <div className={`${W} py-24`}>
-          <motion.div {...fade()} className="glass flex flex-col items-start gap-8 p-8 md:flex-row md:items-end md:justify-between md:p-14" style={{ borderRadius: 32 }}>
+        <div className={`${W} py-16`}>
+          <motion.div {...fade()} className="glass flex flex-col items-start gap-5 p-7 md:flex-row md:items-center md:justify-between md:p-9">
             <div>
-              <h2 className="display text-5xl md:text-7xl">Claim your link.</h2>
-              <p className="mt-4 text-lg text-ink-soft">Free while in beta. No card.</p>
+              <h2 className="display text-[28px] md:text-[34px]">Claim your link.</h2>
+              <p className="mt-1 text-[14px] text-ink-soft">Set up in five minutes. Free while in beta.</p>
             </div>
             <ClaimBar />
           </motion.div>
@@ -148,9 +202,12 @@ export default function Landing() {
       </section>
 
       <footer className="border-t border-rule">
-        <div className={`${W} flex flex-col items-start justify-between gap-4 py-8 text-[15px] text-ink-mute sm:flex-row sm:items-center`}>
-          <div className="flex flex-wrap items-center gap-4"><Logo /><span>Twyn AI · Built for the Gnani AI Internship Challenge</span></div>
-          <div className="flex gap-6"><Link href="/p/hardik" className="hover:text-ink">Demo</Link><Link href="/login" className="hover:text-ink">Sign in</Link></div>
+        <div className={`${W} flex flex-col items-start justify-between gap-3 py-6 text-[12.5px] text-ink-mute sm:flex-row sm:items-center`}>
+          <div className="flex flex-wrap items-center gap-3"><Logo /><span>Built for the Gnani AI Internship Challenge</span></div>
+          <div className="flex items-center gap-5">
+            <span className="flex items-center gap-1.5">LLM by <Image src="/brands/groq.svg" alt="Groq" width={12} height={12} /> Groq</span>
+            <Link href="/p/hardik" className="hover:text-ink">Demo</Link><Link href="/login" className="hover:text-ink">Sign in</Link>
+          </div>
         </div>
       </footer>
     </main>

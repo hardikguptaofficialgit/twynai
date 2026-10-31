@@ -2,8 +2,8 @@
 import Image from "next/image";
 import { useEffect, useRef, useState } from "react";
 import { useParams } from "next/navigation";
-import { motion, AnimatePresence } from "framer-motion";
-import { Microphone as Mic, PaperPlaneRight as Send, ChatCircle as MessageSquare, Waveform as AudioLines, Stop as Square, CalendarCheck, UserPlus, MagnifyingGlass as Search } from "@phosphor-icons/react";
+import { motion, AnimatePresence } from "motion/react";
+import { ArrowUpRight, Check, Clock, Microphone as Mic, PaperPlaneRight as Send, ChatCircle as MessageSquare, Waveform as AudioLines, Stop as Square, CalendarCheck, UserPlus, MagnifyingGlass as Search } from "@phosphor-icons/react";
 import { api, API, WS, Persona, ACCENTS, encodeWav } from "@/lib/api";
 import { Backdrop, Logo, Pill } from "@/components/ui";
 import { Orb } from "@/components/Orb";
@@ -17,7 +17,7 @@ const LANG: Record<string, string> = { hinglish: "Hinglish", "hi-IN": "Hindi", "
 export default function PublicPersona() {
   const { handle } = useParams<{ handle: string }>();
   const [p, setP] = useState<Persona | null>(null);
-  const [mode, setMode] = useState<"chat" | "voice">("chat");
+  const [mode, setMode] = useState<"chat" | "voice" | "book">("chat");
   const [msgs, setMsgs] = useState<Msg[]>([]);
   const [text, setText] = useState("");
   const [cid, setCid] = useState("");
@@ -178,93 +178,119 @@ export default function PublicPersona() {
     } catch { setOrb("idle"); setErr("Voice request failed."); }
   }
 
-  if (err && !p) return <main className="grid min-h-screen place-items-center"><Backdrop /><div className="glass p-10 text-ink-soft">{err}</div></main>;
-  if (!p) return <main className="grid min-h-screen place-items-center"><Backdrop /><div className="clay h-16 w-16 animate-pulse rounded-full" /></main>;
+  if (err && !p) return <main className="grid min-h-screen place-items-center"><Backdrop /><div className="glass px-6 py-5 text-[13.5px] text-ink-soft">{err}</div></main>;
+  if (!p) return <main className="grid min-h-screen place-items-center"><Backdrop /><div className="clay h-12 w-12 animate-pulse rounded-full" /></main>;
 
+  const first = p.name.split(" ")[0];
   const initials = p.name.split(" ").map((w) => w[0]).join("").slice(0, 2);
+  const share = typeof window !== "undefined" ? window.location.href : "";
+  const TABS = [["chat", "Chat", MessageSquare], ["voice", "Talk", AudioLines], ["book", "Book", CalendarCheck]] as const;
   return (
     <main className="relative min-h-screen pb-10">
       <Backdrop />
-      <div className="sticky top-0 z-30 border-b border-rule bg-canvas/70 backdrop-blur-xl"><div className="mx-auto flex h-16 w-[min(1200px,calc(100%-2.5rem))] items-center justify-between"><Logo /><span className="flex items-center gap-3"><span className="hidden font-mono text-[13px] text-ink-mute sm:inline">twyn.ai/{p.handle}</span>{[["linkedin","LinkedIn",`https://www.linkedin.com/sharing/share-offsite/?url=`],["x","X",`https://x.com/intent/post?url=`],["whatsapp","WhatsApp",`https://wa.me/?text=`]].map(([k,n,u]) => <a key={k} aria-label={`Share on ${n}`} target="_blank" rel="noreferrer" href={u + encodeURIComponent(typeof window !== "undefined" ? window.location.href : "")} className="clay-sm grid h-9 w-9 place-items-center bg-white"><Image src={`/brands/${k}.svg`} alt="" width={16} height={16} /></a>)}</span></div></div>
-      <div className="reveal mx-auto grid w-[min(1200px,calc(100%-2.5rem))] gap-6 pt-6 lg:grid-cols-[minmax(0,360px)_minmax(0,1fr)]">
-        <aside className="space-y-5">
-          <div className="glass p-7">
-            <div className="clay-sm grid h-20 w-20 place-items-center font-display text-3xl" style={{ background: accent.soft }}>{initials}</div>
-            <h1 className="mt-6 text-4xl">{p.name}</h1>
-            <p className="mt-1 text-sm text-ink-soft">{p.headline}</p>
-            <div className="mt-4 flex flex-wrap gap-2">
-              <Pill tone={human ? "peach" : "mint"}>{human ? `${p.name.split(" ")[0]} joined` : "AI persona online"}</Pill>
-              {p.has_voice && <Pill tone="lilac">Cloned voice</Pill>}
+      <div className="sticky top-0 z-30 border-b border-rule bg-canvas/75 backdrop-blur-xl">
+        <div className="mx-auto flex h-12 w-[min(1040px,calc(100%-2rem))] items-center justify-between">
+          <Logo />
+          <span className="flex items-center gap-1.5">
+            <span className="mr-2 hidden font-mono text-[12px] text-ink-mute sm:inline">twyn.ai/{p.handle}</span>
+            {[["linkedin", "LinkedIn", "https://www.linkedin.com/sharing/share-offsite/?url="], ["x", "X", "https://x.com/intent/post?url="], ["whatsapp", "WhatsApp", "https://wa.me/?text="]].map(([k, n, u]) => (
+              <a key={k} aria-label={`Share on ${n}`} target="_blank" rel="noreferrer" href={u + encodeURIComponent(share)} className="hairline grid h-7 w-7 place-items-center rounded-full bg-white/80 hover:bg-white"><Image src={`/brands/${k}.svg`} alt="" width={13} height={13} /></a>
+            ))}
+          </span>
+        </div>
+      </div>
+      <div className="reveal mx-auto grid w-[min(1040px,calc(100%-2rem))] gap-4 pt-5 lg:grid-cols-[300px_minmax(0,1fr)]">
+        <aside className="space-y-3">
+          <div className="glass p-5">
+            <div className="flex items-center gap-3">
+              <div className="clay-sm grid h-14 w-14 shrink-0 place-items-center rounded-full font-display text-[22px]" style={{ background: accent.soft, borderRadius: 9999 }}>{initials}</div>
+              <div className="min-w-0">
+                <h1 className="display truncate text-[22px] leading-tight">{p.name}</h1>
+                <p className="truncate text-[12.5px] text-ink-soft">{p.headline}</p>
+              </div>
             </div>
-            <p className="mt-5 border-t border-rule pt-5 text-sm leading-relaxed text-ink-soft">{p.bio}</p>
-            {p.rates && <div className="clay-pressed mt-5 p-4 text-sm"><div className="mb-1 text-xs font-medium text-ink-mute">Rates</div>{p.rates}</div>}
-            {p.links.length > 0 && <div className="mt-5 flex flex-wrap gap-2">{p.links.map((l) => <a key={l.url} href={l.url} target="_blank" className="clay-sm bg-canvas px-3 py-1.5 text-xs font-medium">{l.label}</a>)}</div>}
+            <div className="mt-3 flex flex-wrap gap-1.5">
+              <Pill tone={human ? "peach" : "mint"}>{human ? `${first} joined` : "Online now"}</Pill>
+              {p.has_voice && <Pill tone="lilac">Own voice</Pill>}
+              <Pill tone="sky">{(p.languages || []).length || 2}+ languages</Pill>
+            </div>
+            {p.bio && <p className="mt-4 border-t border-rule pt-4 text-[13px] leading-relaxed text-ink-soft">{p.bio}</p>}
+            {p.rates && <div className="clay-pressed mt-3 px-3 py-2.5 text-[13px]"><div className="eyebrow mb-0.5">Rates</div>{p.rates}</div>}
+            <button onClick={() => setMode("book")} className="mt-3 flex h-9 w-full items-center justify-center gap-2 rounded-full bg-ink text-[13px] font-medium text-canvas hover:bg-ink-soft"><CalendarCheck size={14} />Book a call</button>
           </div>
-          {p.faqs.length > 0 && <div className="glass p-6"><div className="mb-3 text-xs font-medium text-ink-mute">Ask me</div>
-            <div className="flex flex-col gap-2">{p.faqs.slice(0, 4).map((f) => <button key={f.q} onClick={() => { setMode("chat"); send(f.q); }} className="clay-sm bg-canvas px-4 py-2.5 text-left text-sm hover:bg-white">{f.q}</button>)}</div></div>}
+          {p.links.length > 0 && <div className="glass p-2">
+            {p.links.map((l) => (
+              <a key={l.url} href={l.url} target="_blank" rel="noreferrer" className="group flex h-9 items-center justify-between rounded-lg px-3 text-[13px] hover:bg-white/70">
+                <span className="truncate">{l.label}</span><ArrowUpRight size={13} className="text-ink-mute group-hover:text-ink" />
+              </a>))}
+          </div>}
+          {p.faqs.length > 0 && <div className="glass p-4"><div className="eyebrow mb-2">Ask me</div>
+            <div className="flex flex-col gap-1">{p.faqs.slice(0, 4).map((f) => <button key={f.q} onClick={() => { setMode("chat"); send(f.q); }} className="rounded-lg px-2.5 py-1.5 text-left text-[13px] text-ink-soft hover:bg-white/70 hover:text-ink">{f.q}</button>)}</div></div>}
         </aside>
 
-        <section className="glass flex min-h-[calc(100vh-7rem)] flex-col p-3">
-          <div className="flex items-center justify-between border-b border-rule px-4 pb-3 pt-2">
-            <span className="text-sm text-ink-soft">Talking to {p.name.split(" ")[0]}&rsquo;s Twyn</span>
-            <div className="clay-pressed flex p-1">
-              {(["chat", "voice"] as const).map((m) => (
-                <button key={m} onClick={() => setMode(m)} className="relative flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-medium">
-                  {mode === m && <motion.span layoutId="tab" className="clay-sm absolute inset-0 bg-white" />}
-                  <span className="relative flex items-center gap-2">{m === "chat" ? <MessageSquare size={15} /> : <AudioLines size={15} />}{m === "chat" ? "Chat" : "Talk"}</span>
+        <section className="glass flex h-[calc(100vh-6.5rem)] min-h-[520px] flex-col p-2">
+          <div className="flex items-center justify-between px-3 pb-2 pt-1">
+            <span className="text-[12.5px] text-ink-mute">{first}&rsquo;s Twyn</span>
+            <div className="clay-pressed flex p-0.5">
+              {TABS.map(([m, label, I]) => (
+                <button key={m} onClick={() => setMode(m)} className="relative flex h-7 items-center rounded-[10px] px-3 text-[12.5px] font-medium">
+                  {mode === m && <motion.span layoutId="tab" className="clay-sm absolute inset-0 bg-white" style={{ borderRadius: 10 }} />}
+                  <span className="relative flex items-center gap-1.5"><I size={13} />{label}</span>
                 </button>
               ))}
             </div>
           </div>
+          <div className="hair-t" />
 
-          {mode === "voice" ? (
-            <div className="flex flex-1 flex-col items-center justify-center gap-4 p-6">
-              <Orb state={orb} level={level} color={accent.soft} deep={accent.deep} />
+          {mode === "book" ? <BookPanel handle={handle} first={first} />
+          : mode === "voice" ? (
+            <div className="flex flex-1 flex-col items-center justify-center gap-3 p-6">
+              <Orb size={150} state={orb} level={level} color={accent.soft} deep={accent.deep} />
               <div className="text-center">
-                <div className="text-lg font-medium">{{ idle: "Tap to talk", listening: "Listening", thinking: "Thinking", speaking: `${p.name.split(" ")[0]} is speaking` }[orb]}</div>
-                <div className="mt-1 text-sm text-ink-mute">Speak in any Indian language. {lang && `Detected: ${LANG[lang] || lang}`}</div>
-                {lat && <div className="mt-3 flex flex-wrap justify-center gap-1.5 text-xs">{([["Hear", lat.stt_ms], ["First token", lat.llm_ms], ["TTS first chunk", lat.tts_ms], ["First audio", lat.first_audio_ms]] as const).map(([k, v]) => (
-                  <span key={k} className="rounded-full bg-white/70 px-2.5 py-1 text-ink-soft">{k} <span className="font-medium text-ink">{(v / 1000).toFixed(1)}s</span></span>))}</div>}
-                {note && <div className="mt-2 text-xs text-ink-mute">{note}</div>}
+                <div className="text-[15px] font-medium">{{ idle: "Tap to talk", listening: "Listening", thinking: "Thinking", speaking: `${first} is speaking` }[orb]}</div>
+                <div className="mt-0.5 text-[12.5px] text-ink-mute">Speak in any Indian language. {lang && `Detected: ${LANG[lang] || lang}`}</div>
+                {lat && <div className="mt-2 flex flex-wrap justify-center gap-1 text-[11px]">{([["Hear", lat.stt_ms], ["First token", lat.llm_ms], ["TTS chunk", lat.tts_ms], ["First audio", lat.first_audio_ms]] as const).map(([k, v]) => (
+                  <span key={k} className="hairline rounded-full bg-white/70 px-2 py-0.5 text-ink-soft">{k} <span className="font-medium text-ink tnum">{((v || 0) / 1000).toFixed(1)}s</span></span>))}</div>}
+                {note && <div className="mt-1.5 text-[11px] text-ink-mute">{note}</div>}
               </div>
               <motion.button aria-label="Talk to Twyn" whileTap={{ scale: 0.94 }} onClick={() => (orb === "listening" ? rec.current?.stop() : orb === "idle" && startTalk())}
-                className="clay-sm grid h-16 w-16 place-items-center text-white" style={{ background: orb === "listening" ? accent.deep : "var(--color-ink)", borderRadius: 9999 }}>
-                {orb === "listening" ? <Square size={20} /> : <Mic size={22} />}
+                className="grid h-12 w-12 place-items-center rounded-full text-white" style={{ background: orb === "listening" ? accent.deep : "var(--color-ink)" }}>
+                {orb === "listening" ? <Square size={16} /> : <Mic size={18} />}
               </motion.button>
-              {err && <p className="text-sm text-peach-deep">{err}</p>}
-              <div className="mt-4 w-full max-w-xl space-y-2">{msgs.slice(-2).map((m, i) => <p key={i} className={m.role === "visitor" ? "text-right text-sm text-ink-mute" : "text-sm"}>{m.text}</p>)}</div>
+              {err && <p className="text-[12.5px] text-peach-deep">{err}</p>}
+              <div className="mt-2 w-full max-w-lg space-y-1.5">{msgs.slice(-2).map((m, i) => <p key={i} className={m.role === "visitor" ? "text-right text-[13px] text-ink-mute" : "text-[13px]"}>{m.text}</p>)}</div>
             </div>
           ) : (
             <>
-              <div className="flex-1 space-y-4 overflow-y-auto px-4 py-4">
+              <div className="flex-1 space-y-3 overflow-y-auto px-3 py-4">
                 {msgs.length === 0 && (
-                  <div className="mx-auto mt-16 max-w-md text-center">
-                    <div className="mx-auto w-fit"><Orb size={90} color={accent.soft} deep={accent.deep} /></div>
-                    <h2 className="display mt-2 text-4xl md:text-5xl">Hi, I am {p.name.split(" ")[0]}'s Twyn.</h2>
-                    <p className="mt-2 text-sm text-ink-soft">Ask about work, rates or availability. I can book a call for you. English, Hindi, Hinglish and more.</p>
-                    <div className="mt-6 flex flex-wrap justify-center gap-2">
-                      {["Aapka rate kitna hai?", "Can we book a call this week?", "What do you work on?"].map((s) => <button key={s} onClick={() => send(s)} className="clay-sm bg-canvas px-4 py-2 text-sm">{s}</button>)}
+                  <div className="mx-auto mt-10 max-w-sm text-center">
+                    <div className="mx-auto w-fit"><Orb size={64} color={accent.soft} deep={accent.deep} /></div>
+                    <h2 className="display mt-2 text-[26px] leading-tight">Hi, I&rsquo;m {first}&rsquo;s Twyn.</h2>
+                    <p className="mt-1 text-[13px] text-ink-soft">Ask about work, rates or availability. I can book a call. English, Hindi, Hinglish and more.</p>
+                    <div className="mt-4 flex flex-wrap justify-center gap-1.5">
+                      {["Aapka rate kitna hai?", "Can we book a call this week?", "What do you work on?"].map((q) => <button key={q} onClick={() => send(q)} className="hairline h-7 rounded-full bg-white/80 px-3 text-[12.5px] text-ink-soft hover:bg-white hover:text-ink">{q}</button>)}
                     </div>
                   </div>
                 )}
                 <AnimatePresence initial={false}>
                   {msgs.map((m, i) => (
-                    <motion.div key={i} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className={m.role === "visitor" ? "flex justify-end" : "flex justify-start"}>
+                    <motion.div key={i} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} className={m.role === "visitor" ? "flex justify-end" : "flex justify-start"}>
                       <div className="max-w-[78%]">
-                        {m.role === "owner" && <div className="mb-1 text-xs font-medium text-peach-deep">{p.name} (live)</div>}
-                        <div className={m.role === "visitor" ? "rounded-3xl rounded-br-lg bg-ink px-5 py-3 text-[15px] leading-relaxed text-canvas" : "clay-sm whitespace-pre-wrap px-5 py-3 text-[15px] leading-relaxed"} style={m.role === "visitor" ? {} : { background: m.role === "owner" ? "#f8dacb" : "#fbfbfd", borderRadius: "24px 24px 24px 8px" }}>{m.text}</div>
-                        {m.tools && m.tools.length > 0 && <div className="mt-2 flex flex-wrap gap-2">{m.tools.map((t, j) => { const [l, I, tone] = TOOL_LABEL[t.name] || [t.name, Search, "white"]; return <Pill key={j} tone={tone}><I size={12} />{l}</Pill>; })}</div>}
+                        {m.role === "owner" && <div className="mb-0.5 text-[11px] font-medium text-peach-deep">{p.name} (live)</div>}
+                        <div className={m.role === "visitor" ? "rounded-2xl rounded-br-md bg-ink px-3.5 py-2 text-[13.5px] leading-relaxed text-canvas" : "hairline whitespace-pre-wrap rounded-2xl rounded-bl-md px-3.5 py-2 text-[13.5px] leading-relaxed"} style={m.role === "visitor" ? {} : { background: m.role === "owner" ? "#f8dacb" : "#fbfbfd" }}>{m.text}</div>
+                        {m.tools && m.tools.length > 0 && <div className="mt-1.5 flex flex-wrap gap-1">{m.tools.map((t, j) => { const [l, I, tone] = TOOL_LABEL[t.name] || [t.name, Search, "white"]; return <Pill key={j} tone={tone}><I size={11} />{l}</Pill>; })}</div>}
                       </div>
                     </motion.div>
                   ))}
                 </AnimatePresence>
-                {busy && <div className="clay-sm flex w-fit gap-1.5 bg-[#fbfbfd] px-5 py-4">{[0, 1, 2].map((i) => <motion.span key={i} className="h-2 w-2 rounded-full bg-ink-mute" animate={{ y: [0, -4, 0] }} transition={{ duration: 0.8, repeat: Infinity, delay: i * 0.15 }} />)}</div>}
+                {busy && <div className="hairline flex w-fit gap-1 rounded-2xl bg-[#fbfbfd] px-3.5 py-3">{[0, 1, 2].map((i) => <motion.span key={i} className="h-1.5 w-1.5 rounded-full bg-ink-mute" animate={{ y: [0, -3, 0] }} transition={{ duration: 0.8, repeat: Infinity, delay: i * 0.15 }} />)}</div>}
                 <div ref={end} />
               </div>
-              <form onSubmit={(e) => { e.preventDefault(); send(); }} className="clay m-2 flex items-center gap-2 p-2">
-                <input value={text} onChange={(e) => setText(e.target.value)} placeholder={`Message ${p.name.split(" ")[0]}...`} className="flex-1 bg-transparent px-4 py-3 text-[15px] outline-none placeholder:text-ink-mute" />
-                <button type="button" onClick={() => setMode("voice")} className="grid h-11 w-11 place-items-center rounded-2xl text-ink-soft hover:bg-white"><Mic size={18} /></button>
-                <motion.button whileTap={{ scale: 0.94 }} className="grid h-11 w-11 place-items-center rounded-full bg-ink text-canvas"><Send size={17} /></motion.button>
+              <form onSubmit={(e) => { e.preventDefault(); send(); }} className="clay-sm m-1 flex items-center gap-1 bg-white p-1">
+                <input value={text} onChange={(e) => setText(e.target.value)} placeholder={`Message ${first}...`} className="h-9 flex-1 bg-transparent px-3 text-[13.5px] outline-none placeholder:text-ink-mute" />
+                <button type="button" aria-label="Talk instead" onClick={() => setMode("voice")} className="grid h-8 w-8 place-items-center rounded-full text-ink-soft hover:bg-paper-2"><Mic size={15} /></button>
+                <motion.button aria-label="Send" whileTap={{ scale: 0.94 }} className="grid h-8 w-8 place-items-center rounded-full bg-ink text-canvas"><Send size={14} /></motion.button>
               </form>
             </>
           )}
@@ -272,4 +298,56 @@ export default function PublicPersona() {
       </div>
     </main>
   );
+}
+
+type Slot = { start: string; label: string };
+function BookPanel({ handle, first }: { handle: string; first: string }) {
+  const [data, setData] = useState<{ minutes: number; slots: Slot[] } | null>(null);
+  const [day, setDay] = useState("");
+  const [pick, setPick] = useState("");
+  const [f, setF] = useState({ name: "", email: "", topic: "" });
+  const [state, setState] = useState<{ busy?: boolean; err?: string; done?: string }>({});
+  const load = () => api(`/api/p/${handle}/slots`).then((d) => { setData(d); setDay(d.slots[0]?.start.slice(0, 10) || ""); }).catch(() => setData({ minutes: 30, slots: [] }));
+  useEffect(() => { load(); }, [handle]); // eslint-disable-line react-hooks/exhaustive-deps
+  const days = Array.from(new Set((data?.slots || []).map((s) => s.start.slice(0, 10))));
+  const fmt = (d: string, o: Intl.DateTimeFormatOptions) => new Date(d + "T12:00:00").toLocaleDateString("en-IN", o);
+  async function book(e: React.FormEvent) {
+    e.preventDefault(); setState({ busy: true });
+    try { const r = await api(`/api/p/${handle}/book`, { method: "POST", body: JSON.stringify({ start: pick, ...f }) }); setState({ done: r.label }); }
+    catch (x: any) { setState({ err: String(x?.message || "Could not book.") }); load(); setPick(""); }
+  }
+  if (!data) return <div className="grid flex-1 place-items-center"><div className="h-6 w-6 animate-spin rounded-full border-2 border-rule border-t-ink" /></div>;
+  if (state.done) return (
+    <div className="grid flex-1 place-items-center p-6 text-center">
+      <div><div className="mx-auto grid h-11 w-11 place-items-center rounded-full bg-mint text-mint-deep"><Check size={18} weight="bold" /></div>
+        <h3 className="display mt-3 text-[24px]">You&rsquo;re booked.</h3>
+        <p className="mt-1 text-[13px] text-ink-soft">{state.done} with {first}, {data.minutes} min. An invite is on its way to {f.email}.</p></div>
+    </div>);
+  return (
+    <div className="grid flex-1 gap-4 overflow-y-auto p-4 md:grid-cols-[minmax(0,1fr)_260px]">
+      <div>
+        <div className="flex items-baseline justify-between"><h3 className="text-[15px] font-medium">Pick a time</h3><span className="flex items-center gap-1 text-[12px] text-ink-mute"><Clock size={12} />{data.minutes} min, IST</span></div>
+        {days.length === 0 ? <p className="mt-6 text-[13px] text-ink-mute">No open times this week. Ask in chat and {first} will get back to you.</p> : <>
+          <div className="mt-3 grid grid-cols-4 gap-1.5 sm:grid-cols-7">
+            {days.map((d) => (
+              <button key={d} onClick={() => { setDay(d); setPick(""); }} className={"rounded-xl py-2 text-center transition-colors " + (d === day ? "bg-ink text-canvas" : "hairline bg-white/70 hover:bg-white")}>
+                <div className="text-[10.5px] uppercase opacity-70">{fmt(d, { weekday: "short" })}</div><div className="text-[15px] font-medium tnum">{fmt(d, { day: "numeric" })}</div>
+              </button>))}
+          </div>
+          <div className="mt-3 grid grid-cols-2 gap-1.5 sm:grid-cols-3">
+            {data.slots.filter((s) => s.start.startsWith(day)).map((s) => (
+              <button key={s.start} onClick={() => setPick(s.start)} className={"h-9 rounded-lg text-[13px] font-medium tnum transition-colors " + (pick === s.start ? "bg-lilac text-ink ring-1 ring-lilac-deep/40" : "hairline bg-white/70 hover:bg-white")}>
+                {s.label.split(", ")[1]?.replace(" IST", "") || s.label}
+              </button>))}
+          </div></>}
+      </div>
+      <form onSubmit={book} className="clay-sm space-y-2.5 self-start bg-white/80 p-3.5">
+        <div className="text-[12.5px] text-ink-mute">{pick ? data.slots.find((s) => s.start === pick)?.label : "Choose a time first"}</div>
+        <input required className="field" placeholder="Your name" value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} />
+        <input required type="email" className="field" placeholder="you@email.com" value={f.email} onChange={(e) => setF({ ...f, email: e.target.value })} />
+        <input className="field" placeholder="What is it about? (optional)" value={f.topic} onChange={(e) => setF({ ...f, topic: e.target.value })} />
+        {state.err && <p className="text-[12px] text-peach-deep">{state.err}</p>}
+        <button disabled={!pick || state.busy} className="flex h-9 w-full items-center justify-center rounded-full bg-ink text-[13px] font-medium text-canvas disabled:opacity-40">{state.busy ? "Booking..." : "Confirm booking"}</button>
+      </form>
+    </div>);
 }

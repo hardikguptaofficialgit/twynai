@@ -24,7 +24,7 @@ export async function api<T = any>(path: string, opts: RequestInit = {}): Promis
 
 export type Persona = {
   id: string; handle: string; name: string; headline: string; bio: string; rates: string;
-  faqs: { q: string; a: string }[]; links: { label: string; url: string }[]; tone: string; accent: string; has_voice: boolean;
+  faqs: { q: string; a: string }[]; links: { label: string; url: string }[]; tone: string; accent: string; has_voice: boolean; languages?: string[];
 };
 
 export const ACCENTS: Record<string, { soft: string; deep: string }> = {

@@ -1,5 +1,7 @@
 @import "tailwindcss";
 
+@custom-variant dark (&:is(.dark *));
+
 /* Twyn design tokens. Built from Hallmark craft rules (design/hallmark) and
    Anthropic frontend-design: warm tinted paper, OKLCH, one ink accent, pastel
    fields, clay for things you press, glass for things that float.
@@ -37,57 +39,84 @@ p { text-wrap: pretty; }
 :focus-visible { outline: 2px solid var(--color-lilac-deep); outline-offset: 2px; }
 
 @layer components {
-/* Clay: soft, puffy surfaces you can press. Warm-tinted shadows, never coloured halos. */
+/* Clay: soft raised surfaces. Outer shadows only (no inset, no glow). */
 .clay {
-  background: oklch(97.8% 0.01 80);
-  border-radius: 26px;
-  box-shadow:
-    10px 12px 24px oklch(45% 0.04 70 / 0.13),
-    -8px -8px 18px oklch(100% 0 0 / 0.85);
+  background: oklch(98.4% 0.008 80);
+  border: 1px solid oklch(100% 0 0 / 0.9);
+  border-radius: 18px;
+  box-shadow: 0 1px 1px oklch(40% 0.03 70 / 0.05), 4px 6px 16px oklch(45% 0.04 70 / 0.09), -3px -3px 10px oklch(100% 0 0 / 0.7);
 }
 .clay-sm {
-  border-radius: 16px;
-  box-shadow:
-    5px 6px 12px oklch(45% 0.04 70 / 0.14),
-    -4px -4px 10px oklch(100% 0 0 / 0.85);
+  border-radius: 12px;
+  box-shadow: 0 1px 1px oklch(40% 0.03 70 / 0.06), 2px 3px 8px oklch(45% 0.04 70 / 0.1), -2px -2px 6px oklch(100% 0 0 / 0.7);
 }
 .clay-pressed {
-  border-radius: 14px;
-  background: var(--color-paper-2);
-  border: 1px solid oklch(45% 0.04 70 / 0.12);
+  border-radius: 10px;
+  background: oklch(97.5% 0.01 80);
+  border: 1px solid var(--color-rule);
 }
-/* Glass: frosted panel with a hairline. Floats over the pastel shapes. */
+/* Glass: frosted panel with a hairline, for things that float. */
 .glass {
-  background: oklch(99% 0.005 80 / 0.55);
-  backdrop-filter: blur(20px) saturate(130%);
-  -webkit-backdrop-filter: blur(20px) saturate(130%);
-  border: 1px solid oklch(100% 0 0 / 0.8);
-  border-radius: 26px;
-  box-shadow: 0 1px 2px oklch(30% 0.02 70 / 0.06), 0 12px 30px oklch(40% 0.03 70 / 0.08);
+  background: oklch(99.2% 0.004 80 / 0.62);
+  backdrop-filter: blur(18px) saturate(130%);
+  -webkit-backdrop-filter: blur(18px) saturate(130%);
+  border: 1px solid oklch(100% 0 0 / 0.85);
+  border-radius: 18px;
+  box-shadow: 0 1px 2px oklch(30% 0.02 70 / 0.05), 0 8px 24px oklch(40% 0.03 70 / 0.07);
 }
+.hairline { border: 1px solid var(--color-rule); }
 .field {
   width: 100%;
-  padding: 0.8rem 1rem;
-  font-size: 1rem;
+  height: 2.375rem;
+  padding: 0 0.75rem;
+  font-size: 0.875rem;
   outline: none;
-  border: 1px solid transparent;
-  transition: border-color .12s;
+  transition: border-color .12s, background-color .12s;
 }
-.field:focus-visible { outline: 2px solid var(--color-lilac-deep); outline-offset: -2px; }
-.blob { position: absolute; border-radius: 9999px; pointer-events: none; }
-.label { font-size: 0.8125rem; color: var(--color-ink-mute); }
-.display { font-family: var(--font-display); font-weight: 400; letter-spacing: -0.012em; line-height: 1.02; }
-}
-
-@layer components {
-/* Hairline rails at the 1200px container edges. Solid 1px lines, not gradients. */
-.frame-rails::before, .frame-rails::after { content: ""; position: absolute; top: 0; bottom: 0; width: 1px; background: var(--color-rule); }
-.frame-rails::before { left: max(0.5rem, calc(50% - 624px)); }
-.frame-rails::after { right: max(0.5rem, calc(50% - 624px)); }
+textarea.field { height: auto; padding: 0.55rem 0.75rem; line-height: 1.5; }
+.field:focus { border-color: var(--color-lilac-deep); background: white; }
+.label { font-size: 0.75rem; color: var(--color-ink-mute); }
+.eyebrow { font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.04em; text-transform: uppercase; color: var(--color-ink-mute); }
+.display { font-family: var(--font-display); font-weight: 400; letter-spacing: -0.015em; line-height: 1.05; }
+.kbd { font-family: var(--font-mono); font-size: 11px; border: 1px solid var(--color-rule); border-radius: 5px; padding: 0 4px; background: white; }
 .hair-t { border-top: 1px solid var(--color-rule); }
-.reveal { animation: reveal .7s var(--ease-out) both; }
-@keyframes reveal { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+.reveal { animation: reveal .5s var(--ease-out) both; }
+@keyframes reveal { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
 }
 html, body { overflow-x: clip; }
+body { font-size: 14px; line-height: 1.55; }
 
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; } }
+
+@theme inline {
+  --color-muted: var(--color-paper-2);
+  --color-muted-foreground: var(--color-ink-soft);
+  --color-background: var(--color-canvas);
+  --color-primary: var(--color-ink);
+  --color-primary-foreground: var(--color-canvas);
+  --animate-accordion-down: accordion-down .2s var(--ease-out);
+  --animate-accordion-up: accordion-up .2s var(--ease-out);
+  @keyframes accordion-down { from { height: 0; } to { height: var(--radix-accordion-content-height); } }
+  @keyframes accordion-up { from { height: var(--radix-accordion-content-height); } to { height: 0; } }
+}
+
+@theme inline {
+  --animate-marquee: marquee var(--duration) infinite linear;
+  --animate-marquee-vertical: marquee-vertical var(--duration) linear infinite;
+  @keyframes marquee {
+  from {
+    transform: translateX(0);
+    }
+  to {
+    transform: translateX(calc(-100% - var(--gap)));
+    }
+  }
+  @keyframes marquee-vertical {
+  from {
+    transform: translateY(0);
+    }
+  to {
+    transform: translateY(calc(-100% - var(--gap)));
+    }
+  }
+}

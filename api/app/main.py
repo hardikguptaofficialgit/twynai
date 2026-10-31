@@ -196,6 +196,36 @@ def public_persona(handle: str, s=Depends(db)):
     if not p: raise HTTPException(404, "not found")
     return p.to_dict(public=True)
 
+class DirectBook(BaseModel):
+    start: str; name: str; email: str; topic: str = ""
+
+@app.get("/api/p/{handle}/slots")
+def public_slots(handle: str, s=Depends(db)):
+    p = s.scalar(select(Persona).where(Persona.handle == handle))
+    if not p or not p.published: raise HTTPException(404, "not found")
+    owner = s.get(Owner, p.owner_id); cal = calendar_svc.for_owner(owner); rules = calendar_svc.rules_of(p)
+    bookings = list(s.scalars(select(Booking).where(Booking.persona_id == p.id)))
+    slots = calendar_svc.generate(rules, calendar_svc.all_busy(cal, bookings, 7), days=7, limit=18, per_day=4)
+    return {"minutes": int(rules["duration"]), "slots": [{"start": x["start"], "label": calendar_svc.label(dt.datetime.fromisoformat(x["start"]))} for x in slots]}
+
+@app.post("/api/p/{handle}/book")
+def public_book(handle: str, b: DirectBook, s=Depends(db)):
+    p = s.scalar(select(Persona).where(Persona.handle == handle))
+    if not p or not p.published: raise HTTPException(404, "not found")
+    name, email = b.name.strip()[:60], b.email.strip()[:120]
+    if not name or not re.fullmatch(r"[^@\s]+@[^@\s]+\.[^@\s]+", email): raise HTTPException(422, "Add your name and a valid email.")
+    owner = s.get(Owner, p.owner_id); cal = calendar_svc.for_owner(owner); rules = calendar_svc.rules_of(p); dur = int(rules["duration"])
+    bookings = list(s.scalars(select(Booking).where(Booking.persona_id == p.id)))
+    start = b.start[:16]
+    if not calendar_svc.is_valid(rules, calendar_svc.all_busy(cal, bookings, 30), start): raise HTTPException(409, "That time was just taken. Pick another.")
+    topic = b.topic.strip()[:120]
+    ev = cal.book(start, dur, f"{topic or 'Meeting'} with {name}", email)
+    st = dt.datetime.fromisoformat(start)
+    s.add(Booking(persona_id=p.id, conversation_id="direct", guest_name=name, guest_email=email, start=start,
+                  end=(st + dt.timedelta(minutes=dur)).isoformat()[:16], topic=topic, calendar_event_id=ev))
+    s.add(Lead(persona_id=p.id, conversation_id="direct", name=name, contact=email, intent=topic or "Booked a meeting"))
+    s.commit(); return {"booked": True, "label": calendar_svc.label(st), "minutes": dur}
+
 LANG_NAMES = {"hinglish": "Hinglish: Hindi and English mixed, written ONLY in Latin script (e.g. \"Haan, main free hoon, kal 10 baje call kar lete hain\"). Never Devanagari, never pure English",
               "hi-IN": "Hindi in Devanagari script", "ta-IN": "Tamil", "te-IN": "Telugu",
               "kn-IN": "Kannada", "bn-IN": "Bengali", "mr-IN": "Marathi", "gu-IN": "Gujarati", "ml-IN": "Malayalam", "en-IN": "English"}
@@ -203,7 +233,8 @@ LANG_NAMES = {"hinglish": "Hinglish: Hindi and English mixed, written ONLY in La
 def system_prompt(p, ctx, lang, voice_mode):
     k = "\n".join(f"<k>{c.text}</k>" for _, c in ctx) or "(no matching notes)"
     return f"""You are Twyn, the AI persona of {p.name} ({p.headline}). Speak in first person as {p.name}. Tone: {p.tone}.
-Answer ONLY from the knowledge below. If the answer is not there, say you do not know yet and offer to pass a message or book a call. Never invent prices, dates or facts.
+Profile: {p.headline}. {p.bio} {("Rates: " + p.rates) if p.rates else ""}
+Answer ONLY from the profile and knowledge below. If the answer is not there, say you do not know yet and offer to pass a message or book a call. Never invent prices, dates or facts.
 Reply in the caller's language: {LANG_NAMES.get(lang, lang)}. {"Keep replies under 2 short sentences; this will be spoken aloud." if voice_mode else "Keep replies short and clear."}
 No emojis, no markdown, no bullet lists, plain sentences. When offering times, name at most three, and copy each slot's 'say' text from check_availability exactly. Use tools to check availability, book meetings and capture leads. Today is {dt.datetime.now(calendar_svc.IST).strftime('%A %d %B %Y')} (IST).
 Knowledge:

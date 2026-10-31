@@ -1,5 +1,5 @@
 "use client";
-import { motion } from "framer-motion";
+import { motion } from "motion/react";
 
 /** Voice orb: solid clay sphere + concentric solid rings driven by audio level. No glow, no gradients. */
 export function Orb({ level = 0, state = "idle", color = "var(--color-lilac)", deep = "var(--color-lilac-deep)", size = 220 }:
