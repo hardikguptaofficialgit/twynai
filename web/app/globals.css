@@ -36,7 +36,7 @@ h1, h2, h3 { font-family: var(--font-display); font-weight: 400; letter-spacing:
 p { text-wrap: pretty; }
 .tnum { font-variant-numeric: tabular-nums; }
 ::selection { background: var(--color-lilac); color: var(--color-ink); }
-:focus-visible { outline: 2px solid var(--color-ink-mute); outline-offset: 2px; }
+:focus-visible { outline: none; }
 
 @layer components {
 /* Clay: soft raised surfaces. Outer shadows only (no inset, no glow). */
