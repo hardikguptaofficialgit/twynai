@@ -77,7 +77,7 @@ export function Nav({ right }: { right?: ReactNode }) {
         <nav className="flex items-center gap-1 text-[13px]">
           {right ?? (<>
             <Link className="rounded-full px-2.5 py-1 text-ink-soft transition-colors hover:text-ink" href="/login">Sign in</Link>
-            <Link href="/login" className="ml-1 inline-flex h-7 items-center rounded-full bg-ink px-3 text-[12.5px] font-medium text-canvas transition-colors hover:bg-ink-soft">Get your link</Link>
+            <Link href="/onboarding" className="ml-1 inline-flex h-7 items-center rounded-full bg-ink px-3 text-[12.5px] font-medium text-canvas transition-colors hover:bg-ink-soft">Get your link</Link>
           </>)}
         </nav>
       </div>

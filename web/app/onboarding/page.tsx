@@ -1,13 +1,13 @@
 "use client";
 import Image from "next/image";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState, Suspense } from "react";
 import Link from "next/link";
+import { useRouter, useSearchParams } from "next/navigation";
 import { AnimatePresence, motion } from "motion/react";
 import { ArrowLeft, ArrowRight, Check, Copy, FileText, Link as Link2, CircleNotch as Loader2, Microphone as Mic, Plus, Stop as Square, Trash as Trash2, UploadSimple as Upload, X, ArrowSquareOut as ExternalLink, SpeakerHigh as Volume2 } from "@phosphor-icons/react";
 import clsx from "clsx";
 import { api, API, encodeWav, Persona, token } from "@/lib/api";
-import { useOwner } from "@/lib/useOwner";
-import { Logo , Backdrop } from "@/components/ui";
+import { Logo, Backdrop } from "@/components/ui";
 import { Orb } from "@/components/Orb";
 import { VoiceCloner } from "@/components/VoiceCloner";
 import { AiImport } from "@/components/AiImport";
@@ -66,8 +66,10 @@ function Progress({ step, max, go }: { step: number; max: number; go: (i: number
   );
 }
 
-export default function Onboarding() {
-  const { me } = useOwner();
+function OnboardingInner() {
+  const r = useRouter();
+  const sp = useSearchParams();
+  const [me, setMe] = useState<any>(null);
   const [d, setD] = useState<Draft>(empty());
   const [step, setStep] = useState(0);
   const [max, setMax] = useState(0);
@@ -78,24 +80,45 @@ export default function Onboarding() {
   const [loaded, setLoaded] = useState(false);
   const set = (p: Partial<Draft>) => setD((x) => ({ ...x, ...p }));
 
-  // resume: existing persona from API, else a local draft
+  // Local-first: load from localStorage; if signed in, merge API persona
   useEffect(() => {
-    if (!me) return;
-    (async () => {
-      const ps: any[] = await api("/api/me/personas");
-      const local = JSON.parse(localStorage.getItem("proxy_draft") || "null");
-      const claim = localStorage.getItem("proxy_claim") || "";
-      if (ps[0]) {
-        const p = ps[0]; setD({ ...empty(), ...p, availability: { ...DEFAULT_AVAIL, ...(p.availability || {}) } });
-        const s = Math.min(p.onboarding_step || 1, 6); setStep(p.published ? 6 : s); setMax(p.published ? 6 : s);
-      } else if (local) { setD(local); }
-      else set({ name: me.name || "", handle: claim });
+    const handleParam = sp.get("handle") || "";
+    if (handleParam) localStorage.setItem("proxy_claim", handleParam);
+    const claim = localStorage.getItem("proxy_claim") || handleParam;
+    const local = JSON.parse(localStorage.getItem("proxy_draft") || "null");
+
+    if (token()) {
+      api("/api/me")
+        .then((owner) => { setMe(owner); return api("/api/me/personas"); })
+        .then((ps: any[]) => {
+          if (ps[0]) {
+            const p = ps[0];
+            setD({ ...empty(), ...p, availability: { ...DEFAULT_AVAIL, ...(p.availability || {}) } });
+            const s = Math.min(p.onboarding_step || 1, 6);
+            setStep(p.published ? 6 : s); setMax(p.published ? 6 : s);
+          } else if (local) {
+            setD({ ...local, handle: claim || local.handle });
+          } else {
+            set({ handle: claim });
+          }
+        })
+        .catch(() => {
+          localStorage.removeItem("proxy_token");
+          if (local) setD({ ...local, handle: claim || local.handle });
+          else set({ handle: claim });
+        })
+        .finally(() => setLoaded(true));
+    } else {
+      if (local) setD({ ...local, handle: claim || local.handle });
+      else set({ handle: claim });
       setLoaded(true);
-    })();
-  }, [me]);
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Persist draft locally when there's no API id yet
   useEffect(() => { if (loaded && !d.id) localStorage.setItem("proxy_draft", JSON.stringify(d)); }, [d, loaded]);
 
-  // live handle check
+  // Live handle availability check
   const [avail, setAvail] = useState<null | boolean>(null);
   useEffect(() => {
     if (d.id || d.handle.length < 3) { setAvail(null); return; }
@@ -121,17 +144,31 @@ export default function Onboarding() {
   }
 
   async function persist(nextStep: number, extra: Partial<Draft> = {}) {
+    // Steps 0-5 (not publish): just save locally if not signed in
+    if (nextStep < 6 && !d.id && !token()) {
+      setSaved("Draft saved"); setTimeout(() => setSaved(""), 1600);
+      return true;
+    }
+    // Publish step: require auth
+    if (!token()) {
+      localStorage.setItem("proxy_draft", JSON.stringify({ ...d, ...extra }));
+      localStorage.setItem("proxy_next", "/onboarding");
+      r.push("/login?next=/onboarding");
+      return false;
+    }
     setSaving(true);
     try {
       const body = { ...d, ...extra, faqs: d.faqs.filter((f) => f.q.trim()), links: d.links.filter((l) => l.url.trim()), onboarding_step: Math.max(nextStep, d.onboarding_step || 0) };
-      const p: any = d.id ? await api(`/api/personas/${d.id}`, { method: "PUT", body: JSON.stringify(body) })
+      const p: any = d.id
+        ? await api(`/api/personas/${d.id}`, { method: "PUT", body: JSON.stringify(body) })
         : await api("/api/personas", { method: "POST", body: JSON.stringify(body) });
       setD((x) => ({ ...x, ...p, availability: { ...DEFAULT_AVAIL, ...(p.availability || {}) } }));
       localStorage.removeItem("proxy_draft"); localStorage.removeItem("proxy_claim");
       setSaved("Saved"); setTimeout(() => setSaved(""), 1600);
       return true;
     } catch (e: any) {
-      setErrs({ handle: e.message.includes("taken") ? "That handle is taken." : "Could not save. Check the API is running." }); return false;
+      setErrs({ handle: e.message.includes("taken") ? "That handle is taken." : "Could not save. Check the API is running." });
+      return false;
     } finally { setSaving(false); }
   }
 
@@ -157,14 +194,16 @@ export default function Onboarding() {
   return (
     <main className="relative min-h-screen">
       <Backdrop />
-      <div className="sticky top-0 z-30 border-b border-rule bg-canvas/70 backdrop-blur-xl"><header className="mx-auto flex h-12 w-[min(1040px,calc(100%-2rem))] items-center justify-between">
-        <Logo />
-        <div className="flex items-center gap-3 text-[12.5px] text-ink-mute">
-          <AnimatePresence>{saved && <motion.span initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="flex items-center gap-1 text-mint-deep"><Check size={14} />{saved}</motion.span>}</AnimatePresence>
-          <span>Step {step + 1} of {STEPS.length}</span>
-          <Link href="/studio" className="rounded-full px-2.5 py-1 hover:text-ink">Exit</Link>
-        </div>
-      </header></div>
+      <div className="sticky top-0 z-30 border-b border-rule bg-canvas/70 backdrop-blur-xl">
+        <header className="mx-auto flex h-12 w-[min(1040px,calc(100%-2rem))] items-center justify-between">
+          <Logo />
+          <div className="flex items-center gap-3 text-[12.5px] text-ink-mute">
+            <AnimatePresence>{saved && <motion.span initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="flex items-center gap-1 text-mint-deep"><Check size={14} />{saved}</motion.span>}</AnimatePresence>
+            <span>Step {step + 1} of {STEPS.length}</span>
+            <Link href="/studio" className="rounded-full px-2.5 py-1 hover:text-ink">Exit</Link>
+          </div>
+        </header>
+      </div>
       <div className="mx-auto grid w-[min(1040px,calc(100%-2rem))] gap-6 pb-16 pt-8 md:grid-cols-[180px_minmax(0,1fr)]">
         <aside className="md:sticky md:top-20 md:self-start"><p className="eyebrow mb-3 hidden px-2 md:block">Set up your Twyn</p><Progress step={step} max={max} go={go} /></aside>
         <div className="clay relative overflow-hidden p-6 md:p-8">
@@ -311,7 +350,7 @@ function CalendarStep({ me }: any) {
         <span className="clay-sm grid h-12 w-12 place-items-center bg-white"><Image src="/brands/google-calendar.svg" alt="Google Calendar" width={22} height={22} /></span>
         <div className="flex-1"><p className="font-medium">Google Calendar</p><p className="text-sm text-ink-soft">{on ? `Connected as ${me.email}` : "Free/busy and event creation only"}</p></div>
         {on ? <span className="inline-flex items-center gap-1.5 rounded-full bg-mint px-3 py-1.5 text-sm font-medium"><Check size={14} />Connected</span>
-          : <a href={`${API}/api/auth/google/login`} className="rounded-full bg-ink h-9 px-4 text-[13.5px] font-medium text-canvas">Connect</a>}
+          : <a href={`${API}/api/auth/google/login`} className="rounded-full bg-ink h-9 px-4 text-[13.5px] font-medium text-canvas inline-flex items-center">Connect</a>}
       </div>
       {!on && <p className="mt-4 text-sm text-ink-mute">Skip this and Twyn will offer slots from your availability rules, then email you each booking to confirm.</p>}
     </div>
@@ -335,9 +374,13 @@ function AvailabilityStep({ d, set, errs }: any) {
   );
 }
 
-function PublishStep({ d, publish, saving }: any) {
+function PublishStep({ d, publish, saving, onEmailAuth }: any) {
   const link = typeof window !== "undefined" ? `${window.location.origin}/p/${d.handle}` : `/p/${d.handle}`;
   const [copied, setCopied] = useState(false);
+  const [emailInput, setEmailInput] = useState("");
+  const [authBusy, setAuthBusy] = useState(false);
+  const [authErr, setAuthErr] = useState("");
+
   const copy = () => { navigator.clipboard?.writeText(link); setCopied(true); setTimeout(() => setCopied(false), 1500); };
   const a = d.availability;
   const rows: [string, string][] = [
@@ -347,6 +390,76 @@ function PublishStep({ d, publish, saving }: any) {
     ["Voice", d.has_voice ? "Your cloned voice" : "Default voice (add yours later)"],
     ["Availability", `${a.days.map((i: number) => DAYS[i]).join(", ")} · ${a.start} to ${a.end} IST · ${a.duration} min`],
   ];
+
+  async function handleEmailAuth(e: React.FormEvent) {
+    e.preventDefault();
+    if (!emailInput.trim()) return;
+    setAuthBusy(true);
+    setAuthErr("");
+    try {
+      const res = await api("/api/auth/dev", {
+        method: "POST",
+        body: JSON.stringify({ email: emailInput.trim(), name: d.name || emailInput.split("@")[0] }),
+      });
+      localStorage.setItem("proxy_token", res.token);
+      await publish();
+    } catch (err: any) {
+      setAuthErr(err.message || "Sign-in failed. Please try again.");
+    } finally {
+      setAuthBusy(false);
+    }
+  }
+
+  // Sign-in prompt when not authenticated
+  if (!token() && !d.published) {
+    return (
+      <div className="mx-auto max-w-md text-center">
+        <Head k="Almost there" t="Create your account to go live" d="Sign in to publish your Twyn. Your draft is ready to be published immediately." />
+        <div className="glass mt-6 p-6 text-left">
+          <a
+            href={`${API}/api/auth/google/login`}
+            className="clay-sm flex h-10 w-full items-center justify-center gap-2.5 bg-white text-[13.5px] font-medium hover:bg-canvas transition-colors"
+          >
+            <Image src="/brands/google.svg" alt="" width={15} height={15} />
+            Continue with Google
+          </a>
+
+          <div className="my-4 flex items-center gap-3 text-[11px] text-ink-mute">
+            <span className="h-px flex-1 bg-rule" />
+            or continue with email
+            <span className="h-px flex-1 bg-rule" />
+          </div>
+
+          <form onSubmit={handleEmailAuth} className="space-y-3">
+            <div>
+              <label htmlFor="auth-email" className="block text-[12px] font-medium text-ink-mute mb-1">Your email</label>
+              <input
+                id="auth-email"
+                type="email"
+                required
+                className="field clay-pressed"
+                placeholder="you@example.com"
+                value={emailInput}
+                onChange={(e) => setEmailInput(e.target.value)}
+              />
+            </div>
+            <button
+              type="submit"
+              disabled={authBusy}
+              className="inline-flex h-9 w-full items-center justify-center gap-2 rounded-full bg-ink text-[13.5px] font-medium text-canvas hover:bg-ink-soft disabled:opacity-60 transition-colors"
+            >
+              {authBusy ? <Loader2 size={15} className="animate-spin" /> : null}
+              Publish as twyn.ai/{d.handle}
+            </button>
+            {authErr && <p className="text-[12px] text-peach-deep text-center">{authErr}</p>}
+          </form>
+        </div>
+      </div>
+    );
+  }
+
+  const initials = d.name ? d.name.split(" ").map((w: string) => w[0]).join("").slice(0, 2).toUpperCase() : "TW";
+
   return (
     <div>
       {!d.published ? (<>
@@ -355,8 +468,8 @@ function PublishStep({ d, publish, saving }: any) {
         <motion.button whileTap={{ scale: 0.97 }} onClick={publish} disabled={saving} className="mt-8 inline-flex items-center gap-2 rounded-full bg-ink h-9 px-5 text-[13.5px] font-medium text-canvas">{saving && <Loader2 size={15} className="animate-spin" />}Publish my Twyn</motion.button>
       </>) : (
         <motion.div initial={{ opacity: 0, scale: 0.98 }} animate={{ opacity: 1, scale: 1 }} className="text-center">
-          <div className="mx-auto grid place-items-center"><Orb size={72} state="speaking" level={0.3} /></div>
-          <h1 className="display text-[32px]">Your Twyn is live.</h1>
+          <div className="mx-auto grid place-items-center"><Orb size={84} state="speaking" level={0.3} initials={initials} /></div>
+          <h1 className="display text-[32px] mt-2">Your Twyn is live.</h1>
           <p className="mx-auto mt-2 max-w-sm text-ink-soft">Share this link anywhere. Conversations, leads and bookings show up in your dashboard.</p>
           <div className="clay-pressed mx-auto mt-7 flex max-w-md items-center gap-2 py-2 pl-4 pr-2">
             <span className="flex-1 truncate text-left text-sm font-medium">{link.replace(/^https?:\/\//, "")}</span>
@@ -364,10 +477,12 @@ function PublishStep({ d, publish, saving }: any) {
           </div>
           <div className="mt-6 flex justify-center gap-3">
             <Link href={`/p/${d.handle}`} className="clay-sm inline-flex items-center gap-1.5 bg-white h-9 px-4 text-[13.5px]"><ExternalLink size={14} />Open page</Link>
-            <Link href="/dashboard" className="clay-sm inline-flex items-center gap-1.5 bg-lilac h-9 px-4 text-[13.5px] font-medium">Go to dashboard</Link>
+            <Link href="/studio" className="clay-sm inline-flex items-center gap-1.5 bg-lilac h-9 px-4 text-[13.5px] font-medium">Go to studio</Link>
           </div>
         </motion.div>
       )}
     </div>
   );
 }
+
+export default function Page() { return <Suspense><OnboardingInner /></Suspense>; }

@@ -45,7 +45,7 @@ function SoundWave() {
 
 function ClaimBar({ className = "" }: { className?: string }) {
   const r = useRouter(); const [h, setH] = useState("");
-  const go = () => r.push(`/login?handle=${encodeURIComponent(h.toLowerCase().replace(/[^a-z0-9-]/g, ""))}`);
+  const go = () => r.push(`/onboarding?handle=${encodeURIComponent(h.toLowerCase().replace(/[^a-z0-9-]/g, ""))}`);
   return (
     <form onSubmit={(e) => { e.preventDefault(); go(); }} className={`clay flex w-full max-w-[22rem] items-center gap-1 p-1 ${className}`} style={{ borderRadius: 999 }}>
       <label htmlFor="claim" className="pl-3.5 font-mono text-[12.5px] text-ink-mute">twyn.ai/</label>

@@ -245,7 +245,7 @@ export default function PublicPersona() {
           {mode === "book" ? <BookPanel handle={handle} first={first} />
           : mode === "voice" ? (
             <div className="flex flex-1 flex-col items-center justify-center gap-3 p-6">
-              <Orb size={150} state={orb} level={level} color={accent.soft} deep={accent.deep} />
+              <Orb size={150} state={orb} level={level} color={accent.soft} deep={accent.deep} initials={initials} />
               <div className="text-center">
                 <div className="text-[15px] font-medium">{{ idle: "Tap to talk", listening: "Listening", thinking: "Thinking", speaking: `${first} is speaking` }[orb]}</div>
                 <div className="mt-0.5 text-[12.5px] text-ink-mute">Speak in any Indian language. {lang && `Detected: ${LANG[lang] || lang}`}</div>
@@ -265,7 +265,7 @@ export default function PublicPersona() {
               <div className="flex-1 space-y-3 overflow-y-auto px-3 py-4">
                 {msgs.length === 0 && (
                   <div className="mx-auto mt-10 max-w-sm text-center">
-                    <div className="mx-auto w-fit"><Orb size={64} color={accent.soft} deep={accent.deep} /></div>
+                    <div className="mx-auto w-fit"><Orb size={64} color={accent.soft} deep={accent.deep} initials={initials} /></div>
                     <h2 className="display mt-2 text-[26px] leading-tight">Hi, I&rsquo;m {first}&rsquo;s Twyn.</h2>
                     <p className="mt-1 text-[13px] text-ink-soft">Ask about work, rates or availability. I can book a call. English, Hindi, Hinglish and more.</p>
                     <div className="mt-4 flex flex-wrap justify-center gap-1.5">

@@ -7,8 +7,8 @@ import { Backdrop, Button, Logo, Field } from "@/components/ui";
 
 function Login() {
   const r = useRouter(); const sp = useSearchParams();
-  const [email, setEmail] = useState("hardikgupta8792@gmail.com");
-  const [name, setName] = useState("Hardik Gupta");
+  const [email, setEmail] = useState("");
+  const [name, setName] = useState("");
   const [err, setErr] = useState("");
   useEffect(() => { const nx = sp.get("next"); if (nx && nx.startsWith("/") && !nx.startsWith("//") && !sp.get("token")) localStorage.setItem("proxy_next", nx); if (sp.get("handle")) localStorage.setItem("proxy_claim", sp.get("handle")!); const t = sp.get("token"); if (t) { localStorage.setItem("proxy_token", t); const n = sp.get("next") || "/onboarding"; const back = localStorage.getItem("proxy_next"); localStorage.removeItem("proxy_next"); r.replace(n === "/studio" && back && back.startsWith("/studio") ? back : n); } }, [sp, r]);
   const [devOk, setDevOk] = useState(true);
