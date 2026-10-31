@@ -7,6 +7,7 @@ import { motion } from "motion/react";
 import { ArrowRight, ArrowUpRight, CalendarCheck, ChatCircle, Microphone, BookOpenText, Hand, Users, ShieldCheck, Translate, Waveform, UserPlus, MagnifyingGlass } from "@phosphor-icons/react";
 import { Backdrop, Logo, Nav, SectionHead, W } from "@/components/ui";
 import { Orb } from "@/components/Orb";
+import HeroAscii from "@/components/bg/HeroAscii";
 import { Marquee } from "@/components/ui-kit/marquee";
 import { AnimatedList } from "@/components/ui-kit/animated-list";
 import { NumberTicker } from "@/components/ui-kit/number-ticker";
@@ -92,6 +93,8 @@ export default function Landing() {
       <Backdrop />
       <Nav />
 
+      <div className="relative isolate">
+      <HeroAscii />
       <section className={`${W} grid items-center gap-10 pb-14 pt-14 md:pt-20 lg:grid-cols-[1.1fr_0.9fr]`}>
         <div>
           <motion.a href="/p/hardik" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="inline-flex h-6 items-center gap-1.5 rounded-full bg-white/70 pl-1 pr-2.5 text-[12px] text-ink-soft hairline hover:text-ink">
@@ -110,6 +113,7 @@ export default function Landing() {
         </div>
         <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6, delay: 0.1, ease }} className="mx-auto w-full max-w-[400px]"><CallCard /></motion.div>
       </section>
+      </div>
 
       <section aria-label="Languages" className="border-y border-rule bg-white/40">
         <div className={`${W} flex items-center gap-6 py-3`}>
