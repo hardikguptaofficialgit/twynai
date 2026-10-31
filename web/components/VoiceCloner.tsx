@@ -5,7 +5,7 @@ import { api, API, encodeWav, token } from "@/lib/api";
 import { Orb } from "@/components/Orb";
 
 /** Record in the browser (15 to 30 s, script to read) or upload a clip; clone with Gnani; re-clone any time. */
-export function VoiceCloner({ d, set, ensurePersona }: { d: any; set: (p: any) => void; ensurePersona?: () => Promise<string | null> }) {
+export function VoiceCloner({ d, set, ensurePersona, script }: { d: any; set: (p: any) => void; ensurePersona?: () => Promise<string | null>; script: string }) {
   const [rec, setRec] = useState(false);
   const [secs, setSecs] = useState(0);
   const [level, setLevel] = useState(0);
@@ -144,7 +144,7 @@ export function VoiceCloner({ d, set, ensurePersona }: { d: any; set: (p: any) =
         </div>
         <div>
           <div className="glass p-5 text-sm leading-relaxed text-ink-soft" style={{ borderRadius: 20 }}>
-            &ldquo;Hi, this is {d.name || "me"}. Thanks for reaching out. I work as a {(d.headline || "freelancer").toLowerCase()}, and I am happy to help you figure out if we are a good fit. Tell me what you are working on, what you need help with, and when you would like to start. If it sounds like something I can do well, I will share a few times that work for a quick call, and we can take it from there.&rdquo;
+            &ldquo;{script}&rdquo;
           </div>
           <div className="mt-5 flex flex-wrap items-center gap-3">
             {!rec ? (

@@ -503,10 +503,25 @@ function KnowledgeStep({ d, set, errs, ensurePersona }: any) {
 }
 
 function VoiceStep({ d, set, ensurePersona }: any) {
+  const selectedLanguages = LANGS.filter(([code]) => d.languages.includes(code));
+  const [sampleLanguage, setSampleLanguage] = useState(selectedLanguages[0]?.[0] || "en");
+  const scripts: Record<string, string> = {
+    en: `Hi, this is ${d.name || "me"}. Thanks for reaching out. I work as a ${d.headline || "freelancer"}, and I am happy to help you figure out if we are a good fit. Tell me what you are working on, what you need help with, and when you would like to start. If it sounds like something I can do well, I will share a few times that work for a quick call, and we can take it from there.`,
+    hi: `नमस्ते, मैं ${d.name || "हूँ"}। मुझसे संपर्क करने के लिए धन्यवाद। मैं ${d.headline || "अपने काम"} के बारे में आपकी मदद कर सकता हूँ। आप मुझे बताइए कि आप क्या बना रहे हैं और आपको किस तरह की मदद चाहिए। अगर हम साथ काम कर सकते हैं, तो हम एक छोटी सी कॉल का समय तय कर लेंगे।`,
+    hinglish: `Hi, main ${d.name || "hoon"}. Reach out karne ke liye thanks. Main ${d.headline || "apne kaam"} mein help karta hoon. Aap batao aap kis par kaam kar rahe ho aur kis tarah ki help chahiye. Agar hum saath kaam kar sakte hain, toh ek quick call ka time decide kar lenge.`,
+    ta: `வணக்கம், நான் ${d.name || ""}. என்னைத் தொடர்பு கொண்டதற்கு நன்றி. நான் ${d.headline || "என் வேலையில்"} உதவ மகிழ்ச்சியாக இருக்கிறேன். நீங்கள் என்ன செய்கிறீர்கள், எந்த உதவி தேவை என்று சொல்லுங்கள். நன்றாகப் பொருந்தினால், ஒரு சிறிய அழைப்புக்கான நேரத்தைப் பகிர்கிறேன்.`,
+    te: `నమస్కారం, నేను ${d.name || ""}. నన్ను సంప్రదించినందుకు ధన్యవాదాలు. ${d.headline || "నా పనిలో"} మీకు సహాయం చేయడానికి సంతోషిస్తాను. మీరు ఏం చేస్తున్నారు, ఎలాంటి సహాయం కావాలో చెప్పండి. మనం కలిసి పని చేయగలిగితే, ఒక చిన్న కాల్‌కు సమయం నిర్ణయించుకుందాం.`,
+  };
+  const script = scripts[sampleLanguage] || scripts.en;
   return (
     <div>
-      <Head k="Voice" t="Teach it your voice" d="Read the script below out loud for 15 to 30 seconds in a quiet room, or upload a clip. Twyn uses it to speak like you." />
-      <VoiceCloner d={d} set={set} ensurePersona={ensurePersona} />
+      <Head k="Voice" t="Teach it your voice" d="Choose one of your selected languages, then read a short sample in that language. Twyn uses one voice sample when speaking in all your selected languages." />
+      <div className="mx-auto mb-4 max-w-sm">
+        <Label t="Sample language"><select className="field" value={sampleLanguage} onChange={(e) => setSampleLanguage(e.target.value)}>
+          {selectedLanguages.map(([code, label]) => <option key={code} value={code}>{label}</option>)}
+        </select></Label>
+      </div>
+      <VoiceCloner key={sampleLanguage} d={d} set={set} ensurePersona={ensurePersona} script={script} />
     </div>
   );
 }
