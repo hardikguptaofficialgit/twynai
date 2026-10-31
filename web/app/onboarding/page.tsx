@@ -12,7 +12,7 @@ import { Orb } from "@/components/Orb";
 import { VoiceCloner } from "@/components/VoiceCloner";
 import { AiImport } from "@/components/AiImport";
 
-const STEPS = ["Handle", "Basics", "Knowledge", "Voice", "Calendar", "Availability", "Publish"];
+const STEPS = ["Handle", "Name", "Role", "About", "Languages", "Style", "Knowledge", "Voice", "Calendar", "Availability", "Publish"];
 const LANGS: [string, string][] = [["en", "English"], ["hi", "Hindi"], ["hinglish", "Hinglish"], ["ta", "Tamil"], ["te", "Telugu"], ["kn", "Kannada"], ["bn", "Bengali"], ["mr", "Marathi"], ["gu", "Gujarati"], ["ml", "Malayalam"], ["pa", "Punjabi"]];
 const TONES = ["Warm and concise", "Friendly and casual", "Crisp and professional", "Playful"];
 const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
@@ -133,14 +133,12 @@ function OnboardingInner() {
       if (!/^[a-z0-9-]{3,30}$/.test(d.handle)) e.handle = "Use 3 to 30 lowercase letters, numbers or dashes.";
       else if (!d.id && avail === false) e.handle = "That handle is taken.";
     }
-    if (i === 1) {
-      if (!d.name.trim()) e.name = "Add your name.";
-      if (!d.headline.trim()) e.headline = "Add a one-line role.";
-      if (d.bio.trim().length < 40) e.bio = "Write at least a couple of sentences so Twyn has something to go on.";
-      if (!d.languages.length) e.languages = "Pick at least one language.";
-    }
-    if (i === 2) d.links.forEach((l, k) => { if (l.url && !/^https?:\/\//.test(l.url)) e["link" + k] = "Links should start with https://"; });
-    if (i === 5 && (!d.availability.days.length || d.availability.start >= d.availability.end)) e.avail = "Choose at least one day and an end time after the start time.";
+    if (i === 1 && !d.name.trim()) e.name = "Add your name.";
+    if (i === 2 && !d.headline.trim()) e.headline = "Add a one-line role.";
+    if (i === 3 && d.bio.trim().length < 40) e.bio = "Write at least a couple of sentences so Twyn has something to go on.";
+    if (i === 4 && !d.languages.length) e.languages = "Pick at least one language.";
+    if (i === 6) d.links.forEach((l, k) => { if (l.url && !/^https?:\/\//.test(l.url)) e["link" + k] = "Links should start with https://"; });
+    if (i === 9 && (!d.availability.days.length || d.availability.start >= d.availability.end)) e.avail = "Choose at least one day and an end time after the start time.";
     setErrs(e); return !Object.keys(e).length;
   }
 
@@ -228,15 +226,19 @@ function OnboardingInner() {
   const back = () => { setErrs({}); setDir(-1); setStep((s) => Math.max(0, s - 1)); };
   const go = (i: number) => { setErrs({}); setDir(i > step ? 1 : -1); setStep(i); };
 
-  const views = [
-    <HandleStep key="h" d={d} set={set} avail={avail} errs={errs} />,
-    <BasicsStep key="b" d={d} set={set} errs={errs} avatarFile={avatarFile} setAvatarFile={setAvatarFile} />,
-    <KnowledgeStep key="k" d={d} set={set} errs={errs} ensurePersona={ensurePersona} />,
-    <VoiceStep key="v" d={d} set={set} ensurePersona={ensurePersona} />,
-    <CalendarStep key="c" me={me} />,
-    <AvailabilityStep key="a" d={d} set={set} errs={errs} />,
-    <PublishStep key="p" d={d} publish={() => persist(6, { published: true }).then(() => set({ published: true }))} saving={saving} />,
-  ];
+  const viewByStep: Record<number, React.ReactNode> = {
+    0: <HandleStep d={d} set={set} avail={avail} errs={errs} />,
+    1: <ProfilePhotoStep d={d} avatarFile={avatarFile} setAvatarFile={setAvatarFile} />,
+    2: <RoleStep d={d} set={set} errs={errs} />,
+    3: <BioStep d={d} set={set} errs={errs} />,
+    4: <LanguagesStep d={d} set={set} errs={errs} />,
+    5: <ToneStep d={d} set={set} />,
+    6: <KnowledgeStep d={d} set={set} errs={errs} ensurePersona={ensurePersona} />,
+    7: <VoiceStep d={d} set={set} ensurePersona={ensurePersona} />,
+    8: <CalendarStep me={me} />,
+    9: <AvailabilityStep d={d} set={set} errs={errs} />,
+    10: <PublishStep d={d} publish={() => persist(10, { published: true }).then(() => set({ published: true }))} saving={saving} />,
+  };
 
   return (
     <main className="relative min-h-screen">
@@ -259,18 +261,18 @@ function OnboardingInner() {
               <motion.div className="mx-auto max-w-[620px]" key={step} custom={dir}
                 initial={{ opacity: 0, x: dir * 36 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: dir * -36 }}
                 transition={{ duration: 0.32, ease: [0.22, 1, 0.36, 1] }}>
-                {views[step]}
+                {viewByStep[step]}
               </motion.div>
             </AnimatePresence>
           )}
-          {loaded && step < 6 && (
+          {loaded && step < 10 && (
             <div className="mt-8 flex items-center justify-between border-t border-rule pt-5">
               <button onClick={back} disabled={step === 0} className="inline-flex items-center gap-1.5 rounded-xl px-3 py-2 text-sm text-ink-soft hover:text-ink disabled:invisible"><ArrowLeft size={15} />Back</button>
               <div className="flex items-center gap-2">
-                {[3, 4].includes(step) && <button onClick={next} className="rounded-xl h-9 px-4 text-[13.5px] text-ink-soft hover:text-ink">Skip for now</button>}
+                {[1, 6, 7, 8].includes(step) && <button onClick={next} className="rounded-xl h-9 px-4 text-[13.5px] text-ink-soft hover:text-ink">Skip for now</button>}
                 <motion.button whileTap={{ scale: 0.97 }} onClick={next} disabled={saving}
                   className="inline-flex items-center gap-2 rounded-full bg-ink h-9 px-4 text-[13.5px] font-medium text-canvas hover:bg-ink-soft disabled:opacity-60">
-                  {saving ? <Loader2 size={15} className="animate-spin" /> : null}{step === 5 ? "Review" : "Continue"}<ArrowRight size={15} />
+                  {saving ? <Loader2 size={15} className="animate-spin" /> : null}{step === 9 ? "Review" : "Continue"}<ArrowRight size={15} />
                 </motion.button>
               </div>
             </div>
@@ -305,8 +307,7 @@ function HandleStep({ d, set, avail, errs }: any) {
   );
 }
 
-function BasicsStep({ d, set, errs, avatarFile, setAvatarFile }: any) {
-  const toggle = (l: string) => set({ languages: d.languages.includes(l) ? d.languages.filter((x: string) => x !== l) : [...d.languages, l] });
+function ProfilePhotoStep({ d, avatarFile, setAvatarFile }: any) {
   const [preview, setPreview] = useState("");
   const [photoError, setPhotoError] = useState("");
   useEffect(() => {
@@ -317,8 +318,8 @@ function BasicsStep({ d, set, errs, avatarFile, setAvatarFile }: any) {
   const initials = d.name ? d.name.split(" ").map((w: string) => w[0]).join("").slice(0, 2).toUpperCase() : "YOU";
   return (
     <div>
-      <Head k="Persona" t="Tell Twyn who you are" d="These basics shape how your Twyn introduces you and how it sounds." />
-      <div className="mb-7 flex flex-col items-center gap-2 text-center">
+      <Head k="Your profile" t="Add a profile photo" d="Help people recognize your Twyn. You can also do this later." />
+      <div className="mb-3 flex flex-col items-center gap-2 text-center">
         <label className="group relative grid h-24 w-24 cursor-pointer place-items-center overflow-hidden rounded-full border border-rule bg-lilac text-xl font-medium text-ink shadow-sm">
           {preview || d.avatar_url ? <img src={preview || `${API}${d.avatar_url}`} alt="Profile preview" className="h-full w-full object-cover" /> : initials}
           <span className="absolute inset-x-0 bottom-0 flex h-8 items-center justify-center gap-1 bg-ink/75 text-[11px] text-canvas opacity-0 transition-opacity group-hover:opacity-100"><Camera size={12} />Change</span>
@@ -329,20 +330,28 @@ function BasicsStep({ d, set, errs, avatarFile, setAvatarFile }: any) {
             setPhotoError(""); setAvatarFile(f);
           }} />
         </label>
-        <p className="text-[12px] text-ink-mute">Add a profile photo <span className="text-ink-mute/70">· JPG, PNG, or WebP up to 3 MB</span></p>
+        <p className="text-[12px] text-ink-mute">JPG, PNG, or WebP up to 3 MB · optional</p>
         {photoError && <p className="text-[12px] text-peach-deep">{photoError}</p>}
       </div>
-      <div className="grid gap-5 md:grid-cols-2">
-        <Label t="Name" err={errs.name}><input className={input} value={d.name} onChange={(e) => set({ name: e.target.value })} placeholder="Hardik Gupta" /></Label>
-        <Label t="Role" err={errs.headline}><input className={input} value={d.headline} onChange={(e) => set({ headline: e.target.value })} placeholder="Full-stack and AI engineer" /></Label>
-      </div>
-      <div className="mt-5"><Label t="Bio" hint={`${d.bio.length} characters`} err={errs.bio}>
-        <textarea rows={4} className={input + " resize-none"} value={d.bio} onChange={(e) => set({ bio: e.target.value })} placeholder="What you do, who you work with, and what people usually reach out about." />
-      </Label></div>
-      <div className="mt-6"><Label t="Tone"><div className="flex flex-wrap gap-2">{TONES.map((t) => <Chip key={t} on={d.tone === t} onClick={() => set({ tone: t })}>{t}</Chip>)}</div></Label></div>
-      <div className="mt-6"><Label t="Languages it can speak" err={errs.languages}><div className="flex flex-wrap gap-2">{LANGS.map(([k, v]) => <Chip key={k} on={d.languages.includes(k)} onClick={() => toggle(k)}>{v}</Chip>)}</div></Label></div>
     </div>
   );
+}
+
+function RoleStep({ d, set, errs }: any) {
+  return <div><Head k="About you" t="What do you do?" d="A short role helps visitors understand how you can help." /><Label t="Your role" err={errs.headline}><input autoFocus className={input} value={d.headline} onChange={(e) => set({ headline: e.target.value })} placeholder="Designer, founder, engineer…" /></Label></div>;
+}
+
+function BioStep({ d, set, errs }: any) {
+  return <div><Head k="About you" t="Tell us a little more" d="What do you work on, and what do people usually ask you about?" /><Label t="A short introduction" hint={`${d.bio.length} characters`} err={errs.bio}><textarea autoFocus rows={5} className={input + " resize-none"} value={d.bio} onChange={(e) => set({ bio: e.target.value })} placeholder="I help… I work with… People usually reach out about…" /></Label></div>;
+}
+
+function LanguagesStep({ d, set, errs }: any) {
+  const toggle = (l: string) => set({ languages: d.languages.includes(l) ? d.languages.filter((x: string) => x !== l) : [...d.languages, l] });
+  return <div><Head k="Your Twyn" t="Which languages should it speak?" d="Choose all that feel natural for your conversations." /><Label t="Languages" err={errs.languages}><div className="flex justify-center gap-2 flex-wrap">{LANGS.map(([k, v]) => <Chip key={k} on={d.languages.includes(k)} onClick={() => toggle(k)}>{v}</Chip>)}</div></Label></div>;
+}
+
+function ToneStep({ d, set }: any) {
+  return <div><Head k="Your Twyn" t="Choose its conversation style" d="You can change this any time." /><div className="grid gap-2 sm:grid-cols-2">{TONES.map((t) => <button key={t} onClick={() => set({ tone: t })} className={clsx("rounded-2xl border px-4 py-4 text-left text-sm transition-colors", d.tone === t ? "border-ink bg-white text-ink" : "border-rule bg-white/50 text-ink-soft hover:bg-white")}>{t}{d.tone === t && <Check size={15} className="float-right" />}</button>)}</div></div>;
 }
 
 function KnowledgeStep({ d, set, errs, ensurePersona }: any) {
