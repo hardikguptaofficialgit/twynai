@@ -2,6 +2,8 @@
 __pycache__/
 node_modules/
 .next/
+.open-next/
+.wrangler/
 .env
 *.db
 api/uploads/
