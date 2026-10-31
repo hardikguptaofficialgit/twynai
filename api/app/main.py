@@ -579,7 +579,7 @@ def seed():
                              {"q": "Are you available for internships?", "a": "Yes, I am open to AI and full-stack internships starting January 2027."},
                              {"q": "Which languages can I talk to you in?", "a": "English, Hindi and Hinglish work best. My Twyn also understands Tamil, Telugu, Kannada and other Indian languages."}]),
             links=json.dumps([{"label": "GitHub", "url": "https://github.com/"}, {"label": "LinkedIn", "url": "https://linkedin.com/"}]))
-        s.add(p); s.flush(); reindex_profile(s, p); s.commit()
+        s.add(p); s.commit(); s.refresh(p); reindex_profile(s, p); s.commit()
     h = s.scalar(select(Persona).where(Persona.handle == "hardik"))
     if h and not h.published: h.published = True; h.onboarding_step = 6; s.commit()
     n = rag.reembed_stale(s, Chunk)
