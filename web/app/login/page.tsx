@@ -2,7 +2,7 @@
 import { useEffect, useState, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { api, API } from "@/lib/api";
-import { Backdrop, Button, Logo, Field } from "@/components/ui";
+import { Backdrop, Button, Logo, Field, Mark } from "@/components/ui";
 
 function Login() {
   const r = useRouter(); const sp = useSearchParams();
@@ -15,11 +15,21 @@ function Login() {
     catch (e: any) { setErr(e.message); }
   }
   return (
-    <main className="relative grid min-h-screen place-items-center p-6">
+    <main className="relative grid min-h-screen lg:grid-cols-2">
       <Backdrop />
-      <div className="glass w-full max-w-md p-9">
+      <section className="hidden flex-col justify-between border-r border-rule p-12 lg:flex">
         <Logo />
-        <h1 className="mt-8 text-3xl">Welcome to Proxy</h1>
+        <div>
+          <Mark size={120} />
+          <h2 className="display mt-10 max-w-[12ch] text-6xl">One link. A second you.</h2>
+          <p className="mt-5 max-w-[34ch] text-lg text-ink-soft">Chats, calls and bookings in Hindi, Hinglish, Tamil and English, in your own voice.</p>
+        </div>
+        <p className="text-sm text-ink-mute">Voice by Gnani Timbre and Prisma</p>
+      </section>
+      <section className="grid place-items-center p-6">
+      <div className="glass reveal w-full max-w-md p-9">
+        <div className="lg:hidden"><Logo /></div>
+        <h1 className="mt-8 text-3xl lg:mt-0">Welcome to Kadi</h1>
         <p className="mt-2 text-sm text-ink-soft">Sign in to build your persona and connect your calendar.</p>
         <a href={`${API}/api/auth/google/start`} className="clay-sm mt-8 flex w-full items-center justify-center gap-3 bg-canvas px-5 py-3.5 text-sm font-medium">
           <svg width="18" height="18" viewBox="0 0 48 48"><path fill="#4c84bf" d="M44.5 20H24v8.5h11.8C34.7 33.9 30.1 37 24 37c-7.2 0-13-5.8-13-13s5.8-13 13-13c3.1 0 5.9 1.1 8.1 2.9l6.4-6.4C34.6 4.1 29.6 2 24 2 11.8 2 2 11.8 2 24s9.8 22 22 22c11 0 21-8 21-22 0-1.3-.2-2.7-.5-4z"/></svg>
@@ -34,6 +44,7 @@ function Login() {
           {err && <p className="text-xs text-peach-deep">{err}</p>}
         </div>
       </div>
+      </section>
     </main>
   );
 }

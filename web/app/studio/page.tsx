@@ -39,9 +39,9 @@ export default function Studio() {
     <main className="relative min-h-screen pb-24">
       <Backdrop />
       <AppNav handle={p?.handle} />
-      <div className="mx-auto mt-10 w-[min(1180px,calc(100%-2rem))]">
+      <div className="mx-auto mt-10 w-[min(1200px,calc(100%-2.5rem))]">
         <div className="mb-8 flex flex-wrap items-end justify-between gap-4">
-          <div><div className="text-sm text-ink-mute">Persona studio</div><h1 className="display mt-1 text-5xl md:text-6xl">{p ? `Tune ${p.name.split(" ")[0]}'s Proxy` : "Create your Proxy"}</h1></div>
+          <div><div className="text-sm text-ink-mute">Persona studio</div><h1 className="display mt-1 text-5xl md:text-6xl">{p ? `Tune ${p.name.split(" ")[0]}'s Kadi` : "Create your Kadi"}</h1></div>
           <div className="flex items-center gap-3">{saved && <Pill tone="mint"><Check size={12} />{saved}</Pill>}<Button onClick={save}>{p ? "Save changes" : "Create persona"}</Button></div>
         </div>
         <div className="grid gap-6 lg:grid-cols-[1fr_380px]">
@@ -50,9 +50,9 @@ export default function Studio() {
               <h2 className="mb-5 text-2xl">Identity</h2>
               <div className="grid gap-4 md:grid-cols-2">
                 <Field label="Display name"><input className="field clay-pressed" value={f.name} onChange={(e) => set("name", e.target.value)} placeholder="Hardik Gupta" /></Field>
-                <Field label="Handle" hint="proxy.app/handle"><input className="field clay-pressed" disabled={!!p} value={f.handle} onChange={(e) => set("handle", e.target.value)} placeholder="hardik" /></Field>
+                <Field label="Handle" hint="kadi.link/handle"><input className="field clay-pressed" disabled={!!p} value={f.handle} onChange={(e) => set("handle", e.target.value)} placeholder="hardik" /></Field>
                 <div className="md:col-span-2"><Field label="Headline"><input className="field clay-pressed" value={f.headline} onChange={(e) => set("headline", e.target.value)} placeholder="Full-stack and AI engineer" /></Field></div>
-                <div className="md:col-span-2"><Field label="Bio" hint="Proxy speaks from this"><textarea rows={4} className="field clay-pressed resize-none" value={f.bio} onChange={(e) => set("bio", e.target.value)} /></Field></div>
+                <div className="md:col-span-2"><Field label="Bio" hint="Kadi speaks from this"><textarea rows={4} className="field clay-pressed resize-none" value={f.bio} onChange={(e) => set("bio", e.target.value)} /></Field></div>
                 <Field label="Rates"><textarea rows={3} className="field clay-pressed resize-none" value={f.rates} onChange={(e) => set("rates", e.target.value)} /></Field>
                 <Field label="Tone of voice"><textarea rows={3} className="field clay-pressed resize-none" value={f.tone} onChange={(e) => set("tone", e.target.value)} /></Field>
               </div>
@@ -83,7 +83,7 @@ export default function Studio() {
                 <button onClick={() => navigator.clipboard.writeText(link)} className="text-ink-soft hover:text-ink"><Copy size={16} /></button></div></Card>}
             <Card>
               <div className="clay-sm mb-4 grid h-11 w-11 place-items-center bg-peach"><FileText size={18} /></div>
-              <h3 className="text-xl">Knowledge</h3><p className="mt-1 text-sm text-ink-soft">PDF, Markdown or text. Proxy only answers from what you add.</p>
+              <h3 className="text-xl">Knowledge</h3><p className="mt-1 text-sm text-ink-soft">PDF, Markdown or text. Kadi only answers from what you add.</p>
               <label className={`clay-sm mt-4 flex cursor-pointer items-center justify-center gap-2 bg-canvas px-4 py-3 text-sm font-medium ${!p && "pointer-events-none opacity-50"}`}><Upload size={15} />Upload document<input type="file" accept=".pdf,.txt,.md" className="hidden" onChange={(e) => upload("docs", e.target.files?.[0])} /></label>
               <div className="mt-3 space-y-2">{docs.map((d) => <div key={d.name} className="flex justify-between text-sm"><span className="truncate">{d.name}</span><span className="text-ink-mute">{d.chunks} chunks</span></div>)}</div>
             </Card>
@@ -95,12 +95,12 @@ export default function Studio() {
             </Card>
             <Card>
               <div className="clay-sm mb-4 grid h-11 w-11 place-items-center bg-sky"><CalendarCheck size={18} /></div>
-              <h3 className="text-xl">Google Calendar</h3><p className="mt-1 text-sm text-ink-soft">Free/busy and booking. Proxy only offers slots you are actually free.</p>
+              <h3 className="text-xl">Google Calendar</h3><p className="mt-1 text-sm text-ink-soft">Free/busy and booking. Kadi only offers slots you are actually free.</p>
               <div className="mt-3">{me?.google_tokens ? <Pill tone="mint">Connected</Pill> : <Pill tone="butter">Demo calendar in use</Pill>}</div>
               <a href={`${API}/api/auth/google/start`} className="clay-sm mt-4 flex items-center justify-center bg-canvas px-4 py-3 text-sm font-medium">Connect Google Calendar</a>
             </Card>
             <Card>
-              <h3 className="text-xl">Availability</h3><p className="mt-1 text-sm text-ink-soft">Proxy only offers slots inside these rules, minus busy times.</p>
+              <h3 className="text-xl">Availability</h3><p className="mt-1 text-sm text-ink-soft">Kadi only offers slots inside these rules, minus busy times.</p>
               {(() => { const av = { ...DEF_AV, ...(f.availability || {}) }; const up = (k: string, v: any) => set("availability", { ...av, [k]: v });
                 return (<div className="mt-4 space-y-3 text-sm">
                   <div className="flex flex-wrap gap-1.5">{DAYS.map((d, i) => { const on = av.days.includes(i); return (

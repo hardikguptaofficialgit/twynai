@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630"><rect width="1200" height="630" fill="#F5F1EA"/>
+<line x1="80" y1="96" x2="1120" y2="96" stroke="#DCD4C6"/><line x1="80" y1="534" x2="1120" y2="534" stroke="#DCD4C6"/>
+<rect x="760" y="140" width="350" height="350" rx="80" fill="#F6F1FB"/><g transform="translate(785 165) scale(.586)"><g transform="rotate(-40 256 256)"><path fill-rule="evenodd" fill="#B9A6F2" d="M56 256A110 110 0 0 1 166 146H346A110 110 0 0 1 456 256ZM162 256A80 38 0 0 1 322 256Z"/><path fill-rule="evenodd" fill="#1C1A24" d="M56 256A110 110 0 0 0 166 366H346A110 110 0 0 0 456 256ZM162 256A80 38 0 0 0 322 256Z"/></g></g>
+<text x="80" y="300" font-family="Georgia, serif" font-size="150" fill="#1C1A24" letter-spacing="-3">Kadi</text>
+<text x="84" y="372" font-family="Helvetica, Arial, sans-serif" font-size="34" fill="#55516A">An AI you, at a link. It talks, chats and books.</text>
+<text x="84" y="580" font-family="Helvetica, Arial, sans-serif" font-size="24" fill="#7A7690">Voice by Gnani  /  Hindi, Hinglish, Tamil, English</text></svg>

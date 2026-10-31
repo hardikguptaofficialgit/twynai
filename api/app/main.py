@@ -13,7 +13,7 @@ from .db import SessionLocal, init_db, Owner, Persona, Chunk, Conversation, Mess
 
 import logging
 log = logging.getLogger("proxy")
-app = FastAPI(title="Proxy API")
+app = FastAPI(title="Kadi API")
 app.add_middleware(CORSMiddleware, allow_origins=[o.strip() for o in __import__("os").getenv("CORS_ORIGINS", "*").split(",")], allow_methods=["*"], allow_headers=["*"])
 
 # ---------------- realtime hub (visitor + owner sockets per conversation) ----------------
@@ -181,7 +181,7 @@ async def preview_voice(pid: str, o=Depends(current_owner), s=Depends(db)):
     if not p.voice_embedding: raise HTTPException(400, "No voice sample yet")
     path = config.UPLOAD_DIR / f"{p.id}-preview.wav"
     if not path.exists():
-        line = f"Hi, this is {p.name.split()[0] if p.name else 'me'}'s Proxy. Thanks for reaching out, how can I help you today?"
+        line = f"Hi, this is {p.name.split()[0] if p.name else 'me'}'s Kadi. Thanks for reaching out, how can I help you today?"
         emb = "" if "mock" in p.voice_embedding else p.voice_embedding
         try: wav, mock = await voice.tts(line, "en-IN", emb)
         except Exception as e: raise HTTPException(502, f"preview failed: {type(e).__name__}")
@@ -202,7 +202,7 @@ LANG_NAMES = {"hinglish": "Hinglish: Hindi and English mixed, written ONLY in La
 
 def system_prompt(p, ctx, lang, voice_mode):
     k = "\n".join(f"<k>{c.text}</k>" for _, c in ctx) or "(no matching notes)"
-    return f"""You are Proxy, the AI persona of {p.name} ({p.headline}). Speak in first person as {p.name}. Tone: {p.tone}.
+    return f"""You are Kadi, the AI persona of {p.name} ({p.headline}). Speak in first person as {p.name}. Tone: {p.tone}.
 Answer ONLY from the knowledge below. If the answer is not there, say you do not know yet and offer to pass a message or book a call. Never invent prices, dates or facts.
 Reply in the caller's language: {LANG_NAMES.get(lang, lang)}. {"Keep replies under 2 short sentences; this will be spoken aloud." if voice_mode else "Keep replies short and clear."}
 No emojis, no markdown, no bullet lists, plain sentences. When offering times, name at most three, and copy each slot's 'say' text from check_availability exactly. Use tools to check availability, book meetings and capture leads. Today is {dt.datetime.now(calendar_svc.IST).strftime('%A %d %B %Y')} (IST).
@@ -577,7 +577,7 @@ def seed():
             rates="Freelance MVP builds start at 25,000 rupees per week. A 30 minute discovery call is free.",
             faqs=json.dumps([{"q": "What do you work on?", "a": "Voice AI agents, full-stack web apps and LLM tooling, mostly with Next.js, FastAPI and Postgres."},
                              {"q": "Are you available for internships?", "a": "Yes, I am open to AI and full-stack internships starting January 2027."},
-                             {"q": "Which languages can I talk to you in?", "a": "English, Hindi and Hinglish work best. My Proxy also understands Tamil, Telugu, Kannada and other Indian languages."}]),
+                             {"q": "Which languages can I talk to you in?", "a": "English, Hindi and Hinglish work best. My Kadi also understands Tamil, Telugu, Kannada and other Indian languages."}]),
             links=json.dumps([{"label": "GitHub", "url": "https://github.com/"}, {"label": "LinkedIn", "url": "https://linkedin.com/"}]))
         s.add(p); s.flush(); reindex_profile(s, p); s.commit()
     h = s.scalar(select(Persona).where(Persona.handle == "hardik"))

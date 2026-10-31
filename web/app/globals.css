@@ -1,6 +1,6 @@
 @import "tailwindcss";
 
-/* Proxy design tokens. Built from Hallmark craft rules (design/hallmark) and
+/* Kadi design tokens. Built from Hallmark craft rules (design/hallmark) and
    Anthropic frontend-design: warm tinted paper, OKLCH, one ink accent, pastel
    fields, clay for things you press, glass for things that float.
    Hard rules: no glow, no gradients, no emojis. */
@@ -78,5 +78,16 @@ p { text-wrap: pretty; }
 .label { font-size: 0.8125rem; color: var(--color-ink-mute); }
 .display { font-family: var(--font-display); font-weight: 400; letter-spacing: -0.012em; line-height: 1.02; }
 }
+
+@layer components {
+/* Hairline rails at the 1200px container edges. Solid 1px lines, not gradients. */
+.frame-rails::before, .frame-rails::after { content: ""; position: absolute; top: 0; bottom: 0; width: 1px; background: var(--color-rule); }
+.frame-rails::before { left: max(0.5rem, calc(50% - 624px)); }
+.frame-rails::after { right: max(0.5rem, calc(50% - 624px)); }
+.hair-t { border-top: 1px solid var(--color-rule); }
+.reveal { animation: reveal .7s var(--ease-out) both; }
+@keyframes reveal { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+}
+html, body { overflow-x: clip; }
 
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; } }

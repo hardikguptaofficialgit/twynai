@@ -38,40 +38,56 @@ export function Field({ label, hint, children }: { label: string; hint?: string;
   );
 }
 
-export function Logo() {
+export function Mark({ size = 32, className }: { size?: number; className?: string }) {
+  // eslint-disable-next-line @next/next/no-img-element
+  return <img src="/brand/mark.svg" alt="" width={size} height={size} className={className} />;
+}
+
+export function Logo({ href = "/" }: { href?: string }) {
   return (
-    <Link href="/" className="flex items-center gap-2.5">
-      <span className="clay-sm relative grid h-9 w-9 place-items-center bg-lilac" style={{ borderRadius: 12 }}><span className="h-3 w-3 rounded-full bg-ink" /><span className="absolute right-1.5 top-1.5 h-1.5 w-1.5 rounded-full bg-mint-deep" /></span>
-      <span className="font-display text-[22px] leading-none tracking-[-0.02em]">Proxy</span>
+    <Link href={href} aria-label="Kadi home" className="group flex items-center gap-2">
+      <Mark size={34} className="transition-transform duration-300 ease-out group-hover:-rotate-6" />
+      <span className="font-display text-[24px] leading-none tracking-[-0.02em]">Kadi</span>
     </Link>
   );
 }
 
+/** Page frame: two hairline rails at the container edges plus two quiet pastel shapes. */
 export function Backdrop() {
   return (
     <div aria-hidden className="pointer-events-none fixed inset-0 -z-10 overflow-hidden">
-      <div className="blob left-[-6%] top-[-8%] h-[360px] w-[360px] bg-lilac" />
-      <div className="absolute right-[8%] top-[14%] h-[220px] w-[220px] rotate-12 rounded-[56px] bg-mint" />
-      <div className="blob bottom-[-14%] left-[30%] h-[340px] w-[340px] bg-peach" />
-      <div className="absolute bottom-[12%] right-[-3%] h-[160px] w-[260px] rounded-full bg-butter" />
+      <div className="absolute right-[-120px] top-[-140px] h-[380px] w-[380px] rounded-full bg-lilac/60" />
+      <div className="absolute bottom-[-160px] left-[-120px] h-[340px] w-[340px] rounded-full bg-mint/60" />
+      <div className="frame-rails absolute inset-0" />
     </div>
   );
 }
 
+export const W = "mx-auto w-[min(1200px,calc(100%-2.5rem))]";
+
 export function Nav({ right }: { right?: ReactNode }) {
   return (
-    <header className="sticky top-4 z-30 mx-auto mt-4 w-[min(1180px,calc(100%-2rem))]">
-      <div className="glass flex items-center justify-between rounded-[22px] px-5 py-3">
+    <header className="sticky top-0 z-30 border-b border-rule bg-canvas/70 backdrop-blur-xl">
+      <div className={`${W} flex h-16 items-center justify-between`}>
         <Logo />
-        <nav className="flex items-center gap-1 text-sm">
+        <nav className="flex items-center gap-1 text-[15px]">
           {right ?? (<>
-            <Link className="rounded-xl px-3 py-2 text-ink-soft hover:text-ink" href="/p/hardik">Live demo</Link>
-            <Link className="rounded-xl px-3 py-2 text-ink-soft hover:text-ink" href="/studio">Studio</Link>
-            <Link className="rounded-xl px-3 py-2 text-ink-soft hover:text-ink" href="/dashboard">Dashboard</Link>
-            <Link href="/login" className="ml-2 rounded-full bg-ink px-4 py-2 text-canvas">Get your Proxy</Link>
+            <Link className="hidden rounded-full px-3.5 py-2 text-ink-soft transition-colors hover:text-ink sm:block" href="/p/hardik">Live demo</Link>
+            <Link className="hidden rounded-full px-3.5 py-2 text-ink-soft transition-colors hover:text-ink sm:block" href="/#how">How it works</Link>
+            <Link className="rounded-full px-3.5 py-2 text-ink-soft transition-colors hover:text-ink" href="/login">Sign in</Link>
+            <Link href="/login" className="ml-1 rounded-full bg-ink px-4 py-2 text-canvas transition-colors hover:bg-ink-soft">Get your link</Link>
           </>)}
         </nav>
       </div>
     </header>
+  );
+}
+
+export function SectionHead({ n, title, children }: { n?: string; title: string; children?: ReactNode }) {
+  return (
+    <div className="flex flex-wrap items-end justify-between gap-4 border-b border-rule pb-5">
+      <div className="flex items-baseline gap-4">{n && <span className="tnum font-mono text-[13px] text-ink-mute">{n}</span>}<h2 className="display text-3xl md:text-4xl">{title}</h2></div>
+      {children}
+    </div>
   );
 }

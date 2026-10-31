@@ -3,9 +3,9 @@
 Attach: the 60 s demo video. Tag the Gnani AI company page (@Gnani AI on LinkedIn, Gnani's official handle on X; confirm the handle before posting).
 
 ## LinkedIn
-I built Proxy for the Great Indian AI Internship Challenge by @Gnani AI.
+I built Kadi for the Great Indian AI Internship Challenge by @Gnani AI.
 
-Proxy is your AI persona on a link. Share proxy/p/yourname and anyone can chat with it or call it. It answers from your own notes and docs, speaks in your cloned voice, follows the caller's language (Hinglish, Hindi, Tamil and more, no language picker), and books a slot straight into your calendar.
+Kadi is your AI persona on a link. Share kadi.link/yourname and anyone can chat with it or call it. It answers from your own notes and docs, speaks in your cloned voice, follows the caller's language (Hinglish, Hindi, Tamil and more, no language picker), and books a slot straight into your calendar.
 
 Built on Gnani:
 - Prisma v3 STT with indic-auto + code-mix for callers who switch languages mid-sentence
@@ -19,6 +19,6 @@ Solo build, 2nd-year CS at KIIT. Would love your feedback, and a like or comment
 #GreatIndianAIInternshipChallenge #GnaniAI #VoiceAI #BuildInPublic
 
 ## X (under 280 chars)
-Built Proxy for @Gnani AI's internship challenge: an AI persona you share as a link. Callers talk to it in Hinglish/Tamil/Hindi, it answers in my cloned voice and books a slot. Gnani Prisma STT + Timbre streaming TTS, ~2s to first word.
+Built Kadi for @Gnani AI's internship challenge: an AI persona you share as a link. Callers talk to it in Hinglish/Tamil/Hindi, it answers in my cloned voice and books a slot. Gnani Prisma STT + Timbre streaming TTS, ~2s to first word.
 
 #GreatIndianAIInternshipChallenge #GnaniAI

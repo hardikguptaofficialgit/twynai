@@ -9,9 +9,19 @@ const body = Hanken_Grotesk({ subsets: ["latin"], weight: ["400", "500", "700"],
 const jb = JetBrains_Mono({ subsets: ["latin"], weight: ["400"], variable: "--font-jb", display: "swap" });
 
 export const metadata: Metadata = {
-  title: "Proxy, an AI you that takes your calls",
+  metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3100"),
+  title: { default: "Kadi, an AI you at a link", template: "%s | Kadi" },
   description: "Share a link. Anyone can chat or talk to your AI self, in your voice, in their language.",
+  applicationName: "Kadi",
+  manifest: "/manifest.webmanifest",
+  icons: {
+    icon: [{ url: "/brand/favicon.ico", sizes: "any" }, { url: "/brand/icon.svg", type: "image/svg+xml" }, { url: "/brand/icon-192.png", sizes: "192x192", type: "image/png" }],
+    apple: [{ url: "/brand/apple-touch-icon.png", sizes: "180x180" }],
+  },
+  openGraph: { title: "Kadi, an AI you at a link", description: "Chats, calls and bookings in your voice, in Indian languages.", images: [{ url: "/brand/og.png", width: 1200, height: 630, alt: "Kadi" }], siteName: "Kadi", type: "website" },
+  twitter: { card: "summary_large_image", title: "Kadi, an AI you at a link", images: ["/brand/og.png"] },
 };
+export const viewport = { themeColor: "#F5F1EA" };
 
 export default function RootLayout({
   children,
