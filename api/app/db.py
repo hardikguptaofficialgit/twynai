@@ -42,6 +42,7 @@ class Persona(Base):
     links: Mapped[str] = mapped_column(Text, default="[]")   # json [{label,url}]
     tone: Mapped[str] = mapped_column(String, default="warm, concise, professional")
     accent: Mapped[str] = mapped_column(String, default="lilac")
+    avatar_path: Mapped[str] = mapped_column(String, default="")
     voice_embedding: Mapped[str] = mapped_column(Text, default="")  # json speaker_embedding
     voice_sample_path: Mapped[str] = mapped_column(String, default="")
     languages: Mapped[str] = mapped_column(Text, default='["en","hi"]')
@@ -53,7 +54,7 @@ class Persona(Base):
     def to_dict(self, public=False):
         d = dict(id=self.id, handle=self.handle, name=self.name, headline=self.headline, bio=self.bio,
                  rates=self.rates, faqs=json.loads(self.faqs or "[]"), links=json.loads(self.links or "[]"),
-                 tone=self.tone, accent=self.accent, languages=json.loads(self.languages or "[]"), availability=json.loads(self.availability or "{}"), published=bool(self.published), onboarding_step=self.onboarding_step or 0, has_voice=bool(self.voice_embedding or self.voice_sample_path))
+                 tone=self.tone, accent=self.accent, avatar_url=(f"/api/p/{self.handle}/avatar" if self.avatar_path else ""), languages=json.loads(self.languages or "[]"), availability=json.loads(self.availability or "{}"), published=bool(self.published), onboarding_step=self.onboarding_step or 0, has_voice=bool(self.voice_embedding or self.voice_sample_path))
         if not public: d["owner_id"] = self.owner_id
         return d
 
@@ -117,7 +118,7 @@ def init_db():
     Base.metadata.create_all(engine)
     from sqlalchemy import inspect, text
     have = {c["name"] for c in inspect(engine).get_columns("personas")}
-    add = {"languages": "TEXT DEFAULT '[\"en\",\"hi\"]'", "availability": "TEXT DEFAULT '{}'", "published": "BOOLEAN DEFAULT 0", "onboarding_step": "INTEGER DEFAULT 0"}
+    add = {"languages": "TEXT DEFAULT '[\"en\",\"hi\"]'", "availability": "TEXT DEFAULT '{}'", "published": "BOOLEAN DEFAULT 0", "onboarding_step": "INTEGER DEFAULT 0", "avatar_path": "VARCHAR DEFAULT ''"}
     with engine.begin() as c:
         for k, v in add.items():
             if k not in have: c.execute(text(f"ALTER TABLE personas ADD COLUMN {k} {v}"))

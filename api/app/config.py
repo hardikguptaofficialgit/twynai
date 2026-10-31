@@ -47,6 +47,7 @@ def modes():
 ALLOW_DEV_LOGIN = os.getenv("ALLOW_DEV_LOGIN", "1") == "1"   # set 0 in production once Google sign-in is live
 RATE_LIMIT_PER_MIN = int(os.getenv("RATE_LIMIT_PER_MIN", "30"))  # public chat/voice turns per IP per minute
 MAX_AUDIO_BYTES = int(os.getenv("MAX_AUDIO_BYTES", str(8 * 1024 * 1024)))
+MAX_IMAGE_BYTES = int(os.getenv("MAX_IMAGE_BYTES", str(3 * 1024 * 1024)))
 MAX_DOC_BYTES = int(os.getenv("MAX_DOC_BYTES", str(10 * 1024 * 1024)))
 MAX_TEXT_CHARS = int(os.getenv("MAX_TEXT_CHARS", "1500"))
 SESSION_DAYS = int(os.getenv("SESSION_DAYS", "30"))

@@ -251,7 +251,7 @@ export default function PublicPersona() {
         <aside className="space-y-3">
           <div className="glass p-5">
             <div className="flex items-center gap-3">
-              <div className="clay-sm grid h-14 w-14 shrink-0 place-items-center rounded-full font-display text-[22px]" style={{ background: accent.soft, borderRadius: 9999 }}>{initials}</div>
+              <div className="clay-sm grid h-14 w-14 shrink-0 place-items-center overflow-hidden rounded-full font-display text-[22px]" style={{ background: accent.soft, borderRadius: 9999 }}>{p.avatar_url ? <img src={`${API}${p.avatar_url}`} alt={`${p.name}'s profile`} className="h-full w-full object-cover" /> : initials}</div>
               <div className="min-w-0">
                 <h1 className="display truncate text-[22px] leading-tight">{p.name}</h1>
                 <p className="truncate text-[12.5px] text-ink-soft">{p.headline}</p>
@@ -293,7 +293,7 @@ export default function PublicPersona() {
           {mode === "book" ? <BookPanel handle={handle} first={first} />
           : mode === "voice" ? (
             <div className="flex flex-1 flex-col items-center justify-center gap-3 p-6">
-              <Orb size={150} state={orb} level={level} color={accent.soft} deep={accent.deep} initials={initials} />
+              <Orb size={150} state={orb} level={level} color={accent.soft} deep={accent.deep} initials={initials} image={p.avatar_url ? `${API}${p.avatar_url}` : undefined} />
               <div className="text-center">
                 <div className="text-[15px] font-medium">{{ idle: callActive.current ? "Your turn" : "Start a live conversation", listening: "Listening", thinking: "Thinking", speaking: `${first} is speaking` }[orb]}</div>
                 <div className="mt-0.5 text-[12.5px] text-ink-mute">{callActive.current ? "Just speak. Twyn sends your turn after a short pause." : "Speak in any Indian language."} {lang && `Detected: ${LANG[lang] || lang}`}</div>
@@ -313,7 +313,7 @@ export default function PublicPersona() {
               <div className="flex-1 space-y-3 overflow-y-auto px-3 py-4">
                 {msgs.length === 0 && (
                   <div className="mx-auto mt-10 max-w-sm text-center">
-                    <div className="mx-auto w-fit"><Orb size={64} color={accent.soft} deep={accent.deep} initials={initials} /></div>
+                    <div className="mx-auto w-fit"><Orb size={64} color={accent.soft} deep={accent.deep} initials={initials} image={p.avatar_url ? `${API}${p.avatar_url}` : undefined} /></div>
                     <h2 className="display mt-2 text-[26px] leading-tight">Hi, I&rsquo;m {first}&rsquo;s Twyn.</h2>
                     <p className="mt-1 text-[13px] text-ink-soft">Ask about work, rates or availability. I can book a call. English, Hindi, Hinglish and more.</p>
                     <div className="mt-4 flex flex-wrap justify-center gap-1.5">

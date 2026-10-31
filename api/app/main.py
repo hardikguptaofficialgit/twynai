@@ -307,6 +307,25 @@ async def upload_voice(pid: str, file: UploadFile = File(...), o=Depends(current
     (config.UPLOAD_DIR / f"{p.id}-preview.wav").unlink(missing_ok=True)  # old preview no longer matches
     s.commit(); return {"ok": True, "mock": not config.GNANI_API_KEY, "seconds": secs, "dims": (json.loads(p.voice_embedding).get("shape") if p.voice_embedding else None)}
 
+@app.post("/api/personas/{pid}/avatar")
+async def upload_avatar(pid: str, file: UploadFile = File(...), o=Depends(current_owner), s=Depends(db)):
+    p = owned(s, pid, o)
+    data = await read_capped(file, config.MAX_IMAGE_BYTES)
+    kinds = {
+        b"\xff\xd8\xff": ("jpg", "image/jpeg"),
+        b"\x89PNG\r\n\x1a\n": ("png", "image/png"),
+    }
+    ext = media = None
+    for signature, value in kinds.items():
+        if data.startswith(signature): ext, media = value; break
+    if data[:4] == b"RIFF" and data[8:12] == b"WEBP": ext, media = "webp", "image/webp"
+    if not ext or not media: raise HTTPException(422, "Upload a JPG, PNG, or WebP image.")
+    old = _P(p.avatar_path) if p.avatar_path else None
+    path = config.UPLOAD_DIR / f"{p.id}-avatar.{ext}"
+    path.write_bytes(data); p.avatar_path = str(path); s.commit()
+    if old and old != path: old.unlink(missing_ok=True)
+    return {"avatar_url": f"/api/p/{p.handle}/avatar"}
+
 @app.post("/api/personas/{pid}/voice/preview")
 async def preview_voice(pid: str, o=Depends(current_owner), s=Depends(db)):
     """Short line in the owner's cloned voice (Timbre vachana-vc-v1). Cached per embedding so
@@ -330,6 +349,15 @@ def public_persona(handle: str, s=Depends(db)):
     p = s.scalar(select(Persona).where(Persona.handle == handle))
     if not p: raise HTTPException(404, "not found")
     return p.to_dict(public=True)
+
+@app.get("/api/p/{handle}/avatar")
+def public_avatar(handle: str, s=Depends(db)):
+    from fastapi.responses import Response
+    p = s.scalar(select(Persona).where(Persona.handle == handle))
+    path = _P(p.avatar_path) if p and p.avatar_path else None
+    if not path or not path.is_file(): raise HTTPException(404, "avatar not found")
+    media = {".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".png": "image/png", ".webp": "image/webp"}.get(path.suffix.lower(), "application/octet-stream")
+    return Response(path.read_bytes(), media_type=media, headers={"Cache-Control": "public, max-age=3600"})
 
 class DirectBook(BaseModel):
     start: str; name: str; email: str; topic: str = ""

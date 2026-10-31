@@ -4,7 +4,7 @@ import { useEffect, useRef, useState, Suspense } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { AnimatePresence, motion } from "motion/react";
-import { ArrowLeft, ArrowRight, Check, Copy, FileText, Link as Link2, CircleNotch as Loader2, Microphone as Mic, Plus, Stop as Square, Trash as Trash2, UploadSimple as Upload, X, ArrowSquareOut as ExternalLink, SpeakerHigh as Volume2 } from "@phosphor-icons/react";
+import { ArrowLeft, ArrowRight, Camera, Check, Copy, FileText, Link as Link2, CircleNotch as Loader2, Microphone as Mic, Plus, Stop as Square, Trash as Trash2, UploadSimple as Upload, X, ArrowSquareOut as ExternalLink, SpeakerHigh as Volume2 } from "@phosphor-icons/react";
 import clsx from "clsx";
 import { api, API, encodeWav, Persona, token } from "@/lib/api";
 import { Logo, Backdrop } from "@/components/ui";
@@ -44,16 +44,16 @@ function Chip({ on, children, onClick }: any) {
 
 function Progress({ step, max, go }: { step: number; max: number; go: (i: number) => void }) {
   return (
-    <div>
-      <div className="h-1 overflow-hidden rounded-full bg-paper-3 md:hidden">
+    <div className="mx-auto max-w-3xl">
+      <div className="h-1 overflow-hidden rounded-full bg-paper-3">
         <motion.div className="h-full rounded-full bg-ink" animate={{ width: `${((step + 1) / STEPS.length) * 100}%` }} transition={{ type: "spring", stiffness: 120, damping: 20 }} />
       </div>
-      <ol className="hidden space-y-0.5 md:block">
+      <ol className="mt-3 hidden items-center justify-between gap-1 sm:flex">
         {STEPS.map((s, i) => {
           const done = i < step || (i <= max && i !== step);
           return (
             <li key={s}>
-              <button disabled={i > max} onClick={() => go(i)} className={clsx("flex h-8 w-full items-center gap-2.5 rounded-lg px-2 text-[13px] transition-colors", i === step ? "bg-white font-medium text-ink hairline" : i <= max ? "text-ink-soft hover:bg-white/60 hover:text-ink" : "text-ink-mute/60")}>
+              <button disabled={i > max} onClick={() => go(i)} className={clsx("flex items-center gap-1.5 rounded-full px-2 py-1 text-[11px] transition-colors", i === step ? "bg-white font-medium text-ink hairline" : i <= max ? "text-ink-soft hover:bg-white/60 hover:text-ink" : "text-ink-mute/60")}>
                 <span className={clsx("grid h-[18px] w-[18px] place-items-center rounded-full text-[10px] tnum", done ? "bg-mint text-mint-deep" : i === step ? "bg-ink text-canvas" : "hairline bg-white/60")}>
                   {done ? <Check size={10} weight="bold" /> : i + 1}
                 </span>{s}
@@ -78,6 +78,7 @@ function OnboardingInner() {
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState("");
   const [loaded, setLoaded] = useState(false);
+  const [avatarFile, setAvatarFile] = useState<File | null>(null);
   const set = (p: Partial<Draft>) => setD((x) => ({ ...x, ...p }));
 
   // Local-first: load from localStorage; if signed in, merge API persona
@@ -198,7 +199,13 @@ function OnboardingInner() {
       const p: any = d.id
         ? await api(`/api/personas/${d.id}`, { method: "PUT", body: JSON.stringify(body) })
         : await api("/api/personas", { method: "POST", body: JSON.stringify(body) });
-      setD((x) => ({ ...x, ...p, availability: { ...DEFAULT_AVAIL, ...(p.availability || {}) } }));
+      let withAvatar = p;
+      if (avatarFile) {
+        const fd = new FormData(); fd.append("file", avatarFile);
+        const uploaded = await api(`/api/personas/${p.id}/avatar`, { method: "POST", body: fd });
+        withAvatar = { ...p, ...uploaded }; setAvatarFile(null);
+      }
+      setD((x) => ({ ...x, ...withAvatar, availability: { ...DEFAULT_AVAIL, ...(p.availability || {}) } }));
       localStorage.removeItem("proxy_draft");
       localStorage.removeItem("proxy_claim");
       setSaved("Saved");
@@ -223,7 +230,7 @@ function OnboardingInner() {
 
   const views = [
     <HandleStep key="h" d={d} set={set} avail={avail} errs={errs} />,
-    <BasicsStep key="b" d={d} set={set} errs={errs} />,
+    <BasicsStep key="b" d={d} set={set} errs={errs} avatarFile={avatarFile} setAvatarFile={setAvatarFile} />,
     <KnowledgeStep key="k" d={d} set={set} errs={errs} ensurePersona={ensurePersona} />,
     <VoiceStep key="v" d={d} set={set} ensurePersona={ensurePersona} />,
     <CalendarStep key="c" me={me} />,
@@ -244,12 +251,12 @@ function OnboardingInner() {
           </div>
         </header>
       </div>
-      <div className="mx-auto grid w-[min(1040px,calc(100%-2rem))] gap-6 pb-16 pt-8 md:grid-cols-[180px_minmax(0,1fr)]">
-        <aside className="md:sticky md:top-20 md:self-start"><p className="eyebrow mb-3 hidden px-2 md:block">Set up your Twyn</p><Progress step={step} max={max} go={go} /></aside>
-        <div className="clay relative overflow-hidden p-6 md:p-8">
+      <div className="mx-auto w-[min(860px,calc(100%-2rem))] pb-16 pt-8">
+        <p className="eyebrow mb-3 text-center">Set up your Twyn</p><Progress step={step} max={max} go={go} />
+        <div className="clay relative mt-6 overflow-hidden p-6 md:p-10">
           {!loaded ? <div className="grid h-64 place-items-center text-ink-mute"><Loader2 className="animate-spin" /></div> : (
             <AnimatePresence mode="wait" custom={dir} initial={false}>
-              <motion.div key={step} custom={dir}
+              <motion.div className="mx-auto max-w-[620px]" key={step} custom={dir}
                 initial={{ opacity: 0, x: dir * 36 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: dir * -36 }}
                 transition={{ duration: 0.32, ease: [0.22, 1, 0.36, 1] }}>
                 {views[step]}
@@ -275,7 +282,7 @@ function OnboardingInner() {
 }
 
 function Head({ k, t, d }: { k: string; t: string; d: string }) {
-  return <div className="mb-6"><p className="eyebrow">{k}</p><h1 className="display mt-1.5 text-[26px]">{t}</h1><p className="mt-1 max-w-lg text-[13.5px] text-ink-soft">{d}</p></div>;
+  return <div className="mb-8 text-center"><p className="eyebrow">{k}</p><h1 className="display mt-1.5 text-[28px]">{t}</h1><p className="mx-auto mt-2 max-w-lg text-[13.5px] text-ink-soft">{d}</p></div>;
 }
 
 function HandleStep({ d, set, avail, errs }: any) {
@@ -298,11 +305,33 @@ function HandleStep({ d, set, avail, errs }: any) {
   );
 }
 
-function BasicsStep({ d, set, errs }: any) {
+function BasicsStep({ d, set, errs, avatarFile, setAvatarFile }: any) {
   const toggle = (l: string) => set({ languages: d.languages.includes(l) ? d.languages.filter((x: string) => x !== l) : [...d.languages, l] });
+  const [preview, setPreview] = useState("");
+  const [photoError, setPhotoError] = useState("");
+  useEffect(() => {
+    if (!avatarFile) { setPreview(""); return; }
+    const url = URL.createObjectURL(avatarFile); setPreview(url);
+    return () => URL.revokeObjectURL(url);
+  }, [avatarFile]);
+  const initials = d.name ? d.name.split(" ").map((w: string) => w[0]).join("").slice(0, 2).toUpperCase() : "YOU";
   return (
     <div>
       <Head k="Persona" t="Tell Twyn who you are" d="These basics shape how your Twyn introduces you and how it sounds." />
+      <div className="mb-7 flex flex-col items-center gap-2 text-center">
+        <label className="group relative grid h-24 w-24 cursor-pointer place-items-center overflow-hidden rounded-full border border-rule bg-lilac text-xl font-medium text-ink shadow-sm">
+          {preview || d.avatar_url ? <img src={preview || `${API}${d.avatar_url}`} alt="Profile preview" className="h-full w-full object-cover" /> : initials}
+          <span className="absolute inset-x-0 bottom-0 flex h-8 items-center justify-center gap-1 bg-ink/75 text-[11px] text-canvas opacity-0 transition-opacity group-hover:opacity-100"><Camera size={12} />Change</span>
+          <input type="file" accept="image/jpeg,image/png,image/webp" className="sr-only" onChange={(e) => {
+            const f = e.target.files?.[0]; if (!f) return;
+            if (!["image/jpeg", "image/png", "image/webp"].includes(f.type)) { setPhotoError("Use a JPG, PNG, or WebP image."); return; }
+            if (f.size > 3 * 1024 * 1024) { setPhotoError("Keep the photo under 3 MB."); return; }
+            setPhotoError(""); setAvatarFile(f);
+          }} />
+        </label>
+        <p className="text-[12px] text-ink-mute">Add a profile photo <span className="text-ink-mute/70">· JPG, PNG, or WebP up to 3 MB</span></p>
+        {photoError && <p className="text-[12px] text-peach-deep">{photoError}</p>}
+      </div>
       <div className="grid gap-5 md:grid-cols-2">
         <Label t="Name" err={errs.name}><input className={input} value={d.name} onChange={(e) => set({ name: e.target.value })} placeholder="Hardik Gupta" /></Label>
         <Label t="Role" err={errs.headline}><input className={input} value={d.headline} onChange={(e) => set({ headline: e.target.value })} placeholder="Full-stack and AI engineer" /></Label>
