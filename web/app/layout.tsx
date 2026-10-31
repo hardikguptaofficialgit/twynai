@@ -10,16 +10,16 @@ const jb = JetBrains_Mono({ subsets: ["latin"], weight: ["400"], variable: "--fo
 
 export const metadata: Metadata = {
   metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3100"),
-  title: { default: "Kadi, an AI you at a link", template: "%s | Kadi" },
+  title: { default: "Twyn AI, an AI you at a link", template: "%s | Twyn AI" },
   description: "Share a link. Anyone can chat or talk to your AI self, in your voice, in their language.",
-  applicationName: "Kadi",
+  applicationName: "Twyn AI",
   manifest: "/manifest.webmanifest",
   icons: {
     icon: [{ url: "/brand/favicon.ico", sizes: "any" }, { url: "/brand/icon.svg", type: "image/svg+xml" }, { url: "/brand/icon-192.png", sizes: "192x192", type: "image/png" }],
     apple: [{ url: "/brand/apple-touch-icon.png", sizes: "180x180" }],
   },
-  openGraph: { title: "Kadi, an AI you at a link", description: "Chats, calls and bookings in your voice, in Indian languages.", images: [{ url: "/brand/og.png", width: 1200, height: 630, alt: "Kadi" }], siteName: "Kadi", type: "website" },
-  twitter: { card: "summary_large_image", title: "Kadi, an AI you at a link", images: ["/brand/og.png"] },
+  openGraph: { title: "Twyn AI, an AI you at a link", description: "Chats, calls and bookings in your voice, in Indian languages.", images: [{ url: "/brand/og.png", width: 1200, height: 630, alt: "Twyn AI" }], siteName: "Twyn AI", type: "website" },
+  twitter: { card: "summary_large_image", title: "Twyn AI, an AI you at a link", images: ["/brand/og.png"] },
 };
 export const viewport = { themeColor: "#F5F1EA" };
 

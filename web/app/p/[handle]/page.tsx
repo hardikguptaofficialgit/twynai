@@ -32,7 +32,7 @@ export default function PublicPersona() {
   const raf = useRef<number>(0);
   const end = useRef<HTMLDivElement>(null);
 
-  useEffect(() => { api<Persona>(`/api/p/${handle}`).then(setP).catch(() => setErr("This Kadi does not exist.")); }, [handle]);
+  useEffect(() => { api<Persona>(`/api/p/${handle}`).then(setP).catch(() => setErr("This Twyn does not exist.")); }, [handle]);
   useEffect(() => { end.current?.scrollIntoView({ behavior: "smooth" }); }, [msgs, busy]);
   useEffect(() => {
     if (!cid) return;
@@ -184,7 +184,7 @@ export default function PublicPersona() {
   return (
     <main className="relative min-h-screen pb-10">
       <Backdrop />
-      <div className="sticky top-0 z-30 border-b border-rule bg-canvas/70 backdrop-blur-xl"><div className="mx-auto flex h-16 w-[min(1200px,calc(100%-2.5rem))] items-center justify-between"><Logo /><span className="font-mono text-[13px] text-ink-mute">kadi.link/{p.handle}</span></div></div>
+      <div className="sticky top-0 z-30 border-b border-rule bg-canvas/70 backdrop-blur-xl"><div className="mx-auto flex h-16 w-[min(1200px,calc(100%-2.5rem))] items-center justify-between"><Logo /><span className="font-mono text-[13px] text-ink-mute">twyn.ai/{p.handle}</span></div></div>
       <div className="reveal mx-auto grid w-[min(1200px,calc(100%-2.5rem))] gap-6 pt-6 lg:grid-cols-[minmax(0,360px)_minmax(0,1fr)]">
         <aside className="space-y-5">
           <div className="glass p-7">
@@ -205,7 +205,7 @@ export default function PublicPersona() {
 
         <section className="glass flex min-h-[calc(100vh-7rem)] flex-col p-3">
           <div className="flex items-center justify-between border-b border-rule px-4 pb-3 pt-2">
-            <span className="text-sm text-ink-soft">Talking to {p.name.split(" ")[0]}&rsquo;s Kadi</span>
+            <span className="text-sm text-ink-soft">Talking to {p.name.split(" ")[0]}&rsquo;s Twyn</span>
             <div className="clay-pressed flex p-1">
               {(["chat", "voice"] as const).map((m) => (
                 <button key={m} onClick={() => setMode(m)} className="relative flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-medium">
@@ -226,7 +226,7 @@ export default function PublicPersona() {
                   <span key={k} className="rounded-full bg-white/70 px-2.5 py-1 text-ink-soft">{k} <span className="font-medium text-ink">{(v / 1000).toFixed(1)}s</span></span>))}</div>}
                 {note && <div className="mt-2 text-xs text-ink-mute">{note}</div>}
               </div>
-              <motion.button aria-label="Talk to Kadi" whileTap={{ scale: 0.94 }} onClick={() => (orb === "listening" ? rec.current?.stop() : orb === "idle" && startTalk())}
+              <motion.button aria-label="Talk to Twyn" whileTap={{ scale: 0.94 }} onClick={() => (orb === "listening" ? rec.current?.stop() : orb === "idle" && startTalk())}
                 className="clay-sm grid h-16 w-16 place-items-center text-white" style={{ background: orb === "listening" ? accent.deep : "var(--color-ink)", borderRadius: 9999 }}>
                 {orb === "listening" ? <Square size={20} /> : <Mic size={22} />}
               </motion.button>
@@ -239,7 +239,7 @@ export default function PublicPersona() {
                 {msgs.length === 0 && (
                   <div className="mx-auto mt-16 max-w-md text-center">
                     <div className="mx-auto w-fit"><Orb size={90} color={accent.soft} deep={accent.deep} /></div>
-                    <h2 className="display mt-2 text-4xl md:text-5xl">Hi, I am {p.name.split(" ")[0]}'s Kadi.</h2>
+                    <h2 className="display mt-2 text-4xl md:text-5xl">Hi, I am {p.name.split(" ")[0]}'s Twyn.</h2>
                     <p className="mt-2 text-sm text-ink-soft">Ask about work, rates or availability. I can book a call for you. English, Hindi, Hinglish and more.</p>
                     <div className="mt-6 flex flex-wrap justify-center gap-2">
                       {["Aapka rate kitna hai?", "Can we book a call this week?", "What do you work on?"].map((s) => <button key={s} onClick={() => send(s)} className="clay-sm bg-canvas px-4 py-2 text-sm">{s}</button>)}

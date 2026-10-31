@@ -106,7 +106,7 @@ export default function Onboarding() {
     if (i === 1) {
       if (!d.name.trim()) e.name = "Add your name.";
       if (!d.headline.trim()) e.headline = "Add a one-line role.";
-      if (d.bio.trim().length < 40) e.bio = "Write at least a couple of sentences so Kadi has something to go on.";
+      if (d.bio.trim().length < 40) e.bio = "Write at least a couple of sentences so Twyn has something to go on.";
       if (!d.languages.length) e.languages = "Pick at least one language.";
     }
     if (i === 2) d.links.forEach((l, k) => { if (l.url && !/^https?:\/\//.test(l.url)) e["link" + k] = "Links should start with https://"; });
@@ -196,10 +196,10 @@ function Head({ k, t, d }: { k: string; t: string; d: string }) {
 function HandleStep({ d, set, avail, errs }: any) {
   return (
     <div>
-      <Head k="Your link" t="Claim your handle" d="This is the link people will use to talk to your Kadi. Keep it short and easy to say." />
+      <Head k="Your link" t="Claim your handle" d="This is the link people will use to talk to your Twyn. Keep it short and easy to say." />
       <Label t="Handle" err={errs.handle}>
         <div className="clay-pressed flex items-center px-4">
-          <span className="text-ink-mute">kadi.link/</span>
+          <span className="text-ink-mute">twyn.ai/</span>
           <input autoFocus disabled={!!d.id} value={d.handle} onChange={(e) => set({ handle: e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, "") })}
             placeholder="yourname" className="min-w-0 flex-1 bg-transparent py-3.5 font-medium outline-none placeholder:text-ink-mute/70" />
           {d.id ? <span className="text-xs text-ink-mute">locked</span> : avail === true ? <span className="flex items-center gap-1 text-xs text-mint-deep"><Check size={13} />Available</span> : avail === false ? <span className="flex items-center gap-1 text-xs text-peach-deep"><X size={13} />Taken</span> : null}
@@ -217,7 +217,7 @@ function BasicsStep({ d, set, errs }: any) {
   const toggle = (l: string) => set({ languages: d.languages.includes(l) ? d.languages.filter((x: string) => x !== l) : [...d.languages, l] });
   return (
     <div>
-      <Head k="Persona" t="Tell Kadi who you are" d="These basics shape how your Kadi introduces you and how it sounds." />
+      <Head k="Persona" t="Tell Twyn who you are" d="These basics shape how your Twyn introduces you and how it sounds." />
       <div className="grid gap-5 md:grid-cols-2">
         <Label t="Name" err={errs.name}><input className={input} value={d.name} onChange={(e) => set({ name: e.target.value })} placeholder="Hardik Gupta" /></Label>
         <Label t="Role" err={errs.headline}><input className={input} value={d.headline} onChange={(e) => set({ headline: e.target.value })} placeholder="Full-stack and AI engineer" /></Label>
@@ -243,7 +243,7 @@ function KnowledgeStep({ d, set, errs }: any) {
   const del = (k: "faqs" | "links", i: number) => set({ [k]: d[k].filter((_: any, j: number) => j !== i) });
   return (
     <div>
-      <Head k="Knowledge" t="What should it know?" d="Kadi only answers from what you add here. Anything else, it will say it does not know." />
+      <Head k="Knowledge" t="What should it know?" d="Twyn only answers from what you add here. Anything else, it will say it does not know." />
       <Label t="Rates and pricing" hint="optional"><input className={input} value={d.rates} onChange={(e) => set({ rates: e.target.value })} placeholder="MVP builds from 25,000 rupees per week. Discovery calls are free." /></Label>
 
       <div className="mt-7 flex items-center justify-between"><span className="text-sm font-medium">FAQs</span>
@@ -321,7 +321,7 @@ function VoiceStep({ d, set }: any) {
   }
   return (
     <div>
-      <Head k="Voice" t="Teach it your voice" d="Read anything out loud for 10 to 30 seconds in a quiet room. Kadi uses this sample to speak like you." />
+      <Head k="Voice" t="Teach it your voice" d="Read anything out loud for 10 to 30 seconds in a quiet room. Twyn uses this sample to speak like you." />
       <div className="grid items-center gap-8 md:grid-cols-[auto_1fr]">
         <div className="grid place-items-center"><Orb size={130} state={rec ? "listening" : busy ? "thinking" : "idle"} level={level} /></div>
         <div>
@@ -343,7 +343,7 @@ function VoiceStep({ d, set }: any) {
           {(msg || d.has_voice) && <p className="mt-3 flex items-center gap-1.5 text-sm text-mint-deep"><Check size={14} />{msg || "A voice sample is saved."}</p>}
           {d.has_voice && !rec && (
             <div className="mt-4 flex flex-wrap items-center gap-3">
-              <button onClick={listen} disabled={pBusy} className="clay-sm inline-flex items-center gap-2 bg-mint px-4 py-2.5 text-sm font-medium">{pBusy ? <Loader2 size={14} className="animate-spin" /> : <Volume2 size={15} />}Hear my Kadi voice</button>
+              <button onClick={listen} disabled={pBusy} className="clay-sm inline-flex items-center gap-2 bg-mint px-4 py-2.5 text-sm font-medium">{pBusy ? <Loader2 size={14} className="animate-spin" /> : <Volume2 size={15} />}Hear my Twyn voice</button>
               {preview && <audio id="clone-preview" src={preview} controls className="h-10" />}
             </div>
           )}
@@ -357,14 +357,14 @@ function CalendarStep({ me }: any) {
   const on = !!me?.google_tokens;
   return (
     <div>
-      <Head k="Calendar" t="Connect Google Calendar" d="Kadi checks when you are free and books meetings straight into your calendar. It never sees event details, only busy times." />
+      <Head k="Calendar" t="Connect Google Calendar" d="Twyn checks when you are free and books meetings straight into your calendar. It never sees event details, only busy times." />
       <div className="glass flex flex-wrap items-center gap-5 p-6">
         <span className="clay-sm grid h-12 w-12 place-items-center bg-white"><CalendarDays size={20} className="text-sky-deep" /></span>
         <div className="flex-1"><p className="font-medium">Google Calendar</p><p className="text-sm text-ink-soft">{on ? `Connected as ${me.email}` : "Free/busy and event creation only"}</p></div>
         {on ? <span className="inline-flex items-center gap-1.5 rounded-full bg-mint px-3 py-1.5 text-sm font-medium"><Check size={14} />Connected</span>
           : <a href={`${API}/api/auth/google/start`} className="rounded-full bg-ink px-5 py-3 text-sm font-medium text-canvas">Connect</a>}
       </div>
-      {!on && <p className="mt-4 text-sm text-ink-mute">Skip this and Kadi will offer slots from your availability rules, then email you each booking to confirm.</p>}
+      {!on && <p className="mt-4 text-sm text-ink-mute">Skip this and Twyn will offer slots from your availability rules, then email you each booking to confirm.</p>}
     </div>
   );
 }
@@ -374,7 +374,7 @@ function AvailabilityStep({ d, set, errs }: any) {
   const sel = "clay-pressed rounded-xl bg-transparent px-3 py-2.5 text-sm outline-none";
   return (
     <div>
-      <Head k="Availability" t="When can people book you?" d="Kadi only offers times inside these rules, and skips anything already on your calendar." />
+      <Head k="Availability" t="When can people book you?" d="Twyn only offers times inside these rules, and skips anything already on your calendar." />
       <Label t="Days" err={errs.avail}><div className="flex flex-wrap gap-2">{DAYS.map((x, i) => <Chip key={x} on={a.days.includes(i)} onClick={() => up({ days: a.days.includes(i) ? a.days.filter((y: number) => y !== i) : [...a.days, i].sort() })}>{x}</Chip>)}</div></Label>
       <div className="mt-6 grid gap-5 sm:grid-cols-2">
         <Label t="Hours"><div className="flex items-center gap-2"><input type="time" className={sel} value={a.start} onChange={(e) => up({ start: e.target.value })} /><span className="text-ink-mute">to</span><input type="time" className={sel} value={a.end} onChange={(e) => up({ end: e.target.value })} /><span className="text-xs text-ink-mute">IST</span></div></Label>
@@ -403,11 +403,11 @@ function PublishStep({ d, publish, saving }: any) {
       {!d.published ? (<>
         <Head k="Review" t="Ready to go live" d="Check the details below. You can change any of them later in the Studio." />
         <dl className="divide-y divide-ink/5">{rows.map(([k, v]) => <div key={k} className="flex gap-6 py-3 text-sm"><dt className="w-28 shrink-0 text-ink-mute">{k}</dt><dd className="text-ink">{v}</dd></div>)}</dl>
-        <motion.button whileTap={{ scale: 0.97 }} onClick={publish} disabled={saving} className="mt-8 inline-flex items-center gap-2 rounded-full bg-ink px-6 py-3.5 text-sm font-medium text-canvas">{saving && <Loader2 size={15} className="animate-spin" />}Publish my Kadi</motion.button>
+        <motion.button whileTap={{ scale: 0.97 }} onClick={publish} disabled={saving} className="mt-8 inline-flex items-center gap-2 rounded-full bg-ink px-6 py-3.5 text-sm font-medium text-canvas">{saving && <Loader2 size={15} className="animate-spin" />}Publish my Twyn</motion.button>
       </>) : (
         <motion.div initial={{ opacity: 0, scale: 0.98 }} animate={{ opacity: 1, scale: 1 }} className="text-center">
           <div className="mx-auto grid place-items-center"><Orb size={110} state="speaking" level={0.3} /></div>
-          <h1 className="display text-5xl">Your Kadi is live.</h1>
+          <h1 className="display text-5xl">Your Twyn is live.</h1>
           <p className="mx-auto mt-2 max-w-sm text-ink-soft">Share this link anywhere. Conversations, leads and bookings show up in your dashboard.</p>
           <div className="clay-pressed mx-auto mt-7 flex max-w-md items-center gap-2 py-2 pl-4 pr-2">
             <span className="flex-1 truncate text-left text-sm font-medium">{link.replace(/^https?:\/\//, "")}</span>

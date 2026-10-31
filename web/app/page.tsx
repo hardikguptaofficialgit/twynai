@@ -14,7 +14,7 @@ function ClaimBar() {
   const go = () => r.push(`/login?handle=${encodeURIComponent(h.toLowerCase().replace(/[^a-z0-9-]/g, ""))}`);
   return (
     <form onSubmit={(e) => { e.preventDefault(); go(); }} className="clay flex w-full max-w-[26rem] items-center gap-1 p-1.5" style={{ borderRadius: 999 }}>
-      <label htmlFor="claim" className="pl-5 text-[15px] text-ink-mute">kadi.link/</label>
+      <label htmlFor="claim" className="pl-5 text-[15px] text-ink-mute">twyn.ai/</label>
       <input id="claim" name="handle" autoComplete="username" value={h} onChange={(e) => setH(e.target.value)} placeholder="yourname"
         className="min-w-0 flex-1 bg-transparent py-2.5 text-[15px] font-medium text-ink outline-none placeholder:text-ink-mute/60" />
       <button type="submit" className="inline-flex min-h-11 items-center gap-1.5 rounded-full bg-ink px-5 text-[15px] font-medium text-canvas transition-colors duration-150 hover:bg-ink-soft">
@@ -27,7 +27,7 @@ function ClaimBar() {
 function Call() {
   const lines: [string, string][] = [
     ["them", "Bhai aapka rate kitna hai?"],
-    ["kadi", "MVP builds 25,000 rupees per week se start hote hain. Discovery call free hai."],
+    ["twyn", "MVP builds 25,000 rupees per week se start hote hain. Discovery call free hai."],
     ["them", "Kal 3 baje ho sakta hai?"],
   ];
   return (
@@ -36,7 +36,7 @@ function Call() {
         <div className="clay flex items-center gap-4 p-4" style={{ borderRadius: 24 }}>
           <div className="grid h-14 w-14 shrink-0 place-items-center overflow-visible"><Orb size={44} state="speaking" level={0.3} /></div>
           <div className="min-w-0 flex-1">
-            <p className="font-medium">Hardik&rsquo;s Kadi</p>
+            <p className="font-medium">Hardik&rsquo;s Twyn</p>
             <p className="text-sm text-ink-mute">On a call with Ravi, Hinglish</p>
           </div>
           <span className="tnum rounded-full bg-paper-2 px-3 py-1 font-mono text-[13px] text-ink-soft">01:42</span>
@@ -86,11 +86,11 @@ export default function Landing() {
         <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.7, ease }}>
           <h1 className="display min-w-0 max-w-[11ch] text-[clamp(3.1rem,6.8vw,6rem)] [overflow-wrap:break-word]">You, on call. Even when you&rsquo;re not.</h1>
           <p className="mt-6 max-w-[34ch] text-lg leading-relaxed text-ink-soft md:text-xl">
-            Kadi is a link where anyone can talk to an AI you, in your voice and their language.
+            Twyn AI is a link where anyone can talk to an AI you, in your voice and their language.
           </p>
           <div className="mt-9"><ClaimBar /></div>
           <Link href="/p/hardik" className="mt-5 inline-flex items-center gap-1.5 text-[15px] text-ink-soft underline decoration-ink/25 underline-offset-4 transition-colors hover:text-ink">
-            Talk to Hardik&rsquo;s Kadi first <ArrowUpRight size={15} />
+            Talk to Hardik&rsquo;s Twyn first <ArrowUpRight size={15} />
           </Link>
         </motion.div>
         <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.8, delay: 0.1, ease }}><Call /></motion.div>
@@ -149,7 +149,7 @@ export default function Landing() {
 
       <footer className="border-t border-rule">
         <div className={`${W} flex flex-col items-start justify-between gap-4 py-8 text-[15px] text-ink-mute sm:flex-row sm:items-center`}>
-          <div className="flex flex-wrap items-center gap-4"><Logo /><span>Built for the Gnani AI Internship Challenge</span></div>
+          <div className="flex flex-wrap items-center gap-4"><Logo /><span>Twyn AI · Built for the Gnani AI Internship Challenge</span></div>
           <div className="flex gap-6"><Link href="/p/hardik" className="hover:text-ink">Demo</Link><Link href="/login" className="hover:text-ink">Sign in</Link></div>
         </div>
       </footer>

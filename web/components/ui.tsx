@@ -45,9 +45,9 @@ export function Mark({ size = 32, className }: { size?: number; className?: stri
 
 export function Logo({ href = "/" }: { href?: string }) {
   return (
-    <Link href={href} aria-label="Kadi home" className="group flex items-center gap-2">
+    <Link href={href} aria-label="Twyn home" className="group flex items-center gap-2">
       <Mark size={34} className="transition-transform duration-300 ease-out group-hover:-rotate-6" />
-      <span className="font-display text-[24px] leading-none tracking-[-0.02em]">Kadi</span>
+      <span className="font-display text-[24px] leading-none tracking-[-0.02em]">Twyn</span>
     </Link>
   );
 }

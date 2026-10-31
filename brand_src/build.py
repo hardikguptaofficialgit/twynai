@@ -20,18 +20,19 @@ os.replace(f"{OUT}/icon-180.png",f"{OUT}/apple-touch-icon.png")
 mk=svg(f'<rect width="512" height="512" fill="{PAPER}"/><g transform="translate(102 102) scale(.6)">{mark()}</g>'); png(mk,512,f"{OUT}/icon-maskable-512.png")
 im=Image.open(io.BytesIO(cairosvg.svg2png(bytestring=icon_svg.encode(),output_width=256,output_height=256)))
 im.save(f"{OUT}/favicon.ico",sizes=[(16,16),(32,32),(48,48)])
-NAME="Kadi"
+NAME="Twyn"
+FULL="Twyn AI"
 def word(fg,c2):
     return svg(f'<g transform="scale(.125)">{mark(LILAC,c2)}</g><text x="74" y="44" font-family="Gloock, Georgia, serif" font-size="44" fill="{fg}" letter-spacing="-0.5">{NAME}</text>',200,64,"0 0 200 64")
 open(f"{OUT}/wordmark-light.svg","w").write(word(INK,INK)); open(f"{OUT}/wordmark-dark.svg","w").write(word("#F5F1EA","#F5F1EA"))
 og=svg(f'''<rect width="1200" height="630" fill="{CANVAS}"/>
 <line x1="80" y1="96" x2="1120" y2="96" stroke="#DCD4C6"/><line x1="80" y1="534" x2="1120" y2="534" stroke="#DCD4C6"/>
 <rect x="760" y="140" width="350" height="350" rx="80" fill="{PAPER}"/><g transform="translate(785 165) scale(.586)">{mark()}</g>
-<text x="80" y="300" font-family="Georgia, serif" font-size="150" fill="{INK}" letter-spacing="-3">{NAME}</text>
+<text x="80" y="300" font-family="Georgia, serif" font-size="150" fill="{INK}" letter-spacing="-3">{FULL}</text>
 <text x="84" y="372" font-family="Helvetica, Arial, sans-serif" font-size="34" fill="#55516A">An AI you, at a link. It talks, chats and books.</text>
 <text x="84" y="580" font-family="Helvetica, Arial, sans-serif" font-size="24" fill="#7A7690">Voice by Gnani  /  Hindi, Hinglish, Tamil, English</text>''',1200,630,"0 0 1200 630")
 open(f"{OUT}/og.svg","w").write(og); cairosvg.svg2png(bytestring=og.encode(),write_to=f"{OUT}/og.png")
-json.dump({"name":"Kadi","short_name":"Kadi","description":"An AI you, at a link.","start_url":"/","display":"standalone","background_color":CANVAS,"theme_color":CANVAS,
+json.dump({"name":"Twyn AI","short_name":"Twyn","description":"An AI you, at a link.","start_url":"/","display":"standalone","background_color":CANVAS,"theme_color":CANVAS,
  "icons":[{"src":"/brand/icon-192.png","sizes":"192x192","type":"image/png"},{"src":"/brand/icon-512.png","sizes":"512x512","type":"image/png"},
  {"src":"/brand/icon-maskable-512.png","sizes":"512x512","type":"image/png","purpose":"maskable"},{"src":"/brand/icon.svg","sizes":"any","type":"image/svg+xml"}]},open(f"{OUT}/../manifest.webmanifest","w"),indent=1)
 # preview sheet
