@@ -4,7 +4,10 @@ from sqlalchemy import create_engine, String, Text, DateTime, ForeignKey, Intege
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, sessionmaker, relationship
 from .config import DATABASE_URL
 
-engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False} if DATABASE_URL.startswith("sqlite") else {})
+if DATABASE_URL.startswith("sqlite"):
+    engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
+else:  # Neon Postgres: survive scale-to-zero (idle connections get dropped after ~5 min)
+    engine = create_engine(DATABASE_URL, pool_pre_ping=True, pool_recycle=300, pool_size=5, max_overflow=5)
 SessionLocal = sessionmaker(bind=engine, expire_on_commit=False)
 
 def uid(): return uuid.uuid4().hex[:12]

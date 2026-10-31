@@ -11,7 +11,15 @@ def _load_env():
                     os.environ.setdefault(k.strip(), v.strip())
 _load_env()
 
-DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///" + str(Path(__file__).resolve().parents[1] / "proxy.db"))
+def _db_url():
+    u = os.getenv("DATABASE_URL", "").strip() or ("sqlite:///" + str(Path(__file__).resolve().parents[1] / "proxy.db"))
+    for pre in ("postgres://", "postgresql://"):
+        if u.startswith(pre):
+            u = "postgresql+psycopg://" + u[len(pre):]
+    if u.startswith("postgresql+psycopg://") and "sslmode=" not in u:
+        u += ("&" if "?" in u else "?") + "sslmode=require"
+    return u
+DATABASE_URL = _db_url()
 GNANI_API_KEY = os.getenv("GNANI_API_KEY", "")
 GNANI_BASE = os.getenv("GNANI_BASE_URL", "https://api.vachana.ai")
 GNANI_TTS_MODEL = os.getenv("GNANI_TTS_MODEL", "timbre-v3.0")

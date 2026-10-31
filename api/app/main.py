@@ -73,6 +73,14 @@ class DevLogin(BaseModel):
 @app.get("/api/health")
 def health(): return {"ok": True, "modes": config.modes()}
 
+@app.get("/api/health/db")
+def health_db():
+    from sqlalchemy import text
+    from .db import engine
+    with engine.connect() as c:
+        c.execute(text("SELECT 1"))
+    return {"ok": True, "db": config.modes()["db"]}
+
 @app.post("/api/auth/dev")
 def dev_login(b: DevLogin, s=Depends(db)):
     if not config.ALLOW_DEV_LOGIN: raise HTTPException(403, "dev sign-in disabled")
