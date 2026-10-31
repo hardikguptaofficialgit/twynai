@@ -229,9 +229,14 @@ async def run_tool(s, p, conv, name, args):
         st = dt.datetime.fromisoformat(start)
         s.add(Booking(persona_id=p.id, conversation_id=conv.id, guest_name=args.get("guest_name", ""), guest_email=args.get("guest_email", ""),
                       start=start, end=(st + dt.timedelta(minutes=dur)).isoformat()[:16], topic=args.get("topic", ""), calendar_event_id=ev))
+        if conv.visitor_name in ("", "Visitor", "Voice caller") and args.get("guest_name"): conv.visitor_name = args["guest_name"][:60]
+        if not s.scalar(select(Lead).where(Lead.conversation_id == conv.id)):  # a booking is always a lead
+            s.add(Lead(persona_id=p.id, conversation_id=conv.id, name=args.get("guest_name", ""), contact=args.get("guest_email", ""), intent=args.get("topic") or "Booked a meeting"))
         s.commit(); return {"booked": True, "label": st.strftime("%a %d %b, %I:%M %p IST"), "minutes": dur}
     if name == "capture_lead":
-        s.add(Lead(persona_id=p.id, conversation_id=conv.id, name=args.get("name", ""), contact=args.get("contact", ""), intent=args.get("intent", ""))); s.commit()
+        s.add(Lead(persona_id=p.id, conversation_id=conv.id, name=args.get("name", ""), contact=args.get("contact", ""), intent=args.get("intent", "")))
+        if conv.visitor_name in ("", "Visitor", "Voice caller") and args.get("name"): conv.visitor_name = args["name"][:60]
+        s.commit()
         return {"saved": True}
     return {"error": "unknown tool"}
 
@@ -260,7 +265,10 @@ def plain(t: str) -> str:
     t = re.sub(r"(?<![.!?:;,])[ \t]*\n+[ \t]*(?=\S)", "; ", t.strip())  # line-per-item lists become one sentence
     t = re.sub(r"\n+", " ", t)
     t = re.sub(r"\s*(?:^|\s)[-*\u2022]\s+(?=[A-Z0-9])", lambda m: "; " if m.start() else "", t)
-    return re.sub(r"\s{2,}", " ", t).replace(":;", ":").strip()
+    t = re.sub(r"\s{2,}", " ", t)
+    t = re.sub(r"(?:;\s*){2,}", "; ", t)
+    t = re.sub(r"(AM|PM|IST|\d);\s+(?=(?:Let|Tell|Which|Please|Pick|Reply|Just|Share)\b)", r"\1. ", t)  # list end, new sentence
+    return re.sub(r":\s*;\s*", ": ", t).strip()
 
 async def agent_reply(s, p, conv, text, voice_mode=False):
     history = [m for m in conv.messages if m.role in ("visitor", "persona", "owner")][-12:]

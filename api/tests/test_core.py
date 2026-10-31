@@ -70,7 +70,7 @@ def test_live_reply_language(q, lang):
     assert matches_lang(r["reply"], lang), r["reply"]
 
 def test_plain_joins_line_lists():
-    assert plain("Slots this week: Monday 10 AM IST\nTuesday 11 AM IST\nLet me know.") == "Slots this week: Monday 10 AM IST; Tuesday 11 AM IST; Let me know."
+    assert plain("Slots this week: Monday 10 AM IST\nTuesday 11 AM IST\nLet me know.") == "Slots this week: Monday 10 AM IST; Tuesday 11 AM IST. Let me know."
 
 def test_voice_lang_codemix():
     from app.main import voice_lang
@@ -159,3 +159,7 @@ def test_rate_limit_returns_429(monkeypatch):
     c = TestClient(main.app); h = {"x-forwarded-for": "9.9.9.9"}
     codes = [c.post("/api/p/nope-xyz/chat", json={"text": "hi"}, headers=h).status_code for _ in range(3)]
     assert codes[-1] == 429; main._hits.clear()
+
+def test_plain_bullets_after_colon():
+    from app.main import plain
+    assert plain("Open slots:\n- Monday 2 November, 10:00 AM\n- Tuesday 3 November, 10:00 AM\nLet me know.") == "Open slots: Monday 2 November, 10:00 AM; Tuesday 3 November, 10:00 AM. Let me know."

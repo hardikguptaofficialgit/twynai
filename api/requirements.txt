@@ -7,3 +7,4 @@ python-multipart==0.0.32
 SQLAlchemy==2.1.6
 uvicorn==0.54.0
 psycopg[binary]==3.2.3
+websockets>=13

@@ -187,19 +187,19 @@ export default function PublicPersona() {
       <div className="mx-auto grid w-[min(1180px,calc(100%-2rem))] gap-6 pt-6 lg:grid-cols-[360px_1fr]">
         <aside className="space-y-5">
           <div className="glass p-7">
-            <div className="clay-sm grid h-20 w-20 place-items-center text-2xl font-semibold" style={{ background: accent.soft }}>{initials}</div>
-            <h1 className="mt-5 text-2xl font-semibold tracking-tight">{p.name}</h1>
+            <div className="clay-sm grid h-20 w-20 place-items-center font-display text-3xl" style={{ background: accent.soft }}>{initials}</div>
+            <h1 className="mt-6 text-4xl">{p.name}</h1>
             <p className="mt-1 text-sm text-ink-soft">{p.headline}</p>
             <div className="mt-4 flex flex-wrap gap-2">
               <Pill tone={human ? "peach" : "mint"}><span className="h-1.5 w-1.5 rounded-full bg-ink" />{human ? `${p.name.split(" ")[0]} joined` : "AI persona online"}</Pill>
               {p.has_voice && <Pill tone="lilac">Cloned voice</Pill>}
             </div>
             <p className="mt-5 text-sm leading-relaxed text-ink-soft">{p.bio}</p>
-            {p.rates && <div className="clay-pressed mt-5 p-4 text-sm"><div className="mb-1 text-xs font-medium uppercase tracking-wider text-ink-mute">Rates</div>{p.rates}</div>}
-            {p.links.length > 0 && <div className="mt-5 flex flex-wrap gap-2">{p.links.map((l) => <a key={l.url} href={l.url} target="_blank" className="clay-sm bg-[#f7f7fb] px-3 py-1.5 text-xs font-medium">{l.label}</a>)}</div>}
+            {p.rates && <div className="clay-pressed mt-5 p-4 text-sm"><div className="mb-1 text-xs font-mediumr text-ink-mute">Rates</div>{p.rates}</div>}
+            {p.links.length > 0 && <div className="mt-5 flex flex-wrap gap-2">{p.links.map((l) => <a key={l.url} href={l.url} target="_blank" className="clay-sm bg-canvas px-3 py-1.5 text-xs font-medium">{l.label}</a>)}</div>}
           </div>
-          {p.faqs.length > 0 && <div className="glass p-6"><div className="mb-3 text-xs font-medium uppercase tracking-wider text-ink-mute">Ask me</div>
-            <div className="flex flex-col gap-2">{p.faqs.slice(0, 4).map((f) => <button key={f.q} onClick={() => { setMode("chat"); send(f.q); }} className="clay-sm bg-[#f7f7fb] px-4 py-2.5 text-left text-sm hover:bg-white">{f.q}</button>)}</div></div>}
+          {p.faqs.length > 0 && <div className="glass p-6"><div className="mb-3 text-xs font-mediumr text-ink-mute">Ask me</div>
+            <div className="flex flex-col gap-2">{p.faqs.slice(0, 4).map((f) => <button key={f.q} onClick={() => { setMode("chat"); send(f.q); }} className="clay-sm bg-canvas px-4 py-2.5 text-left text-sm hover:bg-white">{f.q}</button>)}</div></div>}
         </aside>
 
         <section className="glass flex min-h-[calc(100vh-3rem)] flex-col p-3">
@@ -226,7 +226,7 @@ export default function PublicPersona() {
                 {note && <div className="mt-2 text-xs text-ink-mute">{note}</div>}
               </div>
               <motion.button aria-label="Talk to Proxy" whileTap={{ scale: 0.94 }} onClick={() => (orb === "listening" ? rec.current?.stop() : orb === "idle" && startTalk())}
-                className="clay-sm grid h-16 w-16 place-items-center text-white" style={{ background: orb === "listening" ? accent.deep : "#24243a", borderRadius: 9999 }}>
+                className="clay-sm grid h-16 w-16 place-items-center text-white" style={{ background: orb === "listening" ? accent.deep : "var(--color-ink)", borderRadius: 9999 }}>
                 {orb === "listening" ? <Square size={20} /> : <Mic size={22} />}
               </motion.button>
               {err && <p className="text-sm text-peach-deep">{err}</p>}
@@ -238,10 +238,10 @@ export default function PublicPersona() {
                 {msgs.length === 0 && (
                   <div className="mx-auto mt-16 max-w-md text-center">
                     <div className="mx-auto w-fit"><Orb size={90} color={accent.soft} deep={accent.deep} /></div>
-                    <h2 className="text-xl font-semibold">Hi, I am {p.name.split(" ")[0]}'s Proxy.</h2>
+                    <h2 className="display mt-2 text-4xl md:text-5xl">Hi, I am {p.name.split(" ")[0]}'s Proxy.</h2>
                     <p className="mt-2 text-sm text-ink-soft">Ask about work, rates or availability. I can book a call for you. English, Hindi, Hinglish and more.</p>
                     <div className="mt-6 flex flex-wrap justify-center gap-2">
-                      {["Aapka rate kitna hai?", "Can we book a call this week?", "What do you work on?"].map((s) => <button key={s} onClick={() => send(s)} className="clay-sm bg-[#f7f7fb] px-4 py-2 text-sm">{s}</button>)}
+                      {["Aapka rate kitna hai?", "Can we book a call this week?", "What do you work on?"].map((s) => <button key={s} onClick={() => send(s)} className="clay-sm bg-canvas px-4 py-2 text-sm">{s}</button>)}
                     </div>
                   </div>
                 )}
@@ -250,7 +250,7 @@ export default function PublicPersona() {
                     <motion.div key={i} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className={m.role === "visitor" ? "flex justify-end" : "flex justify-start"}>
                       <div className="max-w-[78%]">
                         {m.role === "owner" && <div className="mb-1 text-xs font-medium text-peach-deep">{p.name} (live)</div>}
-                        <div className={m.role === "visitor" ? "rounded-3xl rounded-br-lg bg-ink px-5 py-3 text-[15px] leading-relaxed text-white" : "clay-sm whitespace-pre-wrap px-5 py-3 text-[15px] leading-relaxed"} style={m.role === "visitor" ? {} : { background: m.role === "owner" ? "#f8dacb" : "#fbfbfd", borderRadius: "24px 24px 24px 8px" }}>{m.text}</div>
+                        <div className={m.role === "visitor" ? "rounded-3xl rounded-br-lg bg-ink px-5 py-3 text-[15px] leading-relaxed text-canvas" : "clay-sm whitespace-pre-wrap px-5 py-3 text-[15px] leading-relaxed"} style={m.role === "visitor" ? {} : { background: m.role === "owner" ? "#f8dacb" : "#fbfbfd", borderRadius: "24px 24px 24px 8px" }}>{m.text}</div>
                         {m.tools && m.tools.length > 0 && <div className="mt-2 flex flex-wrap gap-2">{m.tools.map((t, j) => { const [l, I, tone] = TOOL_LABEL[t.name] || [t.name, Search, "white"]; return <Pill key={j} tone={tone}><I size={12} />{l}</Pill>; })}</div>}
                       </div>
                     </motion.div>
@@ -262,7 +262,7 @@ export default function PublicPersona() {
               <form onSubmit={(e) => { e.preventDefault(); send(); }} className="clay m-2 flex items-center gap-2 p-2">
                 <input value={text} onChange={(e) => setText(e.target.value)} placeholder={`Message ${p.name.split(" ")[0]}...`} className="flex-1 bg-transparent px-4 py-3 text-[15px] outline-none placeholder:text-ink-mute" />
                 <button type="button" onClick={() => setMode("voice")} className="grid h-11 w-11 place-items-center rounded-2xl text-ink-soft hover:bg-white"><Mic size={18} /></button>
-                <motion.button whileTap={{ scale: 0.94 }} className="grid h-11 w-11 place-items-center rounded-2xl bg-ink text-white"><Send size={17} /></motion.button>
+                <motion.button whileTap={{ scale: 0.94 }} className="grid h-11 w-11 place-items-center rounded-full bg-ink text-canvas"><Send size={17} /></motion.button>
               </form>
             </>
           )}

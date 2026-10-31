@@ -1,71 +1,86 @@
 @import "tailwindcss";
 
+/* Proxy design tokens. Built from Hallmark craft rules (design/hallmark) and
+   Anthropic frontend-design: warm tinted paper, OKLCH, one ink accent, pastel
+   fields, clay for things you press, glass for things that float.
+   Hard rules: no glow, no gradients, no emojis. */
 @theme {
-  --color-canvas: #eef0f6;
-  --color-ink: #24243a;
-  --color-ink-soft: #5d5f78;
-  --color-ink-mute: #8f91a8;
-  --color-lilac: #d9cdf6;
-  --color-lilac-deep: #8b74d6;
-  --color-mint: #cdeadb;
-  --color-mint-deep: #3f9a72;
-  --color-peach: #f8dacb;
-  --color-peach-deep: #d27a52;
-  --color-sky: #cfe2f5;
-  --color-sky-deep: #4c84bf;
-  --color-butter: #f4eac3;
-  --color-butter-deep: #b08f22;
-  --font-sans: var(--font-geist-sans), var(--font-deva), var(--font-tamil), ui-sans-serif, system-ui;
-  --font-mono: var(--font-geist-mono), ui-monospace;
+  --color-canvas: oklch(95.6% 0.014 80);
+  --color-paper-2: oklch(93% 0.018 78);
+  --color-paper-3: oklch(90.5% 0.02 76);
+  --color-rule: oklch(86% 0.018 75);
+  --color-ink: oklch(22% 0.025 285);
+  --color-ink-soft: oklch(42% 0.022 285);
+  --color-ink-mute: oklch(56% 0.018 285);
+  --color-lilac: oklch(88% 0.055 300);
+  --color-lilac-deep: oklch(50% 0.13 295);
+  --color-mint: oklch(91% 0.05 160);
+  --color-mint-deep: oklch(48% 0.1 160);
+  --color-peach: oklch(90% 0.05 50);
+  --color-peach-deep: oklch(52% 0.13 45);
+  --color-sky: oklch(90% 0.04 240);
+  --color-sky-deep: oklch(50% 0.11 245);
+  --color-butter: oklch(93% 0.06 95);
+  --color-butter-deep: oklch(52% 0.1 90);
+  --font-sans: var(--font-body), var(--font-deva), var(--font-tamil), ui-sans-serif, sans-serif;
+  --font-display: var(--font-disp), var(--font-deva), Georgia, serif;
+  --font-mono: var(--font-jb), ui-monospace, monospace;
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 html, body { background: var(--color-canvas); color: var(--color-ink); }
-body { font-feature-settings: "ss01", "cv11"; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", var(--font-deva), var(--font-tamil), "Noto Sans", Arial, sans-serif; }
-::selection { background: var(--color-lilac); }
+body { font-family: var(--font-sans); font-synthesis: none; text-rendering: optimizeLegibility; }
+h1, h2, h3 { font-family: var(--font-display); font-weight: 400; letter-spacing: -0.01em; text-wrap: balance; }
+p { text-wrap: pretty; }
+.tnum { font-variant-numeric: tabular-nums; }
+::selection { background: var(--color-lilac); color: var(--color-ink); }
+:focus-visible { outline: 2px solid var(--color-lilac-deep); outline-offset: 2px; }
 
 @layer components {
-/* Claymorphism: soft, puffy, layered outer + inner shadows. No glow, no gradients. */
+/* Clay: soft, puffy surfaces you can press. Warm-tinted shadows, never coloured halos. */
 .clay {
-  background: #f7f7fb;
-  border-radius: 28px;
+  background: oklch(97.8% 0.01 80);
+  border-radius: 26px;
   box-shadow:
-    14px 16px 32px rgba(104, 98, 150, 0.16),
-    -10px -10px 24px rgba(255, 255, 255, 0.95),
-    inset 3px 3px 6px rgba(255, 255, 255, 0.85),
-    inset -4px -5px 10px rgba(104, 98, 150, 0.09);
+    10px 12px 24px oklch(45% 0.04 70 / 0.13),
+    -8px -8px 18px oklch(100% 0 0 / 0.85),
+    inset 2px 2px 4px oklch(100% 0 0 / 0.9),
+    inset -3px -4px 8px oklch(45% 0.04 70 / 0.08);
 }
 .clay-sm {
-  border-radius: 18px;
+  border-radius: 16px;
   box-shadow:
-    6px 8px 16px rgba(104, 98, 150, 0.16),
-    -5px -5px 12px rgba(255, 255, 255, 0.9),
-    inset 2px 2px 4px rgba(255, 255, 255, 0.8),
-    inset -3px -3px 6px rgba(104, 98, 150, 0.1);
+    5px 6px 12px oklch(45% 0.04 70 / 0.14),
+    -4px -4px 10px oklch(100% 0 0 / 0.85),
+    inset 1.5px 1.5px 3px oklch(100% 0 0 / 0.85),
+    inset -2px -3px 5px oklch(45% 0.04 70 / 0.09);
 }
 .clay-pressed {
-  border-radius: 16px;
-  background: #eceef5;
-  box-shadow: inset 4px 4px 9px rgba(104, 98, 150, 0.14), inset -4px -4px 9px rgba(255, 255, 255, 0.95);
+  border-radius: 14px;
+  background: var(--color-paper-2);
+  box-shadow: inset 3px 3px 7px oklch(45% 0.04 70 / 0.13), inset -3px -3px 7px oklch(100% 0 0 / 0.9);
 }
-/* Glassmorphism: frosted translucent panels */
+/* Glass: frosted panel with a hairline. Floats over the pastel shapes. */
 .glass {
-  background: rgba(255, 255, 255, 0.52);
-  backdrop-filter: blur(22px) saturate(140%);
-  -webkit-backdrop-filter: blur(22px) saturate(140%);
-  border: 1px solid rgba(255, 255, 255, 0.75);
-  border-radius: 28px;
-  box-shadow: 0 18px 40px rgba(84, 80, 130, 0.12), inset 0 1px 0 rgba(255, 255, 255, 0.9);
+  background: oklch(99% 0.005 80 / 0.55);
+  backdrop-filter: blur(20px) saturate(130%);
+  -webkit-backdrop-filter: blur(20px) saturate(130%);
+  border: 1px solid oklch(100% 0 0 / 0.8);
+  border-radius: 26px;
+  box-shadow: 0 1px 2px oklch(30% 0.02 70 / 0.06), 0 12px 30px oklch(40% 0.03 70 / 0.08);
 }
 .field {
   width: 100%;
   padding: 0.8rem 1rem;
-  font-size: 0.95rem;
+  font-size: 1rem;
   outline: none;
   border: 1px solid transparent;
-  transition: border-color .2s;
+  transition: border-color .12s;
 }
-.field:focus { border-color: var(--color-lilac-deep); }
+.field:focus-visible { outline: 2px solid var(--color-lilac-deep); outline-offset: -2px; }
 .blob { position: absolute; border-radius: 9999px; pointer-events: none; }
-.grain-none {}
-
+.label { font-size: 0.8125rem; color: var(--color-ink-mute); }
+.display { font-family: var(--font-display); font-weight: 400; letter-spacing: -0.012em; line-height: 1.02; }
 }
+
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; } }

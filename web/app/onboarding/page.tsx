@@ -49,7 +49,7 @@ function Progress({ step, max, go }: { step: number; max: number; go: (i: number
         {STEPS.map((s, i) => (
           <li key={s}>
             <button disabled={i > max} onClick={() => go(i)} className={clsx("flex items-center gap-1.5 text-xs", i === step ? "font-semibold text-ink" : i <= max ? "text-ink-soft hover:text-ink" : "text-ink-mute/60")}>
-              <span className={clsx("grid h-5 w-5 place-items-center rounded-full text-[10px]", i < step || (i <= max && i !== step) ? "bg-mint text-mint-deep" : i === step ? "bg-ink text-white" : "bg-white/60")}>
+              <span className={clsx("grid h-5 w-5 place-items-center rounded-full text-[10px]", i < step || (i <= max && i !== step) ? "bg-mint text-mint-deep" : i === step ? "bg-ink text-canvas" : "bg-white/60")}>
                 {i < step || (i <= max && i !== step) ? <Check size={11} strokeWidth={3} /> : i + 1}
               </span>{s}
             </button>
@@ -176,7 +176,7 @@ export default function Onboarding() {
               <div className="flex items-center gap-2">
                 {[3, 4].includes(step) && <button onClick={next} className="rounded-xl px-4 py-2.5 text-sm text-ink-soft hover:text-ink">Skip for now</button>}
                 <motion.button whileTap={{ scale: 0.97 }} onClick={next} disabled={saving}
-                  className="inline-flex items-center gap-2 rounded-2xl bg-ink px-5 py-3 text-sm font-medium text-white hover:bg-[#33334f] disabled:opacity-60">
+                  className="inline-flex items-center gap-2 rounded-full bg-ink px-5 py-3 text-sm font-medium text-canvas hover:bg-ink-soft disabled:opacity-60">
                   {saving ? <Loader2 size={15} className="animate-spin" /> : null}{step === 5 ? "Review" : "Continue"}<ArrowRight size={15} />
                 </motion.button>
               </div>
@@ -189,7 +189,7 @@ export default function Onboarding() {
 }
 
 function Head({ k, t, d }: { k: string; t: string; d: string }) {
-  return <div className="mb-8"><p className="text-xs font-medium uppercase tracking-[0.16em] text-ink-mute">{k}</p><h1 className="mt-2 text-3xl font-semibold tracking-tight">{t}</h1><p className="mt-2 max-w-lg text-ink-soft">{d}</p></div>;
+  return <div className="mb-8"><p className="text-xs font-medium text-ink-mute">{k}</p><h1 className="display mt-2 text-4xl md:text-5xl">{t}</h1><p className="mt-2 max-w-lg text-ink-soft">{d}</p></div>;
 }
 
 function HandleStep({ d, set, avail, errs }: any) {
@@ -328,7 +328,7 @@ function VoiceStep({ d, set }: any) {
             "Hi, this is {d.name || "me"}. Thanks for reaching out. I work as a {(d.headline || "freelancer").toLowerCase()}, and I am happy to help you figure out if we are a good fit. Tell me what you are working on."
           </div>
           <div className="mt-5 flex flex-wrap items-center gap-3">
-            {!rec ? <button onClick={start} className="inline-flex items-center gap-2 rounded-2xl bg-ink px-5 py-3 text-sm font-medium text-white"><Mic size={15} />{blob ? "Record again" : "Start recording"}</button>
+            {!rec ? <button onClick={start} className="inline-flex items-center gap-2 rounded-full bg-ink px-5 py-3 text-sm font-medium text-canvas"><Mic size={15} />{blob ? "Record again" : "Start recording"}</button>
               : <button onClick={stop} className="inline-flex items-center gap-2 rounded-2xl bg-peach px-5 py-3 text-sm font-medium"><Square size={13} />Stop · {secs.toFixed(0)}s</button>}
             <label className="clay-sm inline-flex cursor-pointer items-center gap-2 bg-white px-4 py-3 text-sm"><Upload size={15} />Upload audio
               <input type="file" accept="audio/*" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) { setBlob(f); } }} /></label>
@@ -361,7 +361,7 @@ function CalendarStep({ me }: any) {
         <span className="clay-sm grid h-12 w-12 place-items-center bg-white"><CalendarDays size={20} className="text-sky-deep" /></span>
         <div className="flex-1"><p className="font-medium">Google Calendar</p><p className="text-sm text-ink-soft">{on ? `Connected as ${me.email}` : "Free/busy and event creation only"}</p></div>
         {on ? <span className="inline-flex items-center gap-1.5 rounded-full bg-mint px-3 py-1.5 text-sm font-medium"><Check size={14} />Connected</span>
-          : <a href={`${API}/api/auth/google/start`} className="rounded-2xl bg-ink px-5 py-3 text-sm font-medium text-white">Connect</a>}
+          : <a href={`${API}/api/auth/google/start`} className="rounded-full bg-ink px-5 py-3 text-sm font-medium text-canvas">Connect</a>}
       </div>
       {!on && <p className="mt-4 text-sm text-ink-mute">Skip this and Proxy will offer slots from your availability rules, then email you each booking to confirm.</p>}
     </div>
@@ -402,15 +402,15 @@ function PublishStep({ d, publish, saving }: any) {
       {!d.published ? (<>
         <Head k="Review" t="Ready to go live" d="Check the details below. You can change any of them later in the Studio." />
         <dl className="divide-y divide-ink/5">{rows.map(([k, v]) => <div key={k} className="flex gap-6 py-3 text-sm"><dt className="w-28 shrink-0 text-ink-mute">{k}</dt><dd className="text-ink">{v}</dd></div>)}</dl>
-        <motion.button whileTap={{ scale: 0.97 }} onClick={publish} disabled={saving} className="mt-8 inline-flex items-center gap-2 rounded-2xl bg-ink px-6 py-3.5 text-sm font-medium text-white">{saving && <Loader2 size={15} className="animate-spin" />}Publish my Proxy</motion.button>
+        <motion.button whileTap={{ scale: 0.97 }} onClick={publish} disabled={saving} className="mt-8 inline-flex items-center gap-2 rounded-full bg-ink px-6 py-3.5 text-sm font-medium text-canvas">{saving && <Loader2 size={15} className="animate-spin" />}Publish my Proxy</motion.button>
       </>) : (
         <motion.div initial={{ opacity: 0, scale: 0.98 }} animate={{ opacity: 1, scale: 1 }} className="text-center">
           <div className="mx-auto grid place-items-center"><Orb size={110} state="speaking" level={0.3} /></div>
-          <h1 className="text-3xl font-semibold tracking-tight">Your Proxy is live.</h1>
+          <h1 className="display text-5xl">Your Proxy is live.</h1>
           <p className="mx-auto mt-2 max-w-sm text-ink-soft">Share this link anywhere. Conversations, leads and bookings show up in your dashboard.</p>
           <div className="clay-pressed mx-auto mt-7 flex max-w-md items-center gap-2 py-2 pl-4 pr-2">
             <span className="flex-1 truncate text-left text-sm font-medium">{link.replace(/^https?:\/\//, "")}</span>
-            <button onClick={copy} className="inline-flex items-center gap-1.5 rounded-xl bg-ink px-3.5 py-2 text-sm text-white">{copied ? <Check size={14} /> : <Copy size={14} />}{copied ? "Copied" : "Copy"}</button>
+            <button onClick={copy} className="inline-flex items-center gap-1.5 rounded-full bg-ink px-3.5 py-2 text-sm text-canvas">{copied ? <Check size={14} /> : <Copy size={14} />}{copied ? "Copied" : "Copy"}</button>
           </div>
           <div className="mt-6 flex justify-center gap-3">
             <Link href={`/p/${d.handle}`} className="clay-sm inline-flex items-center gap-1.5 bg-white px-4 py-2.5 text-sm"><ExternalLink size={14} />Open page</Link>

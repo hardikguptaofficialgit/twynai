@@ -41,13 +41,13 @@ export default function Studio() {
       <AppNav handle={p?.handle} />
       <div className="mx-auto mt-10 w-[min(1180px,calc(100%-2rem))]">
         <div className="mb-8 flex flex-wrap items-end justify-between gap-4">
-          <div><div className="text-sm text-ink-mute">Persona studio</div><h1 className="text-4xl font-semibold tracking-[-0.03em]">{p ? `Tune ${p.name.split(" ")[0]}'s Proxy` : "Create your Proxy"}</h1></div>
+          <div><div className="text-sm text-ink-mute">Persona studio</div><h1 className="display mt-1 text-5xl md:text-6xl">{p ? `Tune ${p.name.split(" ")[0]}'s Proxy` : "Create your Proxy"}</h1></div>
           <div className="flex items-center gap-3">{saved && <Pill tone="mint"><Check size={12} />{saved}</Pill>}<Button onClick={save}>{p ? "Save changes" : "Create persona"}</Button></div>
         </div>
         <div className="grid gap-6 lg:grid-cols-[1fr_380px]">
           <div className="space-y-6">
             <Card>
-              <h2 className="mb-5 text-lg font-semibold">Identity</h2>
+              <h2 className="mb-5 text-2xl">Identity</h2>
               <div className="grid gap-4 md:grid-cols-2">
                 <Field label="Display name"><input className="field clay-pressed" value={f.name} onChange={(e) => set("name", e.target.value)} placeholder="Hardik Gupta" /></Field>
                 <Field label="Handle" hint="proxy.app/handle"><input className="field clay-pressed" disabled={!!p} value={f.handle} onChange={(e) => set("handle", e.target.value)} placeholder="hardik" /></Field>
@@ -60,7 +60,7 @@ export default function Studio() {
                 <div className="flex gap-3">{Object.entries(ACCENTS).map(([k, c]) => <button key={k} onClick={() => set("accent", k)} className="clay-sm h-10 w-10 rounded-full" style={{ background: c.soft, outline: f.accent === k ? `2px solid ${c.deep}` : "none", outlineOffset: 3, borderRadius: 999 }} />)}</div></div>
             </Card>
             <Card>
-              <div className="mb-5 flex items-center justify-between"><h2 className="text-lg font-semibold">FAQs</h2><Button variant="clay" onClick={() => set("faqs", [...f.faqs, { q: "", a: "" }])}><Plus size={15} />Add</Button></div>
+              <div className="mb-5 flex items-center justify-between"><h2 className="text-2xl">FAQs</h2><Button variant="clay" onClick={() => set("faqs", [...f.faqs, { q: "", a: "" }])}><Plus size={15} />Add</Button></div>
               <div className="space-y-3">{f.faqs.map((x: any, i: number) => (
                 <motion.div layout key={i} className="clay-pressed grid gap-2 p-3 md:grid-cols-[1fr_1.4fr_auto]">
                   <input className="field bg-transparent" placeholder="Question" value={x.q} onChange={(e) => set("faqs", f.faqs.map((y: any, j: number) => j === i ? { ...y, q: e.target.value } : y))} />
@@ -69,7 +69,7 @@ export default function Studio() {
                 </motion.div>))}</div>
             </Card>
             <Card>
-              <div className="mb-5 flex items-center justify-between"><h2 className="text-lg font-semibold">Links</h2><Button variant="clay" onClick={() => set("links", [...f.links, { label: "", url: "" }])}><Plus size={15} />Add</Button></div>
+              <div className="mb-5 flex items-center justify-between"><h2 className="text-2xl">Links</h2><Button variant="clay" onClick={() => set("links", [...f.links, { label: "", url: "" }])}><Plus size={15} />Add</Button></div>
               <div className="space-y-3">{f.links.map((x: any, i: number) => (
                 <div key={i} className="clay-pressed grid gap-2 p-3 md:grid-cols-[1fr_2fr]">
                   <input className="field bg-transparent" placeholder="Label" value={x.label} onChange={(e) => set("links", f.links.map((y: any, j: number) => j === i ? { ...y, label: e.target.value } : y))} />
@@ -83,28 +83,28 @@ export default function Studio() {
                 <button onClick={() => navigator.clipboard.writeText(link)} className="text-ink-soft hover:text-ink"><Copy size={16} /></button></div></Card>}
             <Card>
               <div className="clay-sm mb-4 grid h-11 w-11 place-items-center bg-peach"><FileText size={18} /></div>
-              <h3 className="font-semibold">Knowledge</h3><p className="mt-1 text-sm text-ink-soft">PDF, Markdown or text. Proxy only answers from what you add.</p>
-              <label className={`clay-sm mt-4 flex cursor-pointer items-center justify-center gap-2 bg-[#f7f7fb] px-4 py-3 text-sm font-medium ${!p && "pointer-events-none opacity-50"}`}><Upload size={15} />Upload document<input type="file" accept=".pdf,.txt,.md" className="hidden" onChange={(e) => upload("docs", e.target.files?.[0])} /></label>
+              <h3 className="text-xl">Knowledge</h3><p className="mt-1 text-sm text-ink-soft">PDF, Markdown or text. Proxy only answers from what you add.</p>
+              <label className={`clay-sm mt-4 flex cursor-pointer items-center justify-center gap-2 bg-canvas px-4 py-3 text-sm font-medium ${!p && "pointer-events-none opacity-50"}`}><Upload size={15} />Upload document<input type="file" accept=".pdf,.txt,.md" className="hidden" onChange={(e) => upload("docs", e.target.files?.[0])} /></label>
               <div className="mt-3 space-y-2">{docs.map((d) => <div key={d.name} className="flex justify-between text-sm"><span className="truncate">{d.name}</span><span className="text-ink-mute">{d.chunks} chunks</span></div>)}</div>
             </Card>
             <Card>
               <div className="clay-sm mb-4 grid h-11 w-11 place-items-center bg-lilac"><Mic size={18} /></div>
-              <h3 className="font-semibold">Voice clone</h3><p className="mt-1 text-sm text-ink-soft">5 to 30 seconds of clean speech. Gnani builds a speaker embedding from it.</p>
+              <h3 className="text-xl">Voice clone</h3><p className="mt-1 text-sm text-ink-soft">5 to 30 seconds of clean speech. Gnani builds a speaker embedding from it.</p>
               <div className="mt-3">{p?.has_voice ? <Pill tone="mint"><Check size={12} />Voice sample on file</Pill> : <Pill tone="white">No voice yet</Pill>}</div>
-              <label className={`clay-sm mt-4 flex cursor-pointer items-center justify-center gap-2 bg-[#f7f7fb] px-4 py-3 text-sm font-medium ${!p && "pointer-events-none opacity-50"}`}><Upload size={15} />Upload voice sample<input type="file" accept="audio/*" className="hidden" onChange={(e) => upload("voice", e.target.files?.[0])} /></label>
+              <label className={`clay-sm mt-4 flex cursor-pointer items-center justify-center gap-2 bg-canvas px-4 py-3 text-sm font-medium ${!p && "pointer-events-none opacity-50"}`}><Upload size={15} />Upload voice sample<input type="file" accept="audio/*" className="hidden" onChange={(e) => upload("voice", e.target.files?.[0])} /></label>
             </Card>
             <Card>
               <div className="clay-sm mb-4 grid h-11 w-11 place-items-center bg-sky"><CalendarCheck size={18} /></div>
-              <h3 className="font-semibold">Google Calendar</h3><p className="mt-1 text-sm text-ink-soft">Free/busy and booking. Proxy only offers slots you are actually free.</p>
+              <h3 className="text-xl">Google Calendar</h3><p className="mt-1 text-sm text-ink-soft">Free/busy and booking. Proxy only offers slots you are actually free.</p>
               <div className="mt-3">{me?.google_tokens ? <Pill tone="mint">Connected</Pill> : <Pill tone="butter">Demo calendar in use</Pill>}</div>
-              <a href={`${API}/api/auth/google/start`} className="clay-sm mt-4 flex items-center justify-center bg-[#f7f7fb] px-4 py-3 text-sm font-medium">Connect Google Calendar</a>
+              <a href={`${API}/api/auth/google/start`} className="clay-sm mt-4 flex items-center justify-center bg-canvas px-4 py-3 text-sm font-medium">Connect Google Calendar</a>
             </Card>
             <Card>
-              <h3 className="font-semibold">Availability</h3><p className="mt-1 text-sm text-ink-soft">Proxy only offers slots inside these rules, minus busy times.</p>
+              <h3 className="text-xl">Availability</h3><p className="mt-1 text-sm text-ink-soft">Proxy only offers slots inside these rules, minus busy times.</p>
               {(() => { const av = { ...DEF_AV, ...(f.availability || {}) }; const up = (k: string, v: any) => set("availability", { ...av, [k]: v });
                 return (<div className="mt-4 space-y-3 text-sm">
                   <div className="flex flex-wrap gap-1.5">{DAYS.map((d, i) => { const on = av.days.includes(i); return (
-                    <button key={d} onClick={() => up("days", on ? av.days.filter((x: number) => x !== i) : [...av.days, i].sort())} className={`rounded-full px-3 py-1.5 text-xs font-medium ${on ? "bg-ink text-white" : "clay-sm bg-[#f7f7fb]"}`}>{d}</button>); })}</div>
+                    <button key={d} onClick={() => up("days", on ? av.days.filter((x: number) => x !== i) : [...av.days, i].sort())} className={`rounded-full px-3 py-1.5 text-xs font-medium ${on ? "bg-ink text-canvas" : "clay-sm bg-canvas"}`}>{d}</button>); })}</div>
                   <div className="grid grid-cols-2 gap-2">
                     <label className="text-xs text-ink-soft">From (IST)<input type="time" value={av.start} onChange={(e) => up("start", e.target.value)} className="field mt-1 w-full px-3 py-2 text-sm text-ink" /></label>
                     <label className="text-xs text-ink-soft">To (IST)<input type="time" value={av.end} onChange={(e) => up("end", e.target.value)} className="field mt-1 w-full px-3 py-2 text-sm text-ink" /></label>
