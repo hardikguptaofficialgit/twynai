@@ -3,10 +3,9 @@ import Link from "next/link";
 import Image from "next/image";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { motion } from "motion/react";
+import { motion, useReducedMotion } from "motion/react";
 import { ArrowRight, ArrowUpRight, CalendarCheck, ChatCircle, Microphone, BookOpenText, Hand, Users, ShieldCheck, Translate, Waveform, UserPlus, MagnifyingGlass } from "@phosphor-icons/react";
 import { Backdrop, Logo, Nav, SectionHead, W } from "@/components/ui";
-import { Orb } from "@/components/Orb";
 import HeroAscii from "@/components/bg/HeroAscii";
 import { Marquee } from "@/components/ui-kit/marquee";
 import { AnimatedList } from "@/components/ui-kit/animated-list";
@@ -15,6 +14,34 @@ import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/
 
 const ease = [0.22, 1, 0.36, 1] as [number, number, number, number];
 const fade = (d = 0) => ({ initial: { opacity: 0, y: 8 }, whileInView: { opacity: 1, y: 0 }, viewport: { once: true, margin: "-40px" }, transition: { duration: 0.5, delay: d, ease } });
+
+function SoundWave() {
+  const shouldReduce = useReducedMotion();
+  const bars = [
+    { min: 4, mid: 12, max: 6 },
+    { min: 6, mid: 15, max: 8 },
+    { min: 8, mid: 17, max: 10 },
+    { min: 5, mid: 14, max: 7 },
+    { min: 4, mid: 10, max: 5 },
+  ];
+  return (
+    <div aria-hidden="true" className="flex h-4 items-center gap-[2.5px] px-0.5">
+      {bars.map((b, i) => (
+        <motion.span
+          key={i}
+          className="w-[2px] rounded-full"
+          style={{ backgroundColor: "var(--color-lilac-deep)", opacity: 0.6 }}
+          animate={shouldReduce ? { height: b.min + 4 } : { height: [b.min, b.mid, b.max, b.mid * 0.75, b.min] }}
+          transition={
+            shouldReduce
+              ? { duration: 0 }
+              : { duration: 1.15, repeat: Infinity, ease: "easeInOut", delay: i * 0.14 }
+          }
+        />
+      ))}
+    </div>
+  );
+}
 
 function ClaimBar({ className = "" }: { className?: string }) {
   const r = useRouter(); const [h, setH] = useState("");
@@ -40,12 +67,24 @@ function CallCard() {
   return (
     <div className="glass p-2" style={{ borderRadius: 22 }}>
       <div className="clay flex items-center gap-3 p-3" style={{ borderRadius: 16 }}>
-        <div className="grid h-9 w-9 shrink-0 place-items-center"><Orb size={30} state="speaking" level={0.3} /></div>
+        <div
+          className="clay-sm relative grid h-9 w-9 shrink-0 place-items-center rounded-full bg-lilac font-display text-[15px] font-semibold text-ink select-none"
+          style={{ borderRadius: 9999 }}
+        >
+          <span>H</span>
+          <span
+            aria-label="Live"
+            className="absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-[1.5px] border-white bg-mint shadow-[0_1px_2px_oklch(40%_0.03_70_/_0.1)]"
+          />
+        </div>
         <div className="min-w-0 flex-1">
           <p className="text-[13px] font-medium">Hardik&rsquo;s Twyn</p>
           <p className="text-[12px] text-ink-mute">On a call with Ravi · Hinglish</p>
         </div>
-        <span className="tnum rounded-full bg-paper-2 px-2 py-0.5 font-mono text-[11px] text-ink-soft">01:42</span>
+        <div className="flex items-center gap-1.5 shrink-0">
+          <SoundWave />
+          <span className="tnum rounded-full bg-paper-2 px-2 py-0.5 font-mono text-[11px] text-ink-soft">01:42</span>
+        </div>
       </div>
       <ol className="space-y-2 px-2 pb-1 pt-3">
         {lines.map(([who, t], i) => (
@@ -163,7 +202,7 @@ export default function Landing() {
             ))}
           </div>
           <div className="mt-3 grid gap-3 sm:grid-cols-2 md:grid-cols-4">
-            {([["Leads, sorted", "Names, asks and follow-ups.", Users, "bg-butter"], ["Credits guarded", "Rate limits on voice minutes.", ShieldCheck, "bg-lilac"]] as const).map(([t, d, I, bg]) => (
+            {([["Leads, sorted", "Names, asks and follow-ups.", Users, "bg-butter"], ["Credits guarded", "Rate limits on voice minutes.", ShieldCheck, "bg-lilac"]] as const).map(([t, d, I, bg], i) => (
               <motion.div key={t} {...fade()} className="clay p-4">
                 <span className={`grid h-8 w-8 place-items-center rounded-lg ${bg}`}><I size={15} /></span>
                 <p className="mt-3 text-[14px] font-medium">{t}</p><p className="mt-0.5 text-[13px] text-ink-soft">{d}</p>
