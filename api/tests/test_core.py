@@ -177,7 +177,8 @@ def test_google_login_redirect(monkeypatch):
     assert r.status_code == 302
     loc = r.headers["location"]
     assert loc.startswith("https://accounts.google.com/o/oauth2/v2/auth?") and "client_id=cid.apps" in loc
-    assert "access_type=offline" in loc and "prompt=consent" in loc and "state=" in loc and "calendar.readonly" in loc
+    assert "access_type=offline" in loc and "prompt=select_account" in loc and "state=" in loc and "calendar.readonly" in loc
+    assert "twyn_oauth_state=" in r.headers["set-cookie"]
 
 def test_google_callback_rejects_bad_state_and_denied():
     c = _client()

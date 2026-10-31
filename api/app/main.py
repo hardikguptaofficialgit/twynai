@@ -1,9 +1,11 @@
 import time
+import hashlib
+import hmac
 import re
 import json, base64, re, datetime as dt, asyncio, urllib.parse
 from collections import defaultdict
 import httpx
-from fastapi import FastAPI, HTTPException, UploadFile, File, Form, Header, WebSocket, WebSocketDisconnect, Depends
+from fastapi import FastAPI, HTTPException, UploadFile, File, Form, Header, Cookie, WebSocket, WebSocketDisconnect, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse, StreamingResponse
 from pydantic import BaseModel
@@ -101,34 +103,56 @@ def dev_login(b: DevLogin, s=Depends(db)):
     return {"token": sess.id, "owner": public_owner(o)}
 
 SCOPES = "openid email profile https://www.googleapis.com/auth/calendar.events https://www.googleapis.com/auth/calendar.readonly"
-_oauth_states: dict = {}   # state -> (expiry, safe return path)
+OAUTH_STATE_COOKIE = "twyn_oauth_state"
+OAUTH_STATE_TTL = 600
 
 def _redirect_uri(): return config.GOOGLE_REDIRECT_URI
+
+def _safe_next(value: str) -> str:
+    return value if value.startswith("/") and not value.startswith("//") else ""
+
+def _oauth_state(next_path: str) -> str:
+    """A signed, short-lived state value. The matching HttpOnly cookie binds it to the browser."""
+    import secrets
+    payload = json.dumps({"iat": int(time.time()), "next": _safe_next(next_path), "nonce": secrets.token_urlsafe(12)}, separators=(",", ":")).encode()
+    raw = base64.urlsafe_b64encode(payload).decode().rstrip("=")
+    sig = hmac.new(config.GOOGLE_CLIENT_SECRET.encode(), raw.encode(), hashlib.sha256).digest()
+    return raw + "." + base64.urlsafe_b64encode(sig).decode().rstrip("=")
+
+def _read_oauth_state(state: str) -> str | None:
+    try:
+        raw, supplied_sig = state.split(".", 1)
+        expected_sig = base64.urlsafe_b64encode(hmac.new(config.GOOGLE_CLIENT_SECRET.encode(), raw.encode(), hashlib.sha256).digest()).decode().rstrip("=")
+        if not hmac.compare_digest(supplied_sig, expected_sig): return None
+        payload = json.loads(base64.urlsafe_b64decode(raw + "=" * (-len(raw) % 4)))
+        if not isinstance(payload.get("iat"), int) or time.time() - payload["iat"] > OAUTH_STATE_TTL: return None
+        return _safe_next(str(payload.get("next", "")))
+    except (ValueError, TypeError, json.JSONDecodeError):
+        return None
 
 @app.get("/api/auth/google/login")
 def google_login(next: str = ""):
     if not (config.GOOGLE_CLIENT_ID and config.GOOGLE_CLIENT_SECRET): return RedirectResponse(config.WEB_ORIGIN + "/login?mock=1", status_code=302)
-    import secrets
-    st = secrets.token_urlsafe(24); nowt = time.time()
-    for k in [k for k, v in _oauth_states.items() if v[0] < nowt]: _oauth_states.pop(k, None)
-    # Keep the post-login destination server-side so it survives the Google
-    # redirect without trusting an arbitrary callback query parameter.
-    safe_next = next if next.startswith("/") and not next.startswith("//") else ""
-    _oauth_states[st] = (nowt + 600, safe_next)
+    st = _oauth_state(next)
     q = urllib.parse.urlencode({"client_id": config.GOOGLE_CLIENT_ID, "redirect_uri": _redirect_uri(), "response_type": "code",
         # Google still shows consent when it is needed, but do not force the
         # full consent screen on every reconnect once access is already granted.
         "scope": SCOPES, "access_type": "offline", "prompt": "select_account", "include_granted_scopes": "true", "state": st})
-    return RedirectResponse("https://accounts.google.com/o/oauth2/v2/auth?" + q, status_code=302)
+    response = RedirectResponse("https://accounts.google.com/o/oauth2/v2/auth?" + q, status_code=302)
+    response.set_cookie(OAUTH_STATE_COOKIE, st, httponly=True, secure=config.WEB_ORIGIN.startswith("https://"), samesite="lax", max_age=OAUTH_STATE_TTL, path="/api/auth/google")
+    return response
 
 app.get("/api/auth/google/start")(google_login)   # old links in the web app keep working
 
 @app.get("/api/auth/google/callback")
-def google_callback(code: str = "", state: str = "", error: str = "", s=Depends(db)):
-    fail = lambda why: RedirectResponse(f"{config.WEB_ORIGIN}/login?error={urllib.parse.quote(why)}", status_code=302)
+def google_callback(code: str = "", state: str = "", error: str = "", oauth_cookie: str = Cookie(default="", alias=OAUTH_STATE_COOKIE), s=Depends(db)):
+    def fail(why: str):
+        response = RedirectResponse(f"{config.WEB_ORIGIN}/login?error={urllib.parse.quote(why)}", status_code=302)
+        response.delete_cookie(OAUTH_STATE_COOKIE, path="/api/auth/google")
+        return response
     if error: return fail(error)
-    oauth_state = _oauth_states.pop(state, (0, ""))
-    if not code or oauth_state[0] < time.time(): return fail("Sign-in expired, please try again.")
+    requested = _read_oauth_state(state) if oauth_cookie and hmac.compare_digest(state, oauth_cookie) else None
+    if not code or requested is None: return fail("Sign-in expired, please try again.")
     try:
         r = httpx.post("https://oauth2.googleapis.com/token", data={"code": code, "client_id": config.GOOGLE_CLIENT_ID,
             "client_secret": config.GOOGLE_CLIENT_SECRET, "redirect_uri": _redirect_uri(), "grant_type": "authorization_code"}, timeout=15)
@@ -150,9 +174,10 @@ def google_callback(code: str = "", state: str = "", error: str = "", s=Depends(
     o.google_tokens = json.dumps(tok)   # server-side only; never returned to the browser
     sess = AuthSession(owner_id=o.id); s.add(sess); s.commit()
     has = s.scalar(select(Persona).where(Persona.owner_id == o.id))
-    requested = oauth_state[1]
     nxt = requested or ("/studio" if has and has.published else "/onboarding")
-    return RedirectResponse(f"{config.WEB_ORIGIN}/login?token={sess.id}&next={urllib.parse.quote(nxt, safe='/')}", status_code=302)
+    response = RedirectResponse(f"{config.WEB_ORIGIN}/login?token={sess.id}&next={urllib.parse.quote(nxt, safe='/')}", status_code=302)
+    response.delete_cookie(OAUTH_STATE_COOKIE, path="/api/auth/google")
+    return response
 
 @app.post("/api/me/google/disconnect")
 def google_disconnect(o=Depends(current_owner), s=Depends(db)):
