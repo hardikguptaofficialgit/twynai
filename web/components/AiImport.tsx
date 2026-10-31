@@ -19,7 +19,7 @@ export const AI_PROMPT = `From your memory of me and our past chats, write down 
 
 const enc = encodeURIComponent(AI_PROMPT);
 const AIS = [
-  { k: "ChatGPT", logo: "/brands/chatgpt.svg", url: `https://chatgpt.com/?q=${enc}` },
+  { k: "ChatGPT", logo: "/brands/chatgpt-dark.svg", url: `https://chatgpt.com/?q=${enc}` },
   { k: "Claude", logo: "/brands/claude.svg", url: `https://claude.ai/new?q=${enc}` },
   { k: "Gemini", logo: "/brands/gemini.svg", url: "https://gemini.google.com/app", copy: true },
   { k: "Grok", logo: "/brands/grok.svg", url: `https://grok.com/?q=${enc}` },
