@@ -31,10 +31,20 @@ export default function PublicPersona() {
   const [note, setNote] = useState("");
   const rec = useRef<MediaRecorder | null>(null);
   const raf = useRef<number>(0);
+  const callActive = useRef(false);
+  const turnStarted = useRef(false);
+  const turnStopTimer = useRef<number | null>(null);
   const end = useRef<HTMLDivElement>(null);
 
   useEffect(() => { api<Persona>(`/api/p/${handle}`).then(setP).catch(() => setErr("This Twyn does not exist.")); }, [handle]);
   useEffect(() => { end.current?.scrollIntoView({ behavior: "smooth" }); }, [msgs, busy]);
+  useEffect(() => () => {
+    callActive.current = false;
+    if (turnStopTimer.current) window.clearTimeout(turnStopTimer.current);
+    if (rec.current?.state === "recording") rec.current.stop();
+    speechSynthesis?.cancel();
+    cancelAnimationFrame(raf.current);
+  }, []);
   useEffect(() => {
     if (!cid) return;
     const ws = new WebSocket(`${WS}/ws/conversations/${cid}`);
@@ -67,16 +77,49 @@ export default function PublicPersona() {
   }
 
   async function startTalk() {
+    if (rec.current?.state === "recording") return;
     setErr("");
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const stop = meter(stream); const chunks: Blob[] = [];
+      const ctx = new AudioContext(); const source = ctx.createMediaStreamSource(stream); const analyser = ctx.createAnalyser(); analyser.fftSize = 512; source.connect(analyser);
+      const samples = new Uint8Array(analyser.frequencyBinCount); const chunks: Blob[] = [];
       const r = new MediaRecorder(stream); rec.current = r;
       r.ondataavailable = (e) => chunks.push(e.data);
-      r.onstop = async () => { stop(); stream.getTracks().forEach((t) => t.stop()); await voiceTurn(new Blob(chunks, { type: r.mimeType })); };
+      const stopTurn = () => { if (r.state === "recording") r.stop(); };
+      const listen = () => {
+        analyser.getByteTimeDomainData(samples);
+        const volume = samples.reduce((sum, value) => sum + Math.abs(value - 128), 0) / samples.length;
+        setLevel(Math.min(1, volume / 18));
+        if (volume > 3) {
+          turnStarted.current = true;
+          if (turnStopTimer.current) { window.clearTimeout(turnStopTimer.current); turnStopTimer.current = null; }
+        } else if (turnStarted.current && !turnStopTimer.current) {
+          turnStopTimer.current = window.setTimeout(stopTurn, 900);
+        }
+        if (r.state === "recording") raf.current = requestAnimationFrame(listen);
+      };
+      r.onstop = async () => {
+        cancelAnimationFrame(raf.current); if (turnStopTimer.current) window.clearTimeout(turnStopTimer.current); turnStopTimer.current = null;
+        source.disconnect(); await ctx.close(); stream.getTracks().forEach((t) => t.stop()); setLevel(0);
+        if (!turnStarted.current || !chunks.length) {
+          setOrb("idle");
+          if (callActive.current) window.setTimeout(() => startTalk(), 300);
+          return;
+        }
+        await voiceTurn(new Blob(chunks, { type: r.mimeType }), "", () => { if (callActive.current) startTalk(); });
+      };
       r.start(); setOrb("listening");
-      setTimeout(() => r.state === "recording" && r.stop(), 28000);
+      turnStarted.current = false; listen();
+      window.setTimeout(() => r.state === "recording" && stopTurn(), 28000);
     } catch { setErr("Microphone is blocked. Type below instead, or allow mic access."); }
+  }
+
+  function beginCall() { callActive.current = true; setNote("Live conversation on — pause briefly when you finish speaking."); startTalk(); }
+  function endCall() {
+    callActive.current = false; speechSynthesis?.cancel(); cancelAnimationFrame(raf.current);
+    if (turnStopTimer.current) window.clearTimeout(turnStopTimer.current);
+    if (rec.current?.state === "recording") rec.current.stop();
+    setOrb("idle"); setLevel(0); setNote("");
   }
 
   /** Plays reply segments back to back (first one starts while later ones are queued).
@@ -108,7 +151,7 @@ export default function PublicPersona() {
   /** Streaming voice turn: reads NDJSON from /voice/stream, shows LLM tokens as they arrive and
    *  schedules raw PCM16 chunks (Timbre SSE) back to back on one AudioContext, so the first
    *  sentence plays while the rest is still being generated. Falls back to the batch endpoint. */
-  async function voiceTurn(blob: Blob, hint = "") {
+  async function voiceTurn(blob: Blob, hint = "", afterSpeaking?: () => void) {
     setOrb("thinking"); setNote("");
     const fd = new FormData();
     try { fd.append("audio", await encodeWav(blob), "turn.wav"); } catch { fd.append("audio", blob, "turn.webm"); }
@@ -116,7 +159,7 @@ export default function PublicPersona() {
     const t0 = performance.now();
     let res: Response;
     try { res = await fetch(`${API}/api/p/${handle}/voice/stream`, { method: "POST", body: fd }); if (!res.ok || !res.body) throw 0; }
-    catch { return voiceTurnBatch(fd, t0); }
+    catch { return voiceTurnBatch(fd, t0, afterSpeaking); }
     const ctx = new AudioContext(); const an = ctx.createAnalyser(); an.fftSize = 256; an.connect(ctx.destination);
     const data = new Uint8Array(an.frequencyBinCount);
     const tick = () => { an.getByteFrequencyData(data); setLevel(data.reduce((a, b) => a + b, 0) / data.length / 90); raf.current = requestAnimationFrame(tick); };
@@ -161,12 +204,16 @@ export default function PublicPersona() {
         }
       }
     } catch { setErr("Voice stream interrupted."); }
-    const finish = () => { cancelAnimationFrame(raf.current); setLevel(0); setOrb("idle"); ctx.close(); };
+    const finish = () => { cancelAnimationFrame(raf.current); setLevel(0); setOrb("idle"); ctx.close(); afterSpeaking?.(); };
     if (firstAudio) setTimeout(finish, Math.max(0, (at - ctx.currentTime) * 1000) + 150);
-    else { finish(); if (mock || speakLocal.length) playQueue(mock ? reply : speakLocal.join(" "), [], language); }
+    else if (mock || speakLocal.length) {
+      cancelAnimationFrame(raf.current); setLevel(0); ctx.close();
+      playQueue(mock ? reply : speakLocal.join(" "), [], language).then(() => afterSpeaking?.());
+    }
+    else finish();
   }
 
-  async function voiceTurnBatch(fd: FormData, t0: number) {
+  async function voiceTurnBatch(fd: FormData, t0: number, afterSpeaking?: () => void) {
     try {
       const d = await api(`/api/p/${handle}/voice`, { method: "POST", body: fd });
       setCid(d.conversation_id); setLang(d.language || "");
@@ -175,6 +222,7 @@ export default function PublicPersona() {
       const segs: string[] = d.segments?.length ? d.segments : d.audio ? [d.audio] : [];
       const first = await playQueue(d.reply, d.mock_tts ? [] : segs, d.language);
       if (d.latency) setLat({ ...d.latency, client_ms: Math.round(first - t0), first_audio_ms: Math.round(first - t0) });
+      afterSpeaking?.();
     } catch { setOrb("idle"); setErr("Voice request failed."); }
   }
 
@@ -247,15 +295,15 @@ export default function PublicPersona() {
             <div className="flex flex-1 flex-col items-center justify-center gap-3 p-6">
               <Orb size={150} state={orb} level={level} color={accent.soft} deep={accent.deep} initials={initials} />
               <div className="text-center">
-                <div className="text-[15px] font-medium">{{ idle: "Tap to talk", listening: "Listening", thinking: "Thinking", speaking: `${first} is speaking` }[orb]}</div>
-                <div className="mt-0.5 text-[12.5px] text-ink-mute">Speak in any Indian language. {lang && `Detected: ${LANG[lang] || lang}`}</div>
+                <div className="text-[15px] font-medium">{{ idle: callActive.current ? "Your turn" : "Start a live conversation", listening: "Listening", thinking: "Thinking", speaking: `${first} is speaking` }[orb]}</div>
+                <div className="mt-0.5 text-[12.5px] text-ink-mute">{callActive.current ? "Just speak. Twyn sends your turn after a short pause." : "Speak in any Indian language."} {lang && `Detected: ${LANG[lang] || lang}`}</div>
                 {lat && <div className="mt-2 flex flex-wrap justify-center gap-1 text-[11px]">{([["Hear", lat.stt_ms], ["First token", lat.llm_ms], ["TTS chunk", lat.tts_ms], ["First audio", lat.first_audio_ms]] as const).map(([k, v]) => (
                   <span key={k} className="hairline rounded-full bg-white/70 px-2 py-0.5 text-ink-soft">{k} <span className="font-medium text-ink tnum">{((v || 0) / 1000).toFixed(1)}s</span></span>))}</div>}
                 {note && <div className="mt-1.5 text-[11px] text-ink-mute">{note}</div>}
               </div>
-              <motion.button aria-label="Talk to Twyn" whileTap={{ scale: 0.94 }} onClick={() => (orb === "listening" ? rec.current?.stop() : orb === "idle" && startTalk())}
+              <motion.button aria-label={callActive.current ? "End live conversation" : "Start live conversation"} whileTap={{ scale: 0.94 }} onClick={() => callActive.current ? endCall() : beginCall()}
                 className="grid h-12 w-12 place-items-center rounded-full text-white" style={{ background: orb === "listening" ? accent.deep : "var(--color-ink)" }}>
-                {orb === "listening" ? <Square size={16} /> : <Mic size={18} />}
+                {callActive.current ? <Square size={16} /> : <Mic size={18} />}
               </motion.button>
               {err && <p className="text-[12.5px] text-peach-deep">{err}</p>}
               <div className="mt-2 w-full max-w-lg space-y-1.5">{msgs.slice(-2).map((m, i) => <p key={i} className={m.role === "visitor" ? "text-right text-[13px] text-ink-mute" : "text-[13px]"}>{m.text}</p>)}</div>
