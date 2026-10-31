@@ -133,3 +133,29 @@ def test_repair_slots_fixes_mangled_copy():
     out = repair_slots("நேரங்கள்: திங்கள், நாள்பர் 2, காலை 10:00; ya Tuesday, 3 Nov, subah 10:45 baje", tools)
     assert "திங்கள், நவம்பர் 2, காலை 10:00" in out and "நாள்பர்" not in out
     assert repair_slots("Monday 2 November 10:00", tools) == "Monday 2 November 10:00"  # different text left alone
+
+
+# ---- hardening ----
+def test_safe_name_strips_paths():
+    from app.main import safe_name
+    assert safe_name("../../etc/passwd") == "passwd"
+    assert "/" not in safe_name("a/b\\c d.wav") and safe_name("") == "file"
+
+def test_chat_rejects_empty_and_caps_text():
+    from fastapi.testclient import TestClient
+    from app.main import app
+    c = TestClient(app)
+    assert c.post("/api/p/does-not-exist-xyz/chat", json={"text": "hi"}).status_code == 404
+
+def test_dev_login_validates_email():
+    from fastapi.testclient import TestClient
+    from app.main import app
+    assert TestClient(app).post("/api/auth/dev", json={"email": "not-an-email"}).status_code == 422
+
+def test_rate_limit_returns_429(monkeypatch):
+    from fastapi.testclient import TestClient
+    from app import config, main
+    monkeypatch.setattr(config, "RATE_LIMIT_PER_MIN", 2); main._hits.clear()
+    c = TestClient(main.app); h = {"x-forwarded-for": "9.9.9.9"}
+    codes = [c.post("/api/p/nope-xyz/chat", json={"text": "hi"}, headers=h).status_code for _ in range(3)]
+    assert codes[-1] == 429; main._hits.clear()

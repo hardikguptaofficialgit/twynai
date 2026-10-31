@@ -25,6 +25,30 @@ class Hub:
             except Exception: self.rooms[cid].discard(ws)
 hub = Hub()
 
+# ---------------- hardening: per-IP rate limit on public turns, size caps, safe names ----------------
+from pathlib import Path as _P
+_hits = defaultdict(list)
+@app.middleware("http")
+async def rate_limit(request, call_next):
+    path = request.url.path
+    if request.method == "POST" and path.startswith("/api/p/"):
+        ip = (request.headers.get("x-forwarded-for", "").split(",")[0].strip() or (request.client.host if request.client else "?"))
+        nowt = time.time(); q = [t for t in _hits[ip] if nowt - t < 60]
+        if len(q) >= config.RATE_LIMIT_PER_MIN:
+            from fastapi.responses import JSONResponse
+            return JSONResponse({"detail": "Too many requests, try again in a minute."}, status_code=429, headers={"Retry-After": "60"})
+        q.append(nowt); _hits[ip] = q
+    return await call_next(request)
+
+def safe_name(name: str) -> str:
+    n = re.sub(r"[^A-Za-z0-9._-]", "_", _P(name or "file").name)[:80].lstrip(".")
+    return n or "file"
+
+async def read_capped(f: UploadFile, cap: int) -> bytes:
+    data = await f.read(cap + 1)
+    if len(data) > cap: raise HTTPException(413, f"File too large (max {cap // (1024*1024)} MB).")
+    return data
+
 def db():
     s = SessionLocal()
     try: yield s
@@ -51,6 +75,8 @@ def health(): return {"ok": True, "modes": config.modes()}
 
 @app.post("/api/auth/dev")
 def dev_login(b: DevLogin, s=Depends(db)):
+    if not config.ALLOW_DEV_LOGIN: raise HTTPException(403, "dev sign-in disabled")
+    if not re.fullmatch(r"[^@\s]+@[^@\s]+\.[^@\s]+", b.email.strip()): raise HTTPException(422, "valid email required")
     o = s.scalar(select(Owner).where(Owner.email == b.email.lower()))
     if not o:
         o = Owner(email=b.email.lower(), name=b.name or b.email.split("@")[0]); s.add(o); s.commit()
@@ -125,7 +151,7 @@ def list_docs(pid: str, o=Depends(current_owner), s=Depends(db)):
 
 @app.post("/api/personas/{pid}/docs")
 async def upload_doc(pid: str, file: UploadFile = File(...), o=Depends(current_owner), s=Depends(db)):
-    p = owned(s, pid, o); data = await file.read()
+    p = owned(s, pid, o); data = await read_capped(file, config.MAX_DOC_BYTES); file.filename = safe_name(file.filename)
     if file.filename.lower().endswith(".pdf"):
         import io; from pypdf import PdfReader
         text = "\n".join((pg.extract_text() or "") for pg in PdfReader(io.BytesIO(data)).pages)
@@ -136,7 +162,7 @@ async def upload_doc(pid: str, file: UploadFile = File(...), o=Depends(current_o
 
 @app.post("/api/personas/{pid}/voice")
 async def upload_voice(pid: str, file: UploadFile = File(...), o=Depends(current_owner), s=Depends(db)):
-    p = owned(s, pid, o); data = await file.read()
+    p = owned(s, pid, o); data = await read_capped(file, config.MAX_AUDIO_BYTES); file.filename = safe_name(file.filename)
     path = config.UPLOAD_DIR / f"{p.id}-voice-{file.filename}"; path.write_bytes(data)
     p.voice_sample_path = str(path)
     secs = voice.wav_seconds(data)
@@ -314,6 +340,8 @@ class ChatIn(BaseModel):
 async def chat(handle: str, b: ChatIn, s=Depends(db)):
     p = s.scalar(select(Persona).where(Persona.handle == handle))
     if not p: raise HTTPException(404)
+    b.text = b.text.strip()[:config.MAX_TEXT_CHARS]; b.visitor_name = b.visitor_name.strip()[:60]
+    if not b.text: raise HTTPException(422, "empty message")
     conv = get_conv(s, p, b.conversation_id, b.visitor_name, "chat")
     conv.language = guess_lang(b.text)
     reply, tools, provider, sources = await handle_turn(s, p, conv, b.text)
@@ -331,7 +359,7 @@ async def voice_turn(handle: str, audio: UploadFile = File(...), conversation_id
     p = s.scalar(select(Persona).where(Persona.handle == handle))
     if not p: raise HTTPException(404)
     t0 = time.perf_counter(); ms = lambda a: round((time.perf_counter() - a) * 1000)
-    data = await audio.read(); fallback = []
+    data = await read_capped(audio, config.MAX_AUDIO_BYTES); fallback = []; text_hint = text_hint[:config.MAX_TEXT_CHARS]
     try: r = await voice.stt(data, audio.filename or "audio.wav")
     except Exception as e:
         log.warning("STT failed: %s", e); fallback.append(f"stt:{type(e).__name__}")
@@ -402,7 +430,7 @@ async def voice_stream(handle: str, audio: UploadFile = File(...), conversation_
     """Streaming voice turn as NDJSON events: transcript, text (LLM tokens), audio (raw PCM16
     chunks from Timbre SSE, sentence by sentence), done (latency). TTS of sentence 1 starts as
     soon as the LLM finishes it, while later tokens are still arriving."""
-    data = await audio.read(); fname = audio.filename or "audio.wav"
+    data = await read_capped(audio, config.MAX_AUDIO_BYTES); fname = safe_name(audio.filename or "audio.wav"); text_hint = text_hint[:config.MAX_TEXT_CHARS]
     async def gen():
         s = SessionLocal(); t0 = time.perf_counter(); ms = lambda: round((time.perf_counter() - t0) * 1000)
         ev = lambda o: json.dumps(o, ensure_ascii=False) + "\n"

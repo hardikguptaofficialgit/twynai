@@ -12,7 +12,13 @@ export async function api<T = any>(path: string, opts: RequestInit = {}): Promis
   const t = token();
   if (t) headers["Authorization"] = `Bearer ${t}`;
   const r = await fetch(API + path, { ...opts, headers });
-  if (!r.ok) throw new Error((await r.text()) || r.statusText);
+  if (!r.ok) {
+    const t = await r.text();
+    let msg = t || r.statusText;
+    try { const j = JSON.parse(t); if (typeof j.detail === "string") msg = j.detail; } catch {}
+    if (r.status === 429) msg = "Too many requests, try again in a minute.";
+    throw new Error(msg);
+  }
   return r.json();
 }
 
