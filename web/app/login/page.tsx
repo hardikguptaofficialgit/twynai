@@ -25,7 +25,7 @@ function Login() {
         <div className="glass mt-6 p-6">
           <h1 className="display text-center text-[24px]">Welcome to Twyn</h1>
           <p className="mt-1 text-center text-[13px] text-ink-soft">Sign in to build your persona and share your link.</p>
-          <a href={`${API}/api/auth/google/login`} className="clay-sm mt-6 flex h-9 w-full items-center justify-center gap-2 bg-white text-[13.5px] font-medium hover:bg-canvas">
+          <a href={`${API}/api/auth/google/login?${new URLSearchParams({ next: sp.get("next") || "", handle: sp.get("handle") || "" }).toString()}`} className="clay-sm mt-6 flex h-9 w-full items-center justify-center gap-2 bg-white text-[13.5px] font-medium hover:bg-canvas">
             <Image src="/brands/google.svg" alt="" width={15} height={15} />
             Continue with Google
           </a>

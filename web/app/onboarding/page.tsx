@@ -482,7 +482,7 @@ function CalendarStep({ me }: any) {
         <span className="clay-sm grid h-12 w-12 place-items-center bg-white"><Image src="/brands/google-calendar.svg" alt="Google Calendar" width={22} height={22} /></span>
         <div className="flex-1"><p className="font-medium">Google Calendar</p><p className="text-sm text-ink-soft">{on ? `Connected as ${me.email}` : "Free/busy and event creation only"}</p></div>
         {on ? <span className="inline-flex items-center gap-1.5 rounded-full bg-mint px-3 py-1.5 text-sm font-medium"><Check size={14} />Connected</span>
-          : <a href={`${API}/api/auth/google/login`} className="rounded-full bg-ink h-9 px-4 text-[13.5px] font-medium text-canvas inline-flex items-center">Connect</a>}
+          : <a href={`${API}/api/auth/google/login?next=%2Fonboarding`} className="rounded-full bg-ink h-9 px-4 text-[13.5px] font-medium text-canvas inline-flex items-center">Connect</a>}
       </div>
       {!on && <p className="mt-4 text-sm text-ink-mute">Skip this and Twyn will offer slots from your availability rules, then email you each booking to confirm.</p>}
     </div>
@@ -549,7 +549,7 @@ function PublishStep({ d, publish, saving, onEmailAuth }: any) {
         <Head k="Almost there" t="Create your account to go live" d="Sign in to publish your Twyn. Your draft is ready to be published immediately." />
         <div className="glass mt-6 p-6 text-left">
           <a
-            href={`${API}/api/auth/google/login`}
+            href={`${API}/api/auth/google/login?next=%2Fonboarding`}
             className="clay-sm flex h-10 w-full items-center justify-center gap-2.5 bg-white text-[13.5px] font-medium hover:bg-canvas transition-colors"
           >
             <Image src="/brands/google.svg" alt="" width={15} height={15} />

@@ -72,7 +72,7 @@ export default function StudioLayout({ children }: { children: ReactNode }) {
           {st && CAL_MSG[st] && (
             <div className="mx-4 mt-3 flex flex-wrap items-center gap-2 rounded-xl bg-butter/70 px-3 py-2 text-[12.5px] md:mx-6">
               <Warning size={15} /><span className="flex-1">{CAL_MSG[st]}</span>
-              {st !== "api_disabled" && <a href={`${API}/api/auth/google/login`} className="rounded-full bg-ink px-3 py-1 text-[12px] font-medium text-canvas">Reconnect</a>}
+              {st !== "api_disabled" && <a href={`${API}/api/auth/google/login?next=${encodeURIComponent(path)}`} className="rounded-full bg-ink px-3 py-1 text-[12px] font-medium text-canvas">Reconnect</a>}
             </div>)}
           {children}
         </div>

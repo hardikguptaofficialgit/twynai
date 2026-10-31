@@ -101,7 +101,7 @@ def dev_login(b: DevLogin, s=Depends(db)):
     return {"token": sess.id, "owner": public_owner(o)}
 
 SCOPES = "openid email profile https://www.googleapis.com/auth/calendar.events https://www.googleapis.com/auth/calendar.readonly"
-_oauth_states: dict = {}   # state -> expiry (CSRF protection for the OAuth round trip)
+_oauth_states: dict = {}   # state -> (expiry, safe return path)
 
 def _redirect_uri(): return config.GOOGLE_REDIRECT_URI
 
@@ -110,10 +110,15 @@ def google_login(next: str = ""):
     if not (config.GOOGLE_CLIENT_ID and config.GOOGLE_CLIENT_SECRET): return RedirectResponse(config.WEB_ORIGIN + "/login?mock=1", status_code=302)
     import secrets
     st = secrets.token_urlsafe(24); nowt = time.time()
-    for k in [k for k, v in _oauth_states.items() if v < nowt]: _oauth_states.pop(k, None)
-    _oauth_states[st] = nowt + 600
+    for k in [k for k, v in _oauth_states.items() if v[0] < nowt]: _oauth_states.pop(k, None)
+    # Keep the post-login destination server-side so it survives the Google
+    # redirect without trusting an arbitrary callback query parameter.
+    safe_next = next if next.startswith("/") and not next.startswith("//") else ""
+    _oauth_states[st] = (nowt + 600, safe_next)
     q = urllib.parse.urlencode({"client_id": config.GOOGLE_CLIENT_ID, "redirect_uri": _redirect_uri(), "response_type": "code",
-        "scope": SCOPES, "access_type": "offline", "prompt": "consent", "include_granted_scopes": "true", "state": st})
+        # Google still shows consent when it is needed, but do not force the
+        # full consent screen on every reconnect once access is already granted.
+        "scope": SCOPES, "access_type": "offline", "prompt": "select_account", "include_granted_scopes": "true", "state": st})
     return RedirectResponse("https://accounts.google.com/o/oauth2/v2/auth?" + q, status_code=302)
 
 app.get("/api/auth/google/start")(google_login)   # old links in the web app keep working
@@ -122,7 +127,8 @@ app.get("/api/auth/google/start")(google_login)   # old links in the web app kee
 def google_callback(code: str = "", state: str = "", error: str = "", s=Depends(db)):
     fail = lambda why: RedirectResponse(f"{config.WEB_ORIGIN}/login?error={urllib.parse.quote(why)}", status_code=302)
     if error: return fail(error)
-    if not code or _oauth_states.pop(state, 0) < time.time(): return fail("Sign-in expired, please try again.")
+    oauth_state = _oauth_states.pop(state, (0, ""))
+    if not code or oauth_state[0] < time.time(): return fail("Sign-in expired, please try again.")
     try:
         r = httpx.post("https://oauth2.googleapis.com/token", data={"code": code, "client_id": config.GOOGLE_CLIENT_ID,
             "client_secret": config.GOOGLE_CLIENT_SECRET, "redirect_uri": _redirect_uri(), "grant_type": "authorization_code"}, timeout=15)
@@ -144,8 +150,9 @@ def google_callback(code: str = "", state: str = "", error: str = "", s=Depends(
     o.google_tokens = json.dumps(tok)   # server-side only; never returned to the browser
     sess = AuthSession(owner_id=o.id); s.add(sess); s.commit()
     has = s.scalar(select(Persona).where(Persona.owner_id == o.id))
-    nxt = "/studio" if has and has.published else "/onboarding"
-    return RedirectResponse(f"{config.WEB_ORIGIN}/login?token={sess.id}&next={nxt}", status_code=302)
+    requested = oauth_state[1]
+    nxt = requested or ("/studio" if has and has.published else "/onboarding")
+    return RedirectResponse(f"{config.WEB_ORIGIN}/login?token={sess.id}&next={urllib.parse.quote(nxt, safe='/')}", status_code=302)
 
 @app.post("/api/me/google/disconnect")
 def google_disconnect(o=Depends(current_owner), s=Depends(db)):

@@ -24,7 +24,7 @@ export default function Settings() {
   const [confirmTxt, setConfirmTxt] = useState("");
   const st = STATUS[me.calendar_status] || STATUS.not_connected;
   const link = typeof window !== "undefined" ? `${location.origin}/p/${p.handle}` : "";
-  const connect = () => { window.location.href = `${API}/api/auth/google/login`; };
+  const connect = () => { window.location.href = `${API}/api/auth/google/login?next=${encodeURIComponent("/studio/settings")}`; };
   async function disconnect() { if (!confirm("Disconnect Google Calendar? Your Twyn will switch to a demo calendar.")) return; setBusy("dc"); try { await api("/api/me/google/disconnect", { method: "POST" }); await reloadMe(); toast("Google Calendar disconnected"); } catch (e: any) { toast(e.message, "err"); } finally { setBusy(""); } }
   async function logout() { await api("/api/auth/logout", { method: "POST" }).catch(() => {}); localStorage.removeItem("proxy_token"); r.replace("/login"); }
   async function del() { setBusy("del"); try { await api("/api/me", { method: "DELETE" }); localStorage.removeItem("proxy_token"); r.replace("/"); } catch (e: any) { toast(e.message, "err"); setBusy(""); } }
