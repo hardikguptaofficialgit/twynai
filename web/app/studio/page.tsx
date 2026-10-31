@@ -1,9 +1,10 @@
 "use client";
+import Image from "next/image";
 import { useEffect, useState } from "react";
 const DAYS = ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"];
 const DEF_AV = { days: [0,1,2,3,4], start: "10:00", end: "18:00", duration: 30, buffer: 15, notice: 12 };
 import { motion } from "framer-motion";
-import { Plus, Trash2, Upload, Mic, FileText, CalendarCheck, Check, Copy } from "lucide-react";
+import { Plus, Trash as Trash2, UploadSimple as Upload, Microphone as Mic, FileText, CalendarCheck, Check, Copy } from "@phosphor-icons/react";
 import { api, API, Persona, ACCENTS } from "@/lib/api";
 import { useOwner } from "@/lib/useOwner";
 import { Backdrop, Button, Card, Field, Pill } from "@/components/ui";
@@ -97,7 +98,7 @@ export default function Studio() {
               <div className="clay-sm mb-4 grid h-11 w-11 place-items-center bg-sky"><CalendarCheck size={18} /></div>
               <h3 className="text-xl">Google Calendar</h3><p className="mt-1 text-sm text-ink-soft">Free/busy and booking. Twyn only offers slots you are actually free.</p>
               <div className="mt-3">{me?.google_tokens ? <Pill tone="mint">Connected</Pill> : <Pill tone="butter">Demo calendar in use</Pill>}</div>
-              <a href={`${API}/api/auth/google/start`} className="clay-sm mt-4 flex items-center justify-center bg-canvas px-4 py-3 text-sm font-medium">Connect Google Calendar</a>
+              <a href={`${API}/api/auth/google/start`} className="clay-sm mt-4 flex items-center justify-center gap-2 bg-canvas px-4 py-3 text-sm font-medium"><Image src="/brands/google-calendar.svg" alt="" width={18} height={18} />Connect Google Calendar</a>
             </Card>
             <Card>
               <h3 className="text-xl">Availability</h3><p className="mt-1 text-sm text-ink-soft">Twyn only offers slots inside these rules, minus busy times.</p>

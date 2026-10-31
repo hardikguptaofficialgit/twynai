@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useState, useCallback } from "react";
 import { motion } from "framer-motion";
-import { MessageSquare, Users, CalendarCheck, Hand, Send, AudioLines, RefreshCw } from "lucide-react";
+import { ChatCircle as MessageSquare, Users, CalendarCheck, Hand, PaperPlaneRight as Send, Waveform as AudioLines, ArrowClockwise as RefreshCw } from "@phosphor-icons/react";
 import { api, WS } from "@/lib/api";
 import { useOwner } from "@/lib/useOwner";
 import { Backdrop, Button, Card, Pill } from "@/components/ui";

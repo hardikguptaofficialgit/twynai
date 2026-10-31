@@ -1,8 +1,9 @@
 "use client";
+import Image from "next/image";
 import { useEffect, useRef, useState } from "react";
 import { useParams } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
-import { Mic, Send, MessageSquare, AudioLines, Square, CalendarCheck, UserPlus, Search } from "lucide-react";
+import { Microphone as Mic, PaperPlaneRight as Send, ChatCircle as MessageSquare, Waveform as AudioLines, Stop as Square, CalendarCheck, UserPlus, MagnifyingGlass as Search } from "@phosphor-icons/react";
 import { api, API, WS, Persona, ACCENTS, encodeWav } from "@/lib/api";
 import { Backdrop, Logo, Pill } from "@/components/ui";
 import { Orb } from "@/components/Orb";
@@ -184,7 +185,7 @@ export default function PublicPersona() {
   return (
     <main className="relative min-h-screen pb-10">
       <Backdrop />
-      <div className="sticky top-0 z-30 border-b border-rule bg-canvas/70 backdrop-blur-xl"><div className="mx-auto flex h-16 w-[min(1200px,calc(100%-2.5rem))] items-center justify-between"><Logo /><span className="font-mono text-[13px] text-ink-mute">twyn.ai/{p.handle}</span></div></div>
+      <div className="sticky top-0 z-30 border-b border-rule bg-canvas/70 backdrop-blur-xl"><div className="mx-auto flex h-16 w-[min(1200px,calc(100%-2.5rem))] items-center justify-between"><Logo /><span className="flex items-center gap-3"><span className="hidden font-mono text-[13px] text-ink-mute sm:inline">twyn.ai/{p.handle}</span>{[["linkedin","LinkedIn",`https://www.linkedin.com/sharing/share-offsite/?url=`],["x","X",`https://x.com/intent/post?url=`],["whatsapp","WhatsApp",`https://wa.me/?text=`]].map(([k,n,u]) => <a key={k} aria-label={`Share on ${n}`} target="_blank" rel="noreferrer" href={u + encodeURIComponent(typeof window !== "undefined" ? window.location.href : "")} className="clay-sm grid h-9 w-9 place-items-center bg-white"><Image src={`/brands/${k}.svg`} alt="" width={16} height={16} /></a>)}</span></div></div>
       <div className="reveal mx-auto grid w-[min(1200px,calc(100%-2.5rem))] gap-6 pt-6 lg:grid-cols-[minmax(0,360px)_minmax(0,1fr)]">
         <aside className="space-y-5">
           <div className="glass p-7">

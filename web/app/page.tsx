@@ -3,7 +3,7 @@ import Link from "next/link";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
-import { ArrowRight, ArrowUpRight, CalendarCheck } from "lucide-react";
+import { ArrowRight, ArrowUpRight, CalendarCheck } from "@phosphor-icons/react";
 import { Backdrop, Logo, Nav, SectionHead, W } from "@/components/ui";
 import { Orb } from "@/components/Orb";
 

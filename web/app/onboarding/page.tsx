@@ -1,8 +1,9 @@
 "use client";
+import Image from "next/image";
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { AnimatePresence, motion } from "framer-motion";
-import { ArrowLeft, ArrowRight, Check, Copy, FileText, Link2, Loader2, Mic, Plus, Square, Trash2, Upload, X, CalendarDays, ExternalLink, Volume2 } from "lucide-react";
+import { ArrowLeft, ArrowRight, Check, Copy, FileText, Link as Link2, CircleNotch as Loader2, Microphone as Mic, Plus, Stop as Square, Trash as Trash2, UploadSimple as Upload, X, ArrowSquareOut as ExternalLink, SpeakerHigh as Volume2 } from "@phosphor-icons/react";
 import clsx from "clsx";
 import { api, API, encodeWav, Persona, token } from "@/lib/api";
 import { useOwner } from "@/lib/useOwner";
@@ -50,7 +51,7 @@ function Progress({ step, max, go }: { step: number; max: number; go: (i: number
           <li key={s}>
             <button disabled={i > max} onClick={() => go(i)} className={clsx("flex items-center gap-1.5 text-xs", i === step ? "font-semibold text-ink" : i <= max ? "text-ink-soft hover:text-ink" : "text-ink-mute/60")}>
               <span className={clsx("grid h-5 w-5 place-items-center rounded-full text-[10px]", i < step || (i <= max && i !== step) ? "bg-mint text-mint-deep" : i === step ? "bg-ink text-canvas" : "bg-white/60")}>
-                {i < step || (i <= max && i !== step) ? <Check size={11} strokeWidth={3} /> : i + 1}
+                {i < step || (i <= max && i !== step) ? <Check size={11} weight="bold" /> : i + 1}
               </span>{s}
             </button>
           </li>
@@ -359,7 +360,7 @@ function CalendarStep({ me }: any) {
     <div>
       <Head k="Calendar" t="Connect Google Calendar" d="Twyn checks when you are free and books meetings straight into your calendar. It never sees event details, only busy times." />
       <div className="glass flex flex-wrap items-center gap-5 p-6">
-        <span className="clay-sm grid h-12 w-12 place-items-center bg-white"><CalendarDays size={20} className="text-sky-deep" /></span>
+        <span className="clay-sm grid h-12 w-12 place-items-center bg-white"><Image src="/brands/google-calendar.svg" alt="Google Calendar" width={22} height={22} /></span>
         <div className="flex-1"><p className="font-medium">Google Calendar</p><p className="text-sm text-ink-soft">{on ? `Connected as ${me.email}` : "Free/busy and event creation only"}</p></div>
         {on ? <span className="inline-flex items-center gap-1.5 rounded-full bg-mint px-3 py-1.5 text-sm font-medium"><Check size={14} />Connected</span>
           : <a href={`${API}/api/auth/google/start`} className="rounded-full bg-ink px-5 py-3 text-sm font-medium text-canvas">Connect</a>}
