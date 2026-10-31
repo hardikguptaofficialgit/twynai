@@ -18,11 +18,11 @@ with sync_playwright() as pw:
     b = pw.chromium.launch(executable_path="/usr/bin/google-chrome")
     pg = b.new_page(viewport={"width": 1280, "height": 820}); errs = []
     pg.on("pageerror", lambda e: errs.append(str(e)))
-    pg.goto(B + "/login", wait_until="networkidle"); pg.evaluate(f"localStorage.setItem('proxy_token','{tok}')")
+    pg.goto(B + "/login", wait_until="load"); pg.evaluate(f"localStorage.setItem('proxy_token','{tok}')")
     for x in pages:
-        pg.goto(f"{B}/studio/{x}".rstrip("/"), wait_until="networkidle"); time.sleep(2.5)
+        pg.goto(f"{B}/studio/{x}".rstrip("/"), wait_until="load"); time.sleep(2.5)
         pg.screenshot(path=f"{S}studio-{x or 'overview'}.png", full_page=True)
-    pg.goto(B + "/studio/persona", wait_until="networkidle"); time.sleep(1.5)
+    pg.goto(B + "/studio/persona", wait_until="load"); time.sleep(1.5)
     pg.locator("textarea").first.fill("Too short"); time.sleep(0.3); pg.get_by_role("button", name="Save").click(); time.sleep(0.8)
     pg.screenshot(path=S + "studio-persona-validation.png")
     pg.get_by_placeholder("Paste the answer here...").fill("## Bio\nI design brands for early-stage startups.\n\n## Skills\nBrand strategy, Figma, design systems.\n\n## FAQs\nQ: Do you do logos only?\nA: No, I do full brand systems.\n\n## How I talk\nWarm, direct, a little playful.")
@@ -30,8 +30,8 @@ with sync_playwright() as pw:
     if btn.count(): btn.first.click(); time.sleep(0.8)
     pg.screenshot(path=S + "studio-persona-ai-import.png", full_page=True)
     m = b.new_page(viewport={"width": 390, "height": 844}, device_scale_factor=2)
-    m.goto(B + "/login", wait_until="networkidle"); m.evaluate(f"localStorage.setItem('proxy_token','{tok}')")
+    m.goto(B + "/login", wait_until="load"); m.evaluate(f"localStorage.setItem('proxy_token','{tok}')")
     for x in ["", "conversations", "settings"]:
-        m.goto(f"{B}/studio/{x}".rstrip("/"), wait_until="networkidle"); time.sleep(2); m.screenshot(path=f"{S}mobile-studio-{x or 'overview'}.png")
-    lp = b.new_page(viewport={"width": 1280, "height": 820}); lp.goto(B + "/onboarding", wait_until="networkidle"); time.sleep(1)
+        m.goto(f"{B}/studio/{x}".rstrip("/"), wait_until="load"); time.sleep(2); m.screenshot(path=f"{S}mobile-studio-{x or 'overview'}.png")
+    lp = b.new_page(viewport={"width": 1280, "height": 820}); lp.goto(B + "/onboarding", wait_until="load"); time.sleep(1)
     print("handle", h, "errors:", errs)
