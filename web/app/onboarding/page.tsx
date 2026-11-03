@@ -13,7 +13,7 @@ import { VoiceCloner } from "@/components/VoiceCloner";
 import { AiImport } from "@/components/AiImport";
 import { ProfileAvatar } from "@/components/ProfileAvatar";
 import type { AvatarStyle } from "@/components/ProfileAvatar";
-import { AvatarStylePicker } from "@/components/AvatarPicker";
+import { AvatarPickerModal } from "@/components/AvatarPicker";
 
 const STAGES = ["Identity", "About", "Personality", "Experience", "Launch"];
 const STAGE_STEPS = [[0, 1, 2], [3, 4], [5, 6], [7], [10]];
@@ -55,7 +55,7 @@ function loadAvatar(): Promise<File | null> {
 }
 
 type Draft = Omit<Persona, "id" | "has_voice"> & { id?: string; has_voice?: boolean; languages: string[]; availability: any; published?: boolean; onboarding_step?: number };
-const empty = (name = ""): Draft => ({ handle: "", name, headline: "", bio: "", rates: "", faqs: [], links: [], tone: TONES[0], accent: "lilac", languages: ["en", "hinglish"], availability: DEFAULT_AVAIL });
+const empty = (name = ""): Draft => ({ handle: "", name, headline: "", bio: "", rates: "", faqs: [], links: [], tone: TONES[0], accent: "lilac", avatar_style: "notionists-neutral", avatar_background: "d9cdf6", languages: ["en", "hinglish"], availability: DEFAULT_AVAIL });
 
 const input = "field clay-pressed text-ink placeholder:text-ink-mute/70";
 
@@ -120,6 +120,7 @@ function OnboardingInner() {
   const [loaded, setLoaded] = useState(false);
   const [avatarFile, setAvatarFile] = useState<File | null>(null);
   const [avatarStyle, setAvatarStyle] = useState<AvatarStyle>("notionists-neutral");
+  const [avatarBackground, setAvatarBackground] = useState("d9cdf6");
   const [availState, setAvailState] = useState<"idle" | "checking" | "available" | "taken" | "error">("idle");
   const [notice, setNotice] = useState<{ text: string; tone: "ok" | "err" } | null>(null);
   const stageStartedAt = useRef(Date.now());
@@ -313,9 +314,9 @@ function OnboardingInner() {
   const go = (i: number) => { setErrs({}); setDir(i > stage ? 1 : -1); setStage(i); };
 
   const viewByStage: Record<number, React.ReactNode> = {
-    0: <div className="space-y-8"><HandleStep d={d} set={set} avail={avail} availState={availState} errs={errs} /><ProfilePhotoStep d={d} set={set} errs={errs} avatarFile={avatarFile} setAvatarFile={setAvatarFile} avatarStyle={avatarStyle} setAvatarStyle={(style: AvatarStyle) => { setAvatarStyle(style); localStorage.setItem("twyn-onboarding-avatar-style", style); }} /><RoleStep d={d} set={set} errs={errs} /></div>,
-    1: <div className="space-y-8"><BioStep d={d} set={set} errs={errs} /><LanguagesStep d={d} set={set} errs={errs} /></div>,
-    2: <div className="space-y-8"><ToneStep d={d} set={set} /><KnowledgeStep d={d} set={set} errs={errs} ensurePersona={ensurePersona} /></div>,
+    0: <div className="space-y-7"><HandleStep d={d} set={set} avail={avail} availState={availState} errs={errs} /><SubstepDivider label="Your profile" /><ProfilePhotoStep d={d} set={set} errs={errs} avatarFile={avatarFile} setAvatarFile={setAvatarFile} avatarStyle={avatarStyle} avatarBackground={avatarBackground} setAvatarStyle={(style: AvatarStyle) => { setAvatarStyle(style); set({ avatar_style: style }); localStorage.setItem("twyn-onboarding-avatar-style", style); }} setAvatarBackground={(color: string) => { setAvatarBackground(color); set({ avatar_background: color }); }} /><SubstepDivider label="About you" /><RoleStep d={d} set={set} errs={errs} /></div>,
+    1: <div className="space-y-7"><BioStep d={d} set={set} errs={errs} /><SubstepDivider label="Your Twyn" /><LanguagesStep d={d} set={set} errs={errs} /></div>,
+    2: <div className="space-y-7"><ToneStep d={d} set={set} /><SubstepDivider label="Knowledge" /><KnowledgeStep d={d} set={set} errs={errs} ensurePersona={ensurePersona} /></div>,
     3: <div className="space-y-8"><VoiceStep d={d} set={set} ensurePersona={ensurePersona} /></div>,
     4: <PublishStep d={d} publish={async () => { if (await persist(4, { published: true })) set({ published: true }); }} saving={saving} />,
   };
@@ -385,6 +386,10 @@ function Head({ k, t, d }: { k: string; t: string; d: string }) {
   return <div className="mb-8 text-center"><p className="eyebrow">{k}</p><h1 className="display mt-1.5 text-[28px]">{t}</h1><p className="mx-auto mt-2 max-w-lg text-[13.5px] text-ink-soft">{d}</p></div>;
 }
 
+function SubstepDivider({ label }: { label: string }) {
+  return <div className="flex items-center gap-3 py-1" aria-hidden="true"><span className="h-px flex-1 bg-rule" /><span className="rounded-full border border-rule bg-white/70 px-2.5 py-1 font-mono text-[9px] uppercase tracking-[0.16em] text-ink-mute">{label}</span><span className="h-px flex-1 bg-rule" /></div>;
+}
+
 function HandleStep({ d, set, avail, availState, errs }: any) {
   return (
     <div>
@@ -402,7 +407,7 @@ function HandleStep({ d, set, avail, availState, errs }: any) {
   );
 }
 
-function ProfilePhotoStep({ d, set, errs, avatarFile, setAvatarFile, avatarStyle, setAvatarStyle }: any) {
+function ProfilePhotoStep({ d, set, errs, avatarFile, setAvatarFile, avatarStyle, avatarBackground, setAvatarStyle, setAvatarBackground }: any) {
   const [preview, setPreview] = useState("");
   const [photoError, setPhotoError] = useState("");
   useEffect(() => {
@@ -416,7 +421,7 @@ function ProfilePhotoStep({ d, set, errs, avatarFile, setAvatarFile, avatarStyle
       <Label t="Your name" err={errs.name}><input aria-invalid={!!errs.name} className={clsx(input, errs.name && "border-peach-deep/50")} value={d.name} onChange={(e) => set({ name: e.target.value })} placeholder="Your name" /></Label>
       <div className="glass mt-6 flex flex-col items-center gap-4 p-5 text-center sm:flex-row sm:text-left">
         <div className="grid h-20 w-20 shrink-0 place-items-center overflow-hidden rounded-full border border-rule bg-lilac text-xl font-medium text-ink shadow-sm ring-4 ring-white/70">
-          {preview ? <img src={preview} alt="Profile preview" className="h-full w-full object-cover" /> : <ProfileAvatar seed={d.name || d.handle || "Twyn"} image={d.avatar_url ? `${API}${d.avatar_url}` : undefined} style={avatarStyle} size={80} alt="Profile preview" />}
+          {preview ? <img src={preview} alt="Profile preview" className="h-full w-full object-cover" /> : <ProfileAvatar seed={d.name || d.handle || "Twyn"} image={d.avatar_url ? `${API}${d.avatar_url}` : undefined} style={avatarStyle} background={avatarBackground} size={80} alt="Profile preview" />}
         </div>
         <div className="min-w-0 flex-1">
           <p className="text-sm font-medium">Profile photo <span className="font-normal text-ink-mute">· optional</span></p>
@@ -425,7 +430,7 @@ function ProfilePhotoStep({ d, set, errs, avatarFile, setAvatarFile, avatarStyle
             <Camera size={15} />{avatarFile || d.avatar_url ? "Change photo" : "Choose photo"}
           </label>
           {avatarFile && <p className="mt-2 truncate text-xs text-ink-mute">Selected: {avatarFile.name}</p>}
-          {!avatarFile && !d.avatar_url && <div className="mt-3"><p className="mb-2 text-[11px] text-ink-mute">Choose your DiceBear style</p><AvatarStylePicker seed={d.name || d.handle || "Twyn"} value={avatarStyle} onChange={setAvatarStyle} /></div>}
+          {!avatarFile && !d.avatar_url && <div className="mt-3"><p className="mb-2 text-[11px] text-ink-mute">Choose your avatar</p><AvatarPickerModal seed={d.name || d.handle || "Twyn"} value={avatarStyle} background={avatarBackground} onChange={setAvatarStyle} onBackgroundChange={setAvatarBackground} /></div>}
           <input id="profile-photo" type="file" accept="image/jpeg,image/png,image/webp" className="sr-only" onChange={(e) => {
             const f = e.target.files?.[0]; if (!f) return;
             if (!["image/jpeg", "image/png", "image/webp"].includes(f.type)) { setPhotoError("Use a JPG, PNG, or WebP image."); e.target.value = ""; return; }
@@ -450,7 +455,7 @@ function RoleStep({ d, set, errs }: any) {
 const AI_WRITERS = [
   ["ChatGPT", "https://chatgpt.com/", "q", "/brands/chatgpt.svg"],
   ["Claude", "https://claude.ai/new", "q", "/brands/claude.svg"],
-  ["Gemini", "https://gemini.google.com/app", "prompt", "https://cdn.jsdelivr.net/npm/@thesvg/icons/icons/google-gemini.svg"],
+  ["Gemini", "https://gemini.google.com/app", "prompt", "/brands/gemini.svg"],
   ["Perplexity", "https://www.perplexity.ai/search/new", "q", "/brands/perplexity.svg"],
 ] as const;
 

@@ -215,7 +215,10 @@ def google_callback(code: str = "", state: str = "", error: str = "", oauth_cook
     sess = AuthSession(owner_id=o.id); s.add(sess); s.commit()
     log.info("google_oauth_stage=session_created owner_exists=%s", bool(o))
     has = s.scalar(select(Persona).where(Persona.owner_id == o.id))
-    nxt = requested["next"] or ("/studio" if has and has.published else "/onboarding")
+    if has and has.published:
+        nxt = requested["next"] if requested["next"] and not requested["next"].startswith("/onboarding") else "/studio"
+    else:
+        nxt = requested["next"] or "/onboarding"
     response = RedirectResponse(f"{config.WEB_ORIGIN}/login?token={sess.id}&next={urllib.parse.quote(nxt, safe='/')}", status_code=302)
     response.delete_cookie(OAUTH_STATE_COOKIE, path="/api/auth/google")
     return response
@@ -457,33 +460,43 @@ def public_avatar(handle: str, s=Depends(db)):
     return Response(storage.get(path), media_type=media, headers={"Cache-Control": "public, max-age=3600"})
 
 class DirectBook(BaseModel):
-    start: str; name: str; email: str; topic: str = ""
+    start: str; name: str = ""; email: str = ""; topic: str = ""; conversation_id: str = ""
 
 @app.get("/api/p/{handle}/slots")
-def public_slots(handle: str, s=Depends(db)):
+def public_slots(handle: str, days: int = 14, s=Depends(db)):
     p = s.scalar(select(Persona).where(Persona.handle == handle))
     if not p or not p.published: raise HTTPException(404, "not found")
     owner = s.get(Owner, p.owner_id); cal = calendar_svc.for_owner(owner, s); rules = calendar_svc.rules_of(p)
     bookings = list(s.scalars(select(Booking).where(Booking.persona_id == p.id)))
-    slots = calendar_svc.generate(rules, calendar_svc.all_busy(cal, bookings, 7), days=7, limit=18, per_day=4)
+    days = max(1, min(int(days), 370))
+    slots = calendar_svc.generate(rules, calendar_svc.all_busy(cal, bookings, days), days=days, limit=500, per_day=8)
     return {"minutes": int(rules["duration"]), "slots": [{"start": x["start"], "label": calendar_svc.label(dt.datetime.fromisoformat(x["start"]))} for x in slots]}
 
 @app.post("/api/p/{handle}/book")
 def public_book(handle: str, b: DirectBook, s=Depends(db)):
     p = s.scalar(select(Persona).where(Persona.handle == handle))
     if not p or not p.published: raise HTTPException(404, "not found")
-    name, email = b.name.strip()[:60], b.email.strip()[:120]
+    context = None
+    if b.conversation_id:
+        context = s.get(Conversation, b.conversation_id)
+        if not context or context.persona_id != p.id: context = None
+    known = booking_context(s, context) if context else {"name": "", "email": ""}
+    name, email = (b.name.strip() or known["name"])[:60], (b.email.strip() or known["email"])[:120]
     if not name or not re.fullmatch(r"[^@\s]+@[^@\s]+\.[^@\s]+", email): raise HTTPException(422, "Add your name and a valid email.")
     owner = s.get(Owner, p.owner_id); cal = calendar_svc.for_owner(owner, s); rules = calendar_svc.rules_of(p); dur = int(rules["duration"])
     bookings = list(s.scalars(select(Booking).where(Booking.persona_id == p.id)))
     start = b.start[:16]
+    if s.scalar(select(Booking).where(Booking.persona_id == p.id, Booking.start == start)):
+        raise HTTPException(409, "That time was just taken. Pick another.")
     if not calendar_svc.is_valid(rules, calendar_svc.all_busy(cal, bookings, 30), start): raise HTTPException(409, "That time was just taken. Pick another.")
     topic = b.topic.strip()[:120]
-    ev = calendar_svc.book_safe(cal, start, dur, f"{topic or 'Meeting'} with {name}", email)
+    try: ev = calendar_svc.book_safe(cal, start, dur, f"{topic or 'Meeting'} with {name}", email)
+    except Exception:
+        raise HTTPException(502, "The calendar could not confirm this booking. Please try again.")
     st = dt.datetime.fromisoformat(start)
-    s.add(Booking(persona_id=p.id, conversation_id="direct", guest_name=name, guest_email=email, start=start,
+    s.add(Booking(persona_id=p.id, conversation_id=b.conversation_id or "direct", guest_name=name, guest_email=email, start=start,
                   end=(st + dt.timedelta(minutes=dur)).isoformat()[:16], topic=topic, calendar_event_id=ev))
-    s.add(Lead(persona_id=p.id, conversation_id="direct", name=name, contact=email, intent=topic or "Booked a meeting"))
+    s.add(Lead(persona_id=p.id, conversation_id=b.conversation_id or "direct", name=name, contact=email, intent=topic or "Booked a meeting"))
     s.commit(); return {"booked": True, "label": calendar_svc.label(st), "minutes": dur, "meet": getattr(cal, "meet_link", "")}
 
 LANG_NAMES = {"hinglish": "Hinglish: Hindi and English mixed, written ONLY in Latin script (e.g. \"Haan, main free hoon, kal 10 baje call kar lete hain\"). Never Devanagari, never pure English",
@@ -508,6 +521,19 @@ Profile links:
 Knowledge:
 {k}"""
 
+def booking_context(s, conv):
+    """Extract reversible booking context from the active conversation."""
+    email = ""
+    name = conv.visitor_name if conv.visitor_name not in ("", "Visitor", "Voice caller") else ""
+    for m in conv.messages:
+        text = m.text or ""
+        hit = re.search(r"[\w.+-]+@[\w-]+\.[\w.-]+", text)
+        if hit: email = hit.group(0)
+        if not name:
+            hit = re.search(r"(?:my name is|i am|i'm|mera naam)\s+([A-Za-z][A-Za-z .'-]{1,59})", text, re.I)
+            if hit: name = hit.group(1).strip(" .")[:60]
+    return {"name": name, "email": email}
+
 async def run_tool(s, p, conv, name, args):
     owner = s.get(Owner, p.owner_id); cal = calendar_svc.for_owner(owner, s)
     rules = calendar_svc.rules_of(p); dur = int(rules["duration"])
@@ -516,24 +542,48 @@ async def run_tool(s, p, conv, name, args):
     s.commit()
     if name == "check_availability":
         days = min(int(args.get("days") or 7), 30)
-        slots = calendar_svc.generate(rules, calendar_svc.all_busy(cal, bookings, days), days=days, limit=8, per_day=3)
+        requested_date = str(args.get("date") or "")[:10]
+        slots = calendar_svc.generate(rules, calendar_svc.all_busy(cal, bookings, days), days=days, limit=200, per_day=8)
+        if requested_date:
+            slots = [x for x in slots if x["start"].startswith(requested_date)]
+        tod = str(args.get("time_of_day") or "").lower()
+        if tod:
+            bounds = (5, 12) if "morning" in tod else (12, 17) if "afternoon" in tod else (17, 22) if "evening" in tod else None
+            if bounds: slots = [x for x in slots if bounds[0] <= int(x["start"][11:13]) < bounds[1]]
+        slots = slots[:8]
         lang = conv.language or "en-IN"
         for x in slots: x["say"] = calendar_svc.local_label(dt.datetime.fromisoformat(x["start"]), lang)
         return {"slots": [{"start": x["start"], "say": x["say"]} for x in slots], "meeting_minutes": dur,
                 "note": "When naming a slot, copy its 'say' text exactly, character for character. Do not translate, reorder or recompute days, dates or times." if slots else "No free slots in that range."}
     if name == "book_meeting":
-        start = args["start"][:16]
+        context = booking_context(s, conv)
+        guest_name = str(args.get("guest_name") or context["name"]).strip()[:60]
+        guest_email = str(args.get("guest_email") or context["email"]).strip()[:160]
+        if not guest_name or not guest_email:
+            missing = "name" if not guest_name else "email address"
+            return {"booked": False, "booking_status": "needs_details", "missing": missing,
+                    "message": f"I need your {missing} before I can book this."}
+        start = str(args.get("start") or "")[:16]
+        if not re.match(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$", start):
+            return {"booked": False, "booking_status": "needs_slot", "message": "Please select one of the available slots."}
+        duplicate = s.scalar(select(Booking).where(Booking.persona_id == p.id, Booking.start == start))
+        if duplicate:
+            return {"booked": False, "booking_status": "conflict", "error": "That slot has already been booked. Please choose another available slot."}
         if not calendar_svc.is_valid(rules, calendar_svc.all_busy(cal, bookings, 30), start):
             alt = calendar_svc.generate(rules, calendar_svc.all_busy(cal, bookings, 7), limit=4)
-            return {"booked": False, "error": "That time is outside availability or already taken.", "alternatives": alt}
-        ev = calendar_svc.book_safe(cal, start, dur, f"{args.get('topic') or 'Meeting'} with {args.get('guest_name')}", args.get("guest_email", ""))
+            return {"booked": False, "booking_status": "conflict", "error": "That time is outside availability or already taken.", "alternatives": alt}
+        try:
+            ev = calendar_svc.book_safe(cal, start, dur, f"{args.get('topic') or 'Meeting'} with {guest_name}", guest_email)
+        except Exception as e:
+            log.warning("calendar booking failed: %s", type(e).__name__)
+            return {"booked": False, "booking_status": "calendar_error", "error": "The calendar could not confirm that booking. Please choose another slot or try again."}
         st = dt.datetime.fromisoformat(start)
-        s.add(Booking(persona_id=p.id, conversation_id=conv.id, guest_name=args.get("guest_name", ""), guest_email=args.get("guest_email", ""),
+        s.add(Booking(persona_id=p.id, conversation_id=conv.id, guest_name=guest_name, guest_email=guest_email,
                       start=start, end=(st + dt.timedelta(minutes=dur)).isoformat()[:16], topic=args.get("topic", ""), calendar_event_id=ev))
-        if conv.visitor_name in ("", "Visitor", "Voice caller") and args.get("guest_name"): conv.visitor_name = args["guest_name"][:60]
+        if conv.visitor_name in ("", "Visitor", "Voice caller") and guest_name: conv.visitor_name = guest_name
         if not s.scalar(select(Lead).where(Lead.conversation_id == conv.id)):  # a booking is always a lead
-            s.add(Lead(persona_id=p.id, conversation_id=conv.id, name=args.get("guest_name", ""), contact=args.get("guest_email", ""), intent=args.get("topic") or "Booked a meeting"))
-        s.commit(); return {"booked": True, "label": st.strftime("%a %d %b, %I:%M %p IST"), "minutes": dur}
+            s.add(Lead(persona_id=p.id, conversation_id=conv.id, name=guest_name, contact=guest_email, intent=args.get("topic") or "Booked a meeting"))
+        s.commit(); return {"booked": True, "booking_status": "confirmed", "label": st.strftime("%a %d %b, %I:%M %p IST"), "minutes": dur, "timezone": "Asia/Kolkata", "calendar_event_id": ev}
     if name == "capture_lead":
         s.add(Lead(persona_id=p.id, conversation_id=conv.id, name=args.get("name", ""), contact=args.get("contact", ""), intent=args.get("intent", "")))
         if conv.visitor_name in ("", "Visitor", "Voice caller") and args.get("name"): conv.visitor_name = args["name"][:60]
@@ -574,7 +624,9 @@ def plain(t: str) -> str:
 async def agent_reply(s, p, conv, text, voice_mode=False):
     history = [m for m in conv.messages if m.role in ("visitor", "persona", "owner")][-12:]
     ctx = rag.search(list(s.scalars(select(Chunk).where(Chunk.persona_id == p.id))), text)
-    # The provider call can take seconds. Release the request's DB connection first.
+    # Do not hold a Neon connection while waiting on an external model. The
+    # RAG read is complete; tool execution and the model call can acquire a
+    # connection only when they actually need one.
     s.commit()
     msgs = [{"role": "system", "content": system_prompt(p, ctx, conv.language, voice_mode)}]
     msgs += [{"role": "user" if m.role == "visitor" else "assistant", "content": m.text} for m in history]
@@ -589,13 +641,22 @@ async def agent_reply(s, p, conv, text, voice_mode=False):
             args = json.loads(c["function"].get("arguments") or "{}")
             res = await run_tool(s, p, conv, c["function"]["name"], args)
             tools_used.append({"name": c["function"]["name"], "args": args, "result": res})
+            if c["function"]["name"] == "book_meeting":
+                if res.get("booked"):
+                    return (f"Your meeting is confirmed for {res['label']} ({res.get('timezone', 'Asia/Kolkata')}).", tools_used, provider, [c.source for _, c in ctx])
+                if res.get("booking_status") in {"needs_details", "needs_slot", "calendar_error", "conflict"}:
+                    return (res.get("message") or res.get("error") or "I could not confirm that slot. Please choose another available time.", tools_used, provider, [c.source for _, c in ctx])
             msgs.append({"role": "tool", "tool_call_id": c["id"], "content": json.dumps(res)})
     return "Let me get back to you on that.", tools_used, provider, []
 
 def get_conv(s, p, cid, visitor_name, channel):
     conv = s.get(Conversation, cid) if cid else None
     if not conv or conv.persona_id != p.id:
-        conv = Conversation(persona_id=p.id, visitor_name=visitor_name or "Visitor", channel=channel); s.add(conv); s.commit()
+        conv = Conversation(persona_id=p.id, visitor_name=visitor_name or "Visitor", channel=channel)
+        s.add(conv)
+        # Assign the id without an extra round-trip. The visitor message and
+        # conversation row are committed together in handle_turn().
+        s.flush()
     return conv
 
 HINGLISH = set("""kya hai hain aap aapka aapki apka tum tera mera meri mujhe hum kitna kitne kaise kaisa kab kahan kyun kaun
@@ -629,16 +690,20 @@ async def rewrite_lang(reply, lang):
     except Exception: return None
 
 async def handle_turn(s, p, conv, text, voice_mode=False):
-    s.add(Message(conversation_id=conv.id, role="visitor", text=text)); conv.updated_at = now(); s.commit(); s.refresh(conv)
+    turn_started = time.perf_counter()
+    s.add(Message(conversation_id=conv.id, role="visitor", text=text)); conv.updated_at = now(); s.commit()
+    log.info("chat_stage=visitor_saved latency_ms=%s", round((time.perf_counter() - turn_started) * 1000))
     await hub.send(conv.id, {"type": "message", "role": "visitor", "text": text})
     if conv.takeover:
         return None, [], "owner", []
     reply, tools, provider, sources = await agent_reply(s, p, conv, text, voice_mode)
+    log.info("chat_stage=agent_reply latency_ms=%s provider=%s", round((time.perf_counter() - turn_started) * 1000), provider)
     reply = repair_slots(plain(reply), tools)
     if reply and conv.language in LANG_NAMES and not matches_lang(reply, conv.language):
         reply = repair_slots(plain(await rewrite_lang(reply, conv.language) or reply), tools)
     s.add(Message(conversation_id=conv.id, role="persona", text=reply, meta=json.dumps({"tools": tools, "provider": provider, "sources": sources})))
-    s.commit(); s.refresh(conv)
+    s.commit()
+    log.info("chat_stage=response_saved latency_ms=%s", round((time.perf_counter() - turn_started) * 1000))
     await hub.send(conv.id, {"type": "message", "role": "persona", "text": reply, "tools": tools})
     # Summarization is dashboard metadata, not part of the visitor's response.
     # Run it after the response path so a second provider call cannot hold the

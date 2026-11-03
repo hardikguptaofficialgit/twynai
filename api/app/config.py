@@ -19,21 +19,26 @@ def _db_url():
     if u.startswith("postgresql+psycopg://") and "sslmode=" not in u:
         u += ("&" if "?" in u else "?") + "sslmode=require"
     return u
+
+def _secret(name: str) -> str:
+    """Normalize Secret Manager/env values without ever logging their contents."""
+    return os.getenv(name, "").strip()
+
 DATABASE_URL = _db_url()
-GNANI_API_KEY = os.getenv("GNANI_API_KEY", "")
+GNANI_API_KEY = _secret("GNANI_API_KEY")
 GNANI_BASE = os.getenv("GNANI_BASE_URL", "https://api.vachana.ai")
 GNANI_TTS_MODEL = os.getenv("GNANI_TTS_MODEL", "timbre-v3.0")
 GNANI_DEFAULT_VOICE = os.getenv("GNANI_DEFAULT_VOICE", "Shivani")
-NVIDIA_API_KEY = os.getenv("NVIDIA_API_KEY", "")
+NVIDIA_API_KEY = _secret("NVIDIA_API_KEY")
 NVIDIA_MODEL = os.getenv("NVIDIA_MODEL", "openai/gpt-oss-20b")
-META_API_KEY = os.getenv("META_API_KEY", "")
+META_API_KEY = _secret("META_API_KEY")
 META_MODEL = os.getenv("META_MODEL", "muse-spark-1.3")
-GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
+GROQ_API_KEY = _secret("GROQ_API_KEY")
 GROQ_MODEL = os.getenv("GROQ_MODEL", "openai/gpt-oss-120b")
-OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY", "")
+OPENROUTER_API_KEY = _secret("OPENROUTER_API_KEY")
 OPENROUTER_MODEL = os.getenv("OPENROUTER_MODEL", "openai/gpt-4o-mini")
 GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID", "")
-GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET", "")
+GOOGLE_CLIENT_SECRET = _secret("GOOGLE_CLIENT_SECRET")
 WEB_ORIGIN = os.getenv("WEB_ORIGIN", "http://localhost:3100")
 GOOGLE_REDIRECT_URI = os.getenv("GOOGLE_REDIRECT_URI", "http://localhost:8100/api/auth/google/callback")
 UPLOAD_DIR = Path(os.getenv("UPLOAD_DIR", str(Path(__file__).resolve().parents[1] / "uploads")))

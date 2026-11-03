@@ -66,9 +66,11 @@ export type Owner = {
 
 export type Persona = {
   id: string; handle: string; name: string; headline: string; bio: string; rates: string;
-  faqs: { q: string; a: string }[]; links: { label: string; url: string }[]; tone: string; accent: string; has_voice: boolean; languages?: string[];
-  avatar_url?: string;
+  faqs: { q: string; a: string }[]; links: { label: string; url: string }[]; tone: string; accent: string; has_voice: boolean; languages?: string[]; availability?: any; published?: boolean;
+  avatar_url?: string; avatar_style?: AvatarStyle; avatar_background?: string;
 };
+
+export type AvatarStyle = "lorelei-neutral" | "notionists-neutral" | "micah" | "big-smile" | "initial-face";
 
 export const ACCENTS: Record<string, { soft: string; deep: string }> = {
   lilac: { soft: "#d9cdf6", deep: "#8b74d6" },

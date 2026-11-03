@@ -133,11 +133,16 @@ def for_owner(owner, session=None):
     return MockCalendar()
 
 def book_safe(cal, *a):
-    """Book on Google; if Google fails (revoked token, API off), keep the booking locally so the visitor isn't lost."""
-    try: return cal.book(*a)
+    """Book on the configured calendar and propagate failures.
+
+    A local/mock id is only valid when the owner explicitly has no connected
+    Google calendar. A Google failure must never be converted into a success.
+    """
+    try:
+        return cal.book(*a)
     except Exception as e:
         if hasattr(cal, "mark"): cal.mark(classify(e))
-        return MockCalendar().book(*a)
+        raise
 
 def all_busy(cal, bookings, days):
     now = dt.datetime.now(IST)

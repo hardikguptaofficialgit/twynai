@@ -81,9 +81,9 @@ def test_llm_provider_order_and_models(monkeypatch):
     monkeypatch.setattr(llm.config, "GROQ_API_KEY", "groq-test")
     monkeypatch.setattr(llm.config, "OPENROUTER_API_KEY", "router-test")
     chain = llm.providers()
-    assert [p[0] for p in chain] == ["meta", "nvidia", "groq", "openrouter"]
+    assert [p[0] for p in chain] == ["meta", "groq", "nvidia", "openrouter"]
     assert chain[0][3] == "muse-spark-1.3"
-    assert chain[1][3] == "openai/gpt-oss-20b"
+    assert chain[1][3] == "openai/gpt-oss-120b"
 
 def test_llm_provider_chain_skips_unconfigured(monkeypatch):
     from app import llm

@@ -2,7 +2,8 @@
     import Link from "next/link";
     import { motion } from "motion/react";
     import clsx from "clsx";
-    import { ReactNode } from "react";
+    import { ReactNode, useEffect, useState } from "react";
+    import { api, token } from "@/lib/api";
 
     export const W = "mx-auto w-[min(1040px,calc(100%-2rem))]";
 
@@ -81,6 +82,8 @@
 
     export function Nav({ right }: { right?: ReactNode }) {
       const a = "hidden rounded-full px-2.5 py-1 text-[13px] text-ink-soft transition-colors hover:text-ink sm:block";
+      const [account, setAccount] = useState<any>(null);
+      useEffect(() => { if (token()) api("/api/me/personas").then((ps) => setAccount(ps?.[0] || { empty: true })).catch(() => setAccount(null)); }, []);
       return (
         <header className="nav-shell sticky top-0 z-30 bg-canvas/82 backdrop-blur-xl">
           <div className={`${W} flex h-12 items-center justify-between`}>
@@ -90,8 +93,13 @@
             </div>
             <nav className="flex items-center gap-1 text-[13px]">
               {right ?? (<>
-                <Link className="rounded-full px-2.5 py-1 text-ink-soft transition-colors hover:text-ink" href="/login">Sign in</Link>
-                <Link href="/login?next=/onboarding" className="ml-1 inline-flex h-7 items-center rounded-full bg-ink px-3 text-[12.5px] font-medium text-canvas transition-colors hover:bg-ink-soft">Create Your Twin</Link>
+                {account && !account.empty ? <>
+                  <Link className="rounded-full px-2.5 py-1 text-ink-soft transition-colors hover:text-ink" href={`/p/${account.handle}`}>View your Twin</Link>
+                  <Link href="/studio" className="ml-1 inline-flex h-7 items-center rounded-full bg-ink px-3 text-[12.5px] font-medium text-canvas transition-colors hover:bg-ink-soft">Open Studio</Link>
+                </> : <>
+                  <Link className="rounded-full px-2.5 py-1 text-ink-soft transition-colors hover:text-ink" href="/login">Sign in</Link>
+                  <Link href="/login?next=/onboarding" className="ml-1 inline-flex h-7 items-center rounded-full bg-ink px-3 text-[12.5px] font-medium text-canvas transition-colors hover:bg-ink-soft">Create Your Twin</Link>
+                </>}
               </>)}
             </nav>
           </div>

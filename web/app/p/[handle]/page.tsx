@@ -3,7 +3,7 @@ import Image from "next/image";
 import { useEffect, useRef, useState } from "react";
 import { useParams } from "next/navigation";
 import { motion, AnimatePresence } from "motion/react";
-import { ArrowUpRight, Check, Clock, Microphone as Mic, PaperPlaneRight as Send, ChatCircle as MessageSquare, Waveform as AudioLines, Stop as Square, CalendarCheck, UserPlus, MagnifyingGlass as Search, Plus, X } from "@phosphor-icons/react";
+import { ArrowUpRight, Check, Clock, Microphone as Mic, PaperPlaneRight as Send, ChatCircle as MessageSquare, Waveform as AudioLines, Stop as Square, CalendarCheck, UserPlus, MagnifyingGlass as Search, SquaresFour, X } from "@phosphor-icons/react";
 import { api, API, connectWs, Persona, ACCENTS, encodeWav } from "@/lib/api";
 import { Backdrop, Logo, Pill, TwynLoader } from "@/components/ui";
 import { Orb } from "@/components/Orb";
@@ -255,10 +255,10 @@ export default function PublicPersona() {
 
   const first = p.name.split(" ")[0];
   const initials = p.name.split(" ").map((w) => w[0]).join("").slice(0, 2);
-  const avatarImage = p.avatar_url ? `${API}${p.avatar_url}` : profileAvatarUrl(p.name);
+  const avatarImage = p.avatar_url ? `${API}${p.avatar_url}` : profileAvatarUrl(p.name, p.avatar_style, p.avatar_background);
   const share = typeof window !== "undefined" ? window.location.href : "";
   const TABS = [["chat", "Chat", MessageSquare], ["voice", "Talk", AudioLines], ["book", "Book", CalendarCheck]] as const;
-  const modeContent = mode === "book" ? <BookPanel handle={handle} first={first} />
+  const modeContent = mode === "book" ? <BookPanel handle={handle} first={first} conversationId={cid} />
     : mode === "voice" ? (
       <div className="flex flex-1 flex-col items-center justify-center gap-4 bg-paper-2/30 p-3 md:p-6">
         <div className="glass flex w-full max-w-[560px] flex-1 flex-col items-center justify-center gap-4 rounded-[30px] p-6 md:p-8">
@@ -280,7 +280,7 @@ export default function PublicPersona() {
       </div>
     ) : (
       <>
-        <div className="flex-1 space-y-3 overflow-y-auto px-3 py-4">
+        <div data-lenis-prevent="true" className="twyn-scrollbar min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-contain px-3 py-4">
           {msgs.length === 0 && (
             <div className="mx-auto mt-10 max-w-sm text-center">
               <div className="mx-auto w-fit"><Orb size={64} color={accent.soft} deep={accent.deep} initials={initials} image={avatarImage} /></div>
@@ -298,6 +298,15 @@ export default function PublicPersona() {
                   {m.role === "owner" && <div className="mb-0.5 text-[11px] font-medium text-peach-deep">{p.name} (live)</div>}
                   <div className={m.role === "visitor" ? "rounded-2xl rounded-br-md bg-ink px-3.5 py-2 text-[13.5px] leading-relaxed text-canvas" : "hairline whitespace-pre-wrap rounded-2xl rounded-bl-md px-3.5 py-2 text-[13.5px] leading-relaxed"} style={m.role === "visitor" ? {} : { background: m.role === "owner" ? "#f8dacb" : "#fbfbfd" }}>{m.text}</div>
                   {m.tools && m.tools.length > 0 && <div className="mt-1.5 flex flex-wrap gap-1">{m.tools.map((t, j) => { const [l, I, tone] = TOOL_LABEL[t.name] || [t.name, Search, "white"]; return <Pill key={j} tone={tone}><I size={11} />{l}</Pill>; })}</div>}
+                  {(m.tools || []).flatMap((t) => t.name === "check_availability" ? (t.result?.slots || []) : []).length > 0 && (
+                    <div className="mt-2 grid gap-1.5 sm:grid-cols-2">
+                      {(m.tools || []).flatMap((t) => t.name === "check_availability" ? (t.result?.slots || []) : []).map((slot: { start: string; say: string }) => (
+                        <button key={slot.start} type="button" onClick={() => send(`Please book the ${slot.say} slot (${slot.start}).`)} disabled={busy} className="hairline rounded-xl bg-white/85 px-3 py-2 text-left text-[12px] text-ink-soft transition hover:bg-lilac disabled:opacity-50">
+                          <span className="block font-medium text-ink">{slot.say}</span><span className="text-[10.5px]">Select this time</span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </motion.div>
             ))}
@@ -369,7 +378,9 @@ export default function PublicPersona() {
           </div>
           <div className="hair-t" />
 
-          {modeContent}
+          <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+            {modeContent}
+          </div>
         </section>
       </div>
       <div className="lg:hidden">
@@ -378,7 +389,7 @@ export default function PublicPersona() {
             initial={{ opacity: 0, scale: .8, y: 12 }} animate={{ opacity: 1, scale: 1, y: 0 }} whileTap={{ scale: .94 }}
             type="button" aria-label="Open connection actions" onClick={() => setMobileActionOpen(true)}
             className="fixed bottom-[calc(1rem+env(safe-area-inset-bottom))] right-4 z-40 grid h-14 w-14 place-items-center rounded-full bg-ink text-canvas shadow-[0_10px_25px_oklch(22%_0.025_285/0.2)]">
-            <Plus size={23} weight="regular" />
+            <SquaresFour size={21} weight="fill" />
           </motion.button>}
         </AnimatePresence>
 
@@ -419,22 +430,27 @@ export default function PublicPersona() {
 }
 
 type Slot = { start: string; label: string };
-function BookPanel({ handle, first }: { handle: string; first: string }) {
-  const [data, setData] = useState<{ minutes: number; slots: Slot[] } | null>(null);
+function BookPanel({ handle, first, conversationId }: { handle: string; first: string; conversationId: string }) {
+  const cacheKey = `twyn-slots-${handle}`;
+  const [data, setData] = useState<{ minutes: number; slots: Slot[] } | null>(() => {
+    if (typeof window === "undefined") return null;
+    try { return JSON.parse(sessionStorage.getItem(cacheKey) || "null"); } catch { return null; }
+  });
+  const [loading, setLoading] = useState(false);
   const [day, setDay] = useState("");
   const [pick, setPick] = useState("");
   const [f, setF] = useState({ name: "", email: "", topic: "" });
   const [state, setState] = useState<{ busy?: boolean; err?: string; done?: string }>({});
-  const load = () => api(`/api/p/${handle}/slots`).then((d) => { setData(d); setDay(d.slots[0]?.start.slice(0, 10) || ""); }).catch(() => setData({ minutes: 30, slots: [] }));
+  const load = () => { setLoading(true); return api(`/api/p/${handle}/slots?days=14`).then((d) => { setData(d); setDay(d.slots[0]?.start.slice(0, 10) || ""); try { sessionStorage.setItem(cacheKey, JSON.stringify(d)); } catch {} }).catch(() => { if (!data) setData({ minutes: 30, slots: [] }); }).finally(() => setLoading(false)); };
   useEffect(() => { load(); }, [handle]); // eslint-disable-line react-hooks/exhaustive-deps
   const days = Array.from(new Set((data?.slots || []).map((s) => s.start.slice(0, 10))));
   const fmt = (d: string, o: Intl.DateTimeFormatOptions) => new Date(d + "T12:00:00").toLocaleDateString("en-IN", o);
   async function book(e: React.FormEvent) {
     e.preventDefault(); setState({ busy: true });
-    try { const r = await api(`/api/p/${handle}/book`, { method: "POST", body: JSON.stringify({ start: pick, ...f }) }); setState({ done: r.label }); }
+    try { const r = await api(`/api/p/${handle}/book`, { method: "POST", body: JSON.stringify({ start: pick, ...f, conversation_id: conversationId }) }); setState({ done: r.label }); }
     catch (x: any) { setState({ err: String(x?.message || "Could not book.") }); load(); setPick(""); }
   }
-  if (!data) return <div className="grid flex-1 place-items-center"><div className="h-6 w-6 animate-spin rounded-full border-2 border-rule border-t-ink" /></div>;
+  if (!data) return <div className="grid flex-1 place-items-center"><div className="text-center"><div className="mx-auto h-6 w-6 animate-spin rounded-full border-2 border-rule border-t-ink" /><p className="mt-2 text-[12px] text-ink-mute">Checking available times…</p></div></div>;
   if (state.done) return (
     <div className="grid flex-1 place-items-center p-6 text-center">
       <div><div className="mx-auto grid h-11 w-11 place-items-center rounded-full bg-mint text-mint-deep"><Check size={18} weight="bold" /></div>
@@ -442,7 +458,8 @@ function BookPanel({ handle, first }: { handle: string; first: string }) {
         <p className="mt-1 text-[13px] text-ink-soft">{state.done} with {first}, {data.minutes} min. An invite is on its way to {f.email}.</p></div>
     </div>);
   return (
-    <div className="grid flex-1 gap-4 overflow-y-auto p-4 md:grid-cols-[minmax(0,1fr)_260px]">
+    <div data-lenis-prevent="true" className="twyn-scrollbar relative grid min-h-0 flex-1 gap-4 overflow-y-auto overscroll-contain p-4 md:grid-cols-[minmax(0,1fr)_260px]">
+      {loading && <div className="pointer-events-none absolute right-4 top-3 z-10 rounded-full border border-rule bg-white/85 px-2.5 py-1 text-[11px] text-ink-mute">Updating times…</div>}
       <div>
         <div className="flex items-baseline justify-between"><h3 className="text-[15px] font-medium">Pick a time</h3><span className="flex items-center gap-1 text-[12px] text-ink-mute"><Clock size={12} />{data.minutes} min, IST</span></div>
         {days.length === 0 ? <p className="mt-6 text-[13px] text-ink-mute">No open times this week. Ask in chat and {first} will get back to you.</p> : <>

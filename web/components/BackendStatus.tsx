@@ -1,10 +1,11 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { API } from "@/lib/api";
 
 export default function BackendStatus() {
   const [unavailable, setUnavailable] = useState(false);
+  const failures = useRef(0);
 
   const check = useCallback(async () => {
     if (!navigator.onLine) {
@@ -13,15 +14,18 @@ export default function BackendStatus() {
     }
 
     const controller = new AbortController();
-    const timeout = window.setTimeout(() => controller.abort(), 4000);
+    const timeout = window.setTimeout(() => controller.abort(), 8000);
     try {
-      const response = await fetch(`${API}/api/health/db`, {
+      const response = await fetch(`${API}/api/health`, {
         cache: "no-store",
         signal: controller.signal,
       });
-      setUnavailable(!response.ok);
+      if (response.ok) {
+        failures.current = 0;
+        setUnavailable(false);
+      } else if (++failures.current >= 2) setUnavailable(true);
     } catch {
-      setUnavailable(true);
+      if (++failures.current >= 2) setUnavailable(true);
     } finally {
       window.clearTimeout(timeout);
     }

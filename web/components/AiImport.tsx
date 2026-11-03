@@ -21,7 +21,7 @@ const enc = encodeURIComponent(AI_PROMPT);
 const AIS = [
   { k: "ChatGPT", logo: "/brands/chatgpt-dark.svg", url: `https://chatgpt.com/?q=${enc}` },
   { k: "Claude", logo: "/brands/claude.svg", url: `https://claude.ai/new?q=${enc}` },
-  { k: "Gemini", logo: "https://cdn.jsdelivr.net/npm/@thesvg/icons/icons/google-gemini.svg", url: "https://gemini.google.com/app", copy: true },
+  { k: "Gemini", logo: "/brands/gemini.svg", url: "https://gemini.google.com/app", copy: true },
   { k: "Grok", logo: "/brands/grok.svg", url: `https://grok.com/?q=${enc}` },
   { k: "Perplexity", logo: "/brands/perplexity.svg", url: `https://www.perplexity.ai/search?q=${enc}` },
 ];

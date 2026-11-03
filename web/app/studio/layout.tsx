@@ -3,7 +3,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState, ReactNode } from "react";
 import clsx from "clsx";
-import { SquaresFour, UserCircle, Waveform, CalendarBlank, CalendarCheck, Users, ChatCircle, GearSix, SidebarSimple, ArrowSquareOut, Warning, SignOut } from "@phosphor-icons/react";
+import { SquaresFour, UserCircle, Waveform, CalendarBlank, CalendarCheck, Users, ChatCircle, GearSix, SidebarSimple, ArrowSquareOut, Warning, SignOut, X } from "@phosphor-icons/react";
 import { api, API } from "@/lib/api";
 import { useOwner } from "@/lib/useOwner";
 import { Backdrop, Mark, TwynLoader } from "@/components/ui";
@@ -36,12 +36,20 @@ export default function StudioLayout({ children }: { children: ReactNode }) {
   const { toast, view } = useToasts();
   const [dirty, setDirty] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
+  const [calendarPrompt, setCalendarPrompt] = useState(false);
   useEffect(() => { setCollapsed(localStorage.getItem("twyn_sidebar") === "1"); }, []);
   useEffect(() => { if (loaded && !persona) r.replace("/onboarding"); }, [loaded, persona, r]);   // new users finish onboarding first
+  const availabilityReady = Boolean(persona?.availability?.days?.length && persona?.availability?.start && persona?.availability?.end && persona.availability.start < persona.availability.end);
+  useEffect(() => {
+    if (!me?.id || !persona?.published || (me.calendar_status === "connected" && availabilityReady)) return;
+    const key = `twyn-calendar-prompt-${me.id}`;
+    if (!localStorage.getItem(key)) setCalendarPrompt(true);
+  }, [me?.id, me?.calendar_status, persona?.published, availabilityReady]);
 
   const guard = (e: React.MouseEvent) => { if (dirty && !confirm("You have unsaved changes. Leave without saving?")) e.preventDefault(); else setDirty(false); };
   const active = (h: string) => (h === "/studio" ? path === h : path.startsWith(h));
   async function logout() { await api("/api/auth/logout", { method: "POST" }).catch(() => {}); localStorage.removeItem("proxy_token"); r.replace("/login"); }
+  function dismissCalendarPrompt() { if (me?.id) localStorage.setItem(`twyn-calendar-prompt-${me.id}`, "1"); setCalendarPrompt(false); }
   const st = me?.calendar_status;
 
   if (!me || !loaded || !persona) return <main className="grid min-h-screen place-items-center text-[13px] text-ink-mute"><Backdrop /><TwynLoader label="Loading your studio" /></main>;
@@ -78,6 +86,14 @@ export default function StudioLayout({ children }: { children: ReactNode }) {
           {children}
         </div>
       </div>
+      {calendarPrompt && <div className="fixed inset-0 z-[60] grid place-items-center bg-ink/20 p-4 backdrop-blur-[2px]" role="dialog" aria-modal="true" aria-labelledby="calendar-prompt-title">
+        <div className="w-full max-w-[440px] rounded-[26px] border border-rule bg-canvas p-5 shadow-[0_18px_60px_oklch(22%_0.025_285/0.18)]">
+          <div className="flex items-start justify-between gap-4"><div className="grid h-11 w-11 place-items-center rounded-2xl bg-mint text-mint-deep"><CalendarCheck size={22} weight="duotone" /></div><button type="button" aria-label="Dismiss calendar prompt" onClick={dismissCalendarPrompt} className="grid h-8 w-8 place-items-center rounded-full border border-rule bg-white text-ink-soft hover:text-ink"><X size={15} /></button></div>
+          <p className="eyebrow mt-5">Your schedule</p><h2 id="calendar-prompt-title" className="display mt-1 text-[27px]">{me.calendar_status === "connected" ? "Set your availability" : "Want Twyn to manage your schedule?"}</h2><p className="mt-2 text-[13.5px] leading-relaxed text-ink-soft">{me.calendar_status === "connected" ? "Your calendar is connected. Add the hours and days people can book you." : "Connect Google Calendar and configure availability anytime from Studio."}</p>
+          <div className="mt-5 flex flex-wrap gap-2">{me.calendar_status !== "connected" && <a href={`${API}/api/auth/google/login?next=${encodeURIComponent("/studio/settings")}&calendar=1`} onClick={dismissCalendarPrompt} className="inline-flex h-9 items-center rounded-full bg-ink px-4 text-[13px] font-medium text-canvas">Connect Calendar</a>}<Link href="/studio/availability" onClick={dismissCalendarPrompt} className="clay-sm inline-flex h-9 items-center bg-white px-4 text-[13px] font-medium">Set Availability</Link></div>
+          <button type="button" onClick={dismissCalendarPrompt} className="mt-4 text-[12px] text-ink-mute underline underline-offset-4 hover:text-ink">Maybe later</button>
+        </div>
+      </div>}
       <nav className="glass fixed inset-x-2 bottom-2 z-40 flex justify-around p-1 md:hidden" style={{ borderRadius: 18 }}>
         {NAV.filter((n) => MOBILE.includes(n.href)).map(({ href, label, I }) => (
           <Link key={href} href={href} onClick={guard} className={clsx("flex flex-1 flex-col items-center gap-0.5 rounded-xl py-1.5 text-[10.5px]", active(href) ? "bg-white font-medium text-ink" : "text-ink-soft")}>

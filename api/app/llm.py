@@ -1,5 +1,5 @@
-"""LLM provider chain: Meta -> NVIDIA -> Groq -> OpenRouter -> mock."""
-import json, re, httpx, logging, math, time
+"""LLM provider chain: Meta -> Groq -> NVIDIA -> OpenRouter -> mock."""
+import asyncio, json, re, httpx, logging, math, time
 from datetime import datetime, timezone
 from . import config
 from .db import SessionLocal, ProviderSpend, engine
@@ -12,6 +12,7 @@ META_OUTPUT_LIMIT = 700
 META_INPUT_PER_MILLION_USD = 1.25
 META_OUTPUT_PER_MILLION_USD = 4.25
 COMPLETE_DEADLINE_SECONDS = 12
+META_ATTEMPT_TIMEOUT_SECONDS = 1.5
 
 def _reserve_meta(messages, tools=None):
     # Reserve by UTF-8 byte count (a conservative token upper bound) before sending.
@@ -55,9 +56,25 @@ def _settle_meta(reservation, usage=None, charge_reserve=False):
     finally:
         s.close()
 
+async def _reserve_meta_async(messages, tools=None):
+    """Reserve budget without blocking the FastAPI event loop or chat latency."""
+    try:
+        return await asyncio.wait_for(asyncio.to_thread(_reserve_meta, messages, tools), timeout=0.5)
+    except Exception as e:
+        log.warning("Meta spend reservation skipped: %s", type(e).__name__)
+        return None
+
+def _settle_meta_background(reservation, usage=None, charge_reserve=False):
+    if reservation:
+        asyncio.create_task(asyncio.to_thread(_settle_meta, reservation, usage, charge_reserve))
+
 TOOLS = [
     {"type": "function", "function": {"name": "check_availability", "description": "List the owner's free meeting slots for the next days.",
-        "parameters": {"type": "object", "properties": {"days": {"type": "integer", "description": "How many days ahead, default 5"}}}}},
+        "parameters": {"type": "object", "properties": {
+            "days": {"type": "integer", "description": "How many days ahead, default 7"},
+            "date": {"type": "string", "description": "Requested local date in YYYY-MM-DD if the visitor named one"},
+            "time_of_day": {"type": "string", "description": "Morning, afternoon, or evening if the visitor specified it"}
+        }}}},
     {"type": "function", "function": {"name": "book_meeting", "description": "Book a meeting on the owner's calendar in one of the free slots.",
         "parameters": {"type": "object", "properties": {"start": {"type": "string", "description": "ISO start time from check_availability"},
             "guest_name": {"type": "string"}, "guest_email": {"type": "string"}, "topic": {"type": "string"}}, "required": ["start", "guest_name"]}}},
@@ -67,9 +84,11 @@ TOOLS = [
 
 def providers():
     out = []
+    # Groq is the low-latency path for visitor chat. Keep every configured
+    # provider in the chain so tool calls and provider outages still fail over.
     if config.META_API_KEY: out.append(("meta", "https://api.meta.ai/v1/chat/completions", config.META_API_KEY, config.META_MODEL))
-    if config.NVIDIA_API_KEY: out.append(("nvidia", "https://integrate.api.nvidia.com/v1/chat/completions", config.NVIDIA_API_KEY, config.NVIDIA_MODEL))
     if config.GROQ_API_KEY: out.append(("groq", "https://api.groq.com/openai/v1/chat/completions", config.GROQ_API_KEY, config.GROQ_MODEL))
+    if config.NVIDIA_API_KEY: out.append(("nvidia", "https://integrate.api.nvidia.com/v1/chat/completions", config.NVIDIA_API_KEY, config.NVIDIA_MODEL))
     if config.OPENROUTER_API_KEY: out.append(("openrouter", "https://openrouter.ai/api/v1/chat/completions", config.OPENROUTER_API_KEY, config.OPENROUTER_MODEL))
     return out
 
@@ -82,28 +101,39 @@ async def complete(messages, tools=None):
             log.warning("LLM completion deadline reached; using fallback")
             break
         reservation = None
+        started = time.perf_counter()
         try:
             body = {"model": model, "messages": messages, "temperature": 0.4}
-            if name in ("nvidia", "meta"): body["max_tokens"] = META_OUTPUT_LIMIT
-            if name == "nvidia": body["reasoning_effort"] = "low"
+            if name in ("nvidia", "meta"):
+                body["max_tokens"] = META_OUTPUT_LIMIT
+                # Keep visitor chat/tool turns responsive. Meta's default reasoning
+                # depth is much higher than these short, retrieval-backed turns need.
+                body["reasoning_effort"] = "minimal" if name == "meta" else "low"
             if tools: body["tools"] = tools
-            reservation = _reserve_meta(messages, tools) if name == "meta" else None
-            timeout = min(12 if name == "nvidia" else 30, max(1.0, remaining))
+            reservation = await _reserve_meta_async(messages, tools) if name == "meta" else None
+            # Meta remains the primary provider, but a slow first provider must
+            # not hold a visitor request for the entire chain deadline. Groq
+            # is the configured low-latency fallback.
+            provider_timeout = META_ATTEMPT_TIMEOUT_SECONDS if name == "meta" else (12 if name == "nvidia" else 8)
+            timeout = min(provider_timeout, max(1.0, remaining))
             async with httpx.AsyncClient(timeout=timeout) as c:
-                r = await c.post(url, headers={"Authorization": f"Bearer {key}"}, json=body)
+                r = await asyncio.wait_for(c.post(url, headers={"Authorization": f"Bearer {key}"}, json=body), timeout=timeout)
             r.raise_for_status()
             data = r.json()
             if name == "meta":
-                _settle_meta(reservation, data.get("usage"), charge_reserve=True)
+                _settle_meta_background(reservation, data.get("usage"), charge_reserve=True)
                 reservation = None
             message = data["choices"][0]["message"]
             if not message.get("content") and not message.get("tool_calls"):
                 log.warning("provider %s returned an empty completion; trying the next provider", name)
                 continue
+            log.info("llm_provider=%s latency_ms=%s success=true", name, round((time.perf_counter() - started) * 1000))
             return message, name
         except Exception as e:
-            if name == "meta" and reservation: _settle_meta(reservation)
-            log.warning("provider %s failed: %s", name, e)
+            if name == "meta" and reservation: _settle_meta_background(reservation)
+            status = getattr(getattr(e, "response", None), "status_code", None)
+            suffix = f" status={status}" if status is not None else ""
+            log.warning("provider %s failed: %s%s latency_ms=%s", name, type(e).__name__, suffix, round((time.perf_counter() - started) * 1000))
     return mock_complete(messages, tools), "mock"
 
 # ---------- mock brain: deterministic, uses retrieved context + emits real tool calls ----------
@@ -165,15 +195,18 @@ async def stream(messages, tools=None):
     for name, url, key, model in providers():
         sent, content, calls = False, "", {}
         reservation, usage = None, None
+        started = time.perf_counter()
         try:
             body = {"model": model, "messages": messages, "temperature": 0.4, "stream": True}
             if name in ("nvidia", "meta"): body["max_tokens"] = META_OUTPUT_LIMIT
             if name == "nvidia": body["reasoning_effort"] = "low"
             if tools: body["tools"] = tools
             if name == "meta":
-                reservation = _reserve_meta(messages, tools)
+                reservation = await _reserve_meta_async(messages, tools)
                 body["stream_options"] = {"include_usage": True}
-            timeout = 12 if name == "nvidia" else 30
+                body["reasoning_effort"] = "minimal"
+            provider_timeout = META_ATTEMPT_TIMEOUT_SECONDS if name == "meta" else (12 if name == "nvidia" else 8)
+            timeout = provider_timeout
             async with httpx.AsyncClient(timeout=httpx.Timeout(timeout, read=timeout)) as c:
                 async with c.stream("POST", url, headers={"Authorization": f"Bearer {key}"}, json=body) as r:
                     r.raise_for_status()
@@ -193,14 +226,15 @@ async def stream(messages, tools=None):
                             slot["function"]["name"] += f.get("name") or ""
                             slot["function"]["arguments"] += f.get("arguments") or ""
             if name == "meta":
-                _settle_meta(reservation, usage, charge_reserve=True)
+                _settle_meta_background(reservation, usage, charge_reserve=True)
                 reservation = None
             yield "done", {"content": content, "tool_calls": [calls[i] for i in sorted(calls)], "provider": name}
+            log.info("llm_stream_provider=%s latency_ms=%s success=true", name, round((time.perf_counter() - started) * 1000))
             return
         except Exception as e:
             if name == "meta" and reservation:
-                _settle_meta(reservation, usage, charge_reserve=sent)
-            log.warning("stream %s failed: %s", name, e)
+                _settle_meta_background(reservation, usage, charge_reserve=sent)
+            log.warning("stream %s failed: %s latency_ms=%s", name, type(e).__name__, round((time.perf_counter() - started) * 1000))
             if sent:
                 yield "done", {"content": content, "tool_calls": [], "provider": name}; return
     m, prov = await complete(messages, tools)
