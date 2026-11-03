@@ -6,7 +6,7 @@ import clsx from "clsx";
 import { SquaresFour, UserCircle, Waveform, CalendarBlank, CalendarCheck, Users, ChatCircle, GearSix, SidebarSimple, ArrowSquareOut, Warning, SignOut } from "@phosphor-icons/react";
 import { api, API } from "@/lib/api";
 import { useOwner } from "@/lib/useOwner";
-import { Backdrop, Mark } from "@/components/ui";
+import { Backdrop, Mark, TwynLoader } from "@/components/ui";
 import { StudioCtx, useToasts, useOverview } from "./ctx";
 
 const NAV = [
@@ -43,7 +43,7 @@ export default function StudioLayout({ children }: { children: ReactNode }) {
   async function logout() { await api("/api/auth/logout", { method: "POST" }).catch(() => {}); localStorage.removeItem("proxy_token"); r.replace("/login"); }
   const st = me?.calendar_status;
 
-  if (!me || !loaded || !persona) return <main className="grid min-h-screen place-items-center text-[13px] text-ink-mute"><Backdrop />Loading your studio...</main>;
+  if (!me || !loaded || !persona) return <main className="grid min-h-screen place-items-center text-[13px] text-ink-mute"><Backdrop /><TwynLoader label="Loading your studio" /></main>;
 
   return (
     <StudioCtx.Provider value={{ me, setMe, reloadMe, persona, reload, ov, loadOv, toast, dirty, setDirty }}>
@@ -72,7 +72,7 @@ export default function StudioLayout({ children }: { children: ReactNode }) {
           {st && CAL_MSG[st] && (
             <div className="mx-4 mt-3 flex flex-wrap items-center gap-2 rounded-xl bg-butter/70 px-3 py-2 text-[12.5px] md:mx-6">
               <Warning size={15} /><span className="flex-1">{CAL_MSG[st]}</span>
-              {st !== "api_disabled" && <a href={`${API}/api/auth/google/login?next=${encodeURIComponent(path)}`} className="rounded-full bg-ink px-3 py-1 text-[12px] font-medium text-canvas">Reconnect</a>}
+              {st !== "api_disabled" && <a href={`${API}/api/auth/google/login?next=${encodeURIComponent(path)}&calendar=1`} className="rounded-full bg-ink px-3 py-1 text-[12px] font-medium text-canvas">Reconnect</a>}
             </div>)}
           {children}
         </div>

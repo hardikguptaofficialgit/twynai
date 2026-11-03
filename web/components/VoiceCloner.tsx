@@ -5,7 +5,7 @@ import { api, API, encodeWav, token } from "@/lib/api";
 import { Orb } from "@/components/Orb";
 
 /** Record in the browser (15 to 30 s, script to read) or upload a clip; clone with Gnani; re-clone any time. */
-export function VoiceCloner({ d, set, ensurePersona, script }: { d: any; set: (p: any) => void; ensurePersona?: () => Promise<string | null>; script: string }) {
+export function VoiceCloner({ d, set, ensurePersona, script = "Hi, this is my voice sample. Thanks for listening." }: { d: any; set: (p: any) => void; ensurePersona?: () => Promise<string | null>; script?: string }) {
   const [rec, setRec] = useState(false);
   const [secs, setSecs] = useState(0);
   const [level, setLevel] = useState(0);
@@ -83,7 +83,7 @@ export function VoiceCloner({ d, set, ensurePersona, script }: { d: any; set: (p
         pid = await ensurePersona();
       }
       if (!pid) {
-        setErr("Please complete Step 1 (Handle) before cloning your voice.");
+        setErr("Sign in at the final step to save your voice sample. You can skip this for now.");
         return;
       }
 
@@ -216,9 +216,9 @@ export function VoiceCloner({ d, set, ensurePersona, script }: { d: any; set: (p
 
           {/* Error Status - Never green checkmark! */}
           {err && (
-            <p className="mt-3 flex items-center gap-1.5 text-sm text-peach-deep">
-              <X size={14} weight="bold" />
-              {err}
+            <p role="alert" className="mt-3 flex items-start gap-2 rounded-xl border border-peach-deep/20 bg-peach/25 px-3 py-2.5 text-[12.5px] leading-relaxed text-peach-deep">
+              <X size={15} weight="bold" className="mt-0.5 shrink-0" />
+              <span>{err}</span>
             </p>
           )}
 

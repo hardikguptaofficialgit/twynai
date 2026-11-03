@@ -1,0 +1,50 @@
+services:
+  api:
+    image: twyn-api:staged
+    container_name: twyn-api
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      PORT: "8100"
+      UPLOAD_DIR: /data/uploads
+    ports:
+      - "127.0.0.1:8100:8100"
+    dns:
+      - 1.1.1.1
+    volumes:
+      - twyn-data:/data
+    mem_limit: 2g
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8100/api/health/db', timeout=4)"
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 90s
+
+  cloudflare-quick-tunnel:
+    image: cloudflare/cloudflared:latest
+    command: tunnel --no-autoupdate --url http://api:8100
+    profiles: [quick-tunnel]
+    restart: "no"
+    dns: [1.1.1.1]
+    depends_on:
+      api:
+        condition: service_healthy
+
+  cloudflare-named-tunnel:
+    image: cloudflare/cloudflared:latest
+    command: tunnel --no-autoupdate run --token ${CLOUDFLARE_TUNNEL_TOKEN:-}
+    profiles: [named-tunnel]
+    restart: unless-stopped
+    dns: [1.1.1.1]
+    depends_on:
+      api:
+        condition: service_healthy
+
+volumes:
+  twyn-data:

@@ -1,0 +1,26 @@
+# Kabir Sharma — Background, Services & Architecture Philosophy
+
+## Personal & Career Background
+I am Kabir Sharma, a full-stack founding engineer and AI product consultant based in Bengaluru, India. Over the last 6 years, I have helped seed and Series-A venture-backed startups take technical products from initial whiteboard architecture to 100k+ active users.
+
+Previously, I was a Lead Product Engineer at a B2B SaaS analytics company where I built high-throughput event processing pipelines using FastAPI, PostgreSQL, and Redis. Later, I joined an early-stage fintech startup as founding engineer, leading the web architecture and automated KYC verification workflows.
+
+Currently, I run independent technical consulting and sprint-based MVP engineering for early founders, design studios, and product teams building with LLMs and real-time voice AI.
+
+## Core Technical Competencies
+- Frontend Architecture: Next.js (App Router), React 19, TypeScript, Tailwind CSS, Web Audio API, Framer Motion.
+- Backend & Systems: Python (FastAPI, AsyncIO, SQLAlchemy, Pydantic), Node.js, REST & SSE streaming, WebSocket architectures.
+- AI & LLM Systems: Retrieval-Augmented Generation (RAG), vector similarity search, function calling, prompt engineering, speech-to-text (STT) and voice synthesis (TTS) integrations with Gnani and OpenAI.
+- Databases & Infrastructure: PostgreSQL (pgvector, Neon serverless, Supabase), Redis, Docker, Cloudflare Workers, AWS.
+
+## Services, Consulting & Pricing
+- Rapid MVP Build Sprint: ₹75,000 to ₹1,50,000 for a 2-week end-to-end prototype build (database, backend API, authenticated frontend, and core AI workflows).
+- Architecture & Codebase Review: ₹4,000 for a 45-minute focused strategy session with actionable written recommendations.
+- Fractional Lead Engineer / Advisory: ₹60,000 per month (includes weekly architecture syncs, PR reviews, and technical hiring guidance).
+- Free 15-minute introductory discovery calls are available for founders with active projects.
+
+## Working Style & Collaboration Guidelines
+- Timezone: Indian Standard Time (IST, UTC+05:30). Open to overlapping async hours for US and European teams.
+- Availability: Available Monday to Friday, 10:00 AM to 6:30 PM IST.
+- Communication: Async-first via Slack/Notion; focused video calls for kickoff and sprint milestones.
+- Open Source & Side Projects: Regular contributor to open-source developer tooling and creator of interactive developer micro-tools.

@@ -3,7 +3,7 @@ import { Suspense, useEffect, useState, useCallback } from "react";
 import { useSearchParams } from "next/navigation";
 import { motion } from "motion/react";
 import { ChatCircle as MessageSquare, Hand, PaperPlaneRight as Send } from "@phosphor-icons/react";
-import { api, WS } from "@/lib/api";
+import { api, connectWs } from "@/lib/api";
 import { Button, Card, Pill } from "@/components/ui";
 import { useStudio, Page, Empty, Skeleton, ago } from "../ctx";
 
@@ -16,7 +16,7 @@ function Conversations() {
   const [conv, setConv] = useState<any>(null);
   const [reply, setReply] = useState("");
   const loadConv = useCallback(async () => { if (sel) try { setConv(await api(`/api/conversations/${sel}`)); } catch { toast("Could not load conversation", "err"); } }, [sel]); // eslint-disable-line
-  useEffect(() => { loadConv(); if (!sel) return; const ws = new WebSocket(`${WS}/ws/conversations/${sel}`); ws.onmessage = () => loadConv(); return () => ws.close(); }, [sel, loadConv]);
+  useEffect(() => { loadConv(); if (!sel) return; return connectWs(`/ws/conversations/${sel}`, () => loadConv()); }, [sel, loadConv]);
   useEffect(() => { if (!sel && ov?.conversations?.[0] && window.innerWidth >= 1024) setSel(ov.conversations[0].id); }, [ov, sel]);
   async function takeover(on: boolean) { try { await api(`/api/conversations/${sel}/takeover`, { method: "POST", body: JSON.stringify({ on }) }); toast(on ? "You are live in this chat" : "Handed back to Twyn"); loadConv(); } catch (e: any) { toast(e.message, "err"); } }
   async function send() { if (!reply.trim()) return; try { await api(`/api/conversations/${sel}/reply`, { method: "POST", body: JSON.stringify({ text: reply }) }); setReply(""); loadConv(); } catch (e: any) { toast(e.message, "err"); } }

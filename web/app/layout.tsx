@@ -4,6 +4,7 @@ const tamil = Noto_Sans_Tamil({ subsets: ["tamil"], variable: "--font-tamil", we
 const deva = Noto_Sans_Devanagari({ subsets: ["devanagari"], variable: "--font-deva", weight: ["400", "500"] });
 import "./globals.css";
 import SmoothScroll from "@/components/SmoothScroll";
+import BackendStatus from "@/components/BackendStatus";
 
 const disp = Gloock({ subsets: ["latin"], weight: "400", variable: "--font-disp", display: "swap" });
 const body = Hanken_Grotesk({ subsets: ["latin"], weight: ["400", "500", "700"], variable: "--font-body", display: "swap" });
@@ -33,7 +34,8 @@ export default function RootLayout({
     <html lang="en" className={`${disp.variable} ${body.variable} ${jb.variable} ${tamil.variable} ${deva.variable}`}>
       <body
         className={`antialiased`}
-      ><SmoothScroll>
+        suppressHydrationWarning
+      ><BackendStatus /><SmoothScroll>
         {children}
       </SmoothScroll></body>
     </html>

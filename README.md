@@ -6,14 +6,14 @@ Share one link (`/p/<handle>`) and visitors can chat or talk to your AI persona.
 - web/: Next.js 15 (App Router, TS), Tailwind v4, Framer Motion
 - api/: FastAPI with WebSockets, SQLAlchemy (SQLite now, Supabase/Postgres via DATABASE_URL)
 - Voice: Gnani Prisma v3 STT (`/stt/v3`), Timbre TTS, voice-clone embeddings
-- LLM: Groq, then OpenRouter, then a built-in mock (OpenAI-compatible tool calls)
+- LLM: NVIDIA NIM, Groq, OpenRouter, Meta Model API, then a built-in mock (OpenAI-compatible tool calls)
 - Calendar: Google freeBusy/events, with a mock fallback
 
 ## Architecture
 ```
 Browser (Next.js, /p/<handle>)                 FastAPI (api/, port 8100)
   Chat  ── POST /api/p/{h}/chat ─────────────►  handle_turn: RAG (fastembed, multilingual) -> LLM with tools
-  Talk  ── POST /api/p/{h}/voice/stream ─────►  Gnani Prisma STT -> Groq tokens (streamed) -> Gnani Timbre SSE
+  Talk  ── POST /api/p/{h}/voice/stream ─────►  Gnani Prisma STT -> NVIDIA/Groq/OpenRouter/Meta tokens (streamed) -> Gnani Timbre SSE
         ◄─ NDJSON: transcript, text, audio (PCM16 24 kHz), done{latency}     tools: get_slots, book, capture_lead
 Studio/Dashboard ── WS /ws/conversations/{id} ►  live view + owner takeover
                                                 SQLite (SQLAlchemy; Postgres/Supabase via DATABASE_URL)
@@ -46,6 +46,7 @@ Full numbers in `gnani_live/RESULTS.md`.
 - Uploads are size-capped (`MAX_AUDIO_BYTES` 8 MB, `MAX_DOC_BYTES` 10 MB), filenames are sanitized, chat text is capped at `MAX_TEXT_CHARS`.
 - Dev sign-in is for local demos; set `ALLOW_DEV_LOGIN=0` in production once Google sign-in is configured.
 - Keys live only in `api/.env` (gitignored) and are never logged.
+- LLM provider order is NVIDIA, Groq, OpenRouter, Meta. A provider failure before output starts falls through to the next configured provider. NVIDIA defaults to `openai/gpt-oss-20b` with low reasoning effort and a 700-token output cap; Meta defaults to `muse-spark-1.3` with a 700-token output cap. Meta usage is guarded by a persistent, conservative app-side monthly budget (`META_MONTHLY_BUDGET_USD`, default `$30`); Meta calls that could exceed the budget are skipped. Override model IDs in `api/.env`.
 
 ## Setup
 ```

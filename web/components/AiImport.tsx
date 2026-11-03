@@ -78,13 +78,13 @@ export function AiImport({ pid, onApplied, compact }: { pid?: string; onApplied?
         <p className="text-[13px] font-medium">Import from your AI assistant</p>
         <p className="text-[12.5px] text-ink-soft">Your assistant already knows a lot about you. Ask it, then paste the answer here.</p>
       </div>
-      <div className={`grid gap-2 ${compact ? "grid-cols-2 sm:grid-cols-3" : "grid-cols-2 sm:grid-cols-3 lg:grid-cols-6"}`}>
+      <div className={`grid gap-2 ${compact ? "grid-cols-2" : "grid-cols-2 sm:grid-cols-3 lg:grid-cols-6"}`}>
         {AIS.map((a) => (
           <a key={a.k} href={a.url} target="_blank" rel="noreferrer" onClick={() => { if (a.copy) copy(); }}
-            className="clay-sm flex h-9 items-center gap-2 bg-white px-3 text-[13px] font-medium hover:bg-canvas">
-            <Image src={a.logo} alt="" width={15} height={15} />Ask {a.k}<ArrowSquareOut size={12} className="ml-auto text-ink-mute" />
+            className="clay-sm flex min-w-0 h-10 items-center gap-1.5 bg-white px-2.5 text-[12.5px] font-medium text-ink hover:bg-canvas sm:gap-2 sm:px-3 sm:text-[13px]">
+            <Image src={a.logo} alt="" width={15} height={15} className="shrink-0" /><span className="min-w-0 flex-1 whitespace-nowrap">Ask {a.k}</span><ArrowSquareOut size={12} className="shrink-0 text-ink-mute" />
           </a>))}
-        <button onClick={copy} className="clay-sm flex h-9 items-center gap-2 bg-white px-3 text-[13px] font-medium hover:bg-canvas">{copied ? <Check size={14} /> : <Copy size={14} />}{copied ? "Copied" : "Copy prompt"}</button>
+        <button onClick={copy} className="clay-sm flex min-w-0 h-10 items-center gap-1.5 bg-white px-2.5 text-[12.5px] font-medium text-ink hover:bg-canvas sm:gap-2 sm:px-3 sm:text-[13px]">{copied ? <Check size={14} className="shrink-0" /> : <Copy size={14} className="shrink-0" />}<span className="whitespace-nowrap">{copied ? "Copied" : "Copy prompt"}</span></button>
       </div>
       <p className="text-[11.5px] text-ink-mute">Gemini does not accept a prefilled prompt, so the prompt is copied for you to paste.</p>
       {!prev ? <>

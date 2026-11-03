@@ -6,6 +6,7 @@ node_modules/
 .wrangler/
 .env
 *.db
+*.tar
 api/uploads/
 shots/
 .gnani_key

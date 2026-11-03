@@ -1,5 +1,6 @@
 import time
 import hashlib
+import hashlib
 import hmac
 import re
 import json, base64, re, datetime as dt, asyncio, urllib.parse, uuid
@@ -11,12 +12,12 @@ from fastapi.responses import RedirectResponse, StreamingResponse
 from pydantic import BaseModel
 from sqlalchemy import select
 from . import config, rag, llm, voice, calendar_svc, storage
-from .db import SessionLocal, init_db, Owner, Persona, Chunk, Conversation, Message, Lead, Booking, AuthSession, row, now
+from .db import SessionLocal, Owner, Persona, Chunk, DocumentAsset, Conversation, Message, Lead, Booking, AuthSession, row, now
 
 import logging
 log = logging.getLogger("proxy")
 app = FastAPI(title="Twyn AI API")
-app.add_middleware(CORSMiddleware, allow_origins=[o.strip() for o in __import__("os").getenv("CORS_ORIGINS", "*").split(",")], allow_methods=["*"], allow_headers=["*"])
+app.add_middleware(CORSMiddleware, allow_origins=config.CORS_ORIGINS, allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
 
 # ---------------- realtime hub (visitor + owner sockets per conversation) ----------------
 class Hub:
@@ -85,6 +86,10 @@ def public_owner(o):
 class DevLogin(BaseModel):
     email: str
     name: str = ""
+
+@app.get("/")
+def root():
+    return {"ok": True, "service": "Twyn AI API", "docs": "/docs", "version": "1.0.0"}
 
 @app.get("/api/health")
 def health(): return {"ok": True, "modes": config.modes()}
@@ -219,7 +224,11 @@ def google_disconnect(o=Depends(current_owner), s=Depends(db)):
 def delete_account(o=Depends(current_owner), s=Depends(db)):
     from sqlalchemy import delete
     pids = [p.id for p in s.scalars(select(Persona).where(Persona.owner_id == o.id))]
-    for M in (Chunk, Lead, Booking):
+    assets = list(s.scalars(select(DocumentAsset).where(DocumentAsset.persona_id.in_(pids))))
+    for asset in assets:
+        try: storage.delete(asset.object_path)
+        except Exception: log.exception("Failed to remove document object during account deletion: %s", asset.id)
+    for M in (Chunk, DocumentAsset, Lead, Booking):
         s.execute(delete(M).where(M.persona_id.in_(pids)))
     cids = [c.id for c in s.scalars(select(Conversation).where(Conversation.persona_id.in_(pids)))]
     s.execute(delete(Message).where(Message.conversation_id.in_(cids)))
@@ -281,7 +290,12 @@ def update_persona(pid: str, b: PersonaIn, o=Depends(current_owner), s=Depends(d
 def list_docs(pid: str, o=Depends(current_owner), s=Depends(db)):
     owned(s, pid, o); out = defaultdict(int)
     for c in s.scalars(select(Chunk).where(Chunk.persona_id == pid, Chunk.source.like("doc:%"))): out[c.source[4:]] += 1
-    return [{"name": k, "chunks": v} for k, v in out.items()]
+    assets = {a.original_name: a for a in s.scalars(select(DocumentAsset).where(DocumentAsset.persona_id == pid)).all()}
+    return [{"name": k, "chunks": v, "document_id": assets[k].id if k in assets else None,
+             "size_bytes": assets[k].size_bytes if k in assets else None,
+             "content_type": assets[k].content_type if k in assets else None,
+             "download_url": f"/api/personas/{pid}/docs/{assets[k].id}/download" if k in assets else None}
+            for k, v in out.items()]
 
 class KnowledgeIn(BaseModel):
     entries: list   # [{title, text}]
@@ -301,20 +315,49 @@ def import_knowledge(pid: str, b: KnowledgeIn, o=Depends(current_owner), s=Depen
 @app.delete("/api/personas/{pid}/docs/{name}")
 def delete_doc(pid: str, name: str, o=Depends(current_owner), s=Depends(db)):
     p = owned(s, pid, o); n = 0
+    assets = list(s.scalars(select(DocumentAsset).where(DocumentAsset.persona_id == p.id, DocumentAsset.original_name == name)))
+    # Delete remote objects before committing the DB deletion. If storage fails,
+    # keep the metadata/chunks so the operator can retry without an orphan.
+    for asset in assets: storage.delete(asset.object_path)
     for c in s.scalars(select(Chunk).where(Chunk.persona_id == p.id, Chunk.source == "doc:" + name)): s.delete(c); n += 1
+    for asset in assets: s.delete(asset)
     s.commit(); return {"deleted": n}
+
+@app.get("/api/personas/{pid}/docs/{document_id}/download")
+def download_doc(pid: str, document_id: str, o=Depends(current_owner), s=Depends(db)):
+    from fastapi.responses import Response
+    p = owned(s, pid, o)
+    asset = s.scalar(select(DocumentAsset).where(DocumentAsset.id == document_id, DocumentAsset.persona_id == p.id))
+    if not asset or not storage.exists(asset.object_path): raise HTTPException(404, "document not found")
+    signed = storage.presigned_get(asset.object_path, content_type=asset.content_type, filename=safe_name(asset.original_name))
+    if signed: return RedirectResponse(signed, status_code=307)
+    return Response(storage.get(asset.object_path), media_type=asset.content_type,
+                    headers={"Content-Disposition": f'attachment; filename="{safe_name(asset.original_name)}"'})
 
 @app.post("/api/personas/{pid}/docs")
 async def upload_doc(pid: str, file: UploadFile = File(...), o=Depends(current_owner), s=Depends(db)):
-    p = owned(s, pid, o); data = await read_capped(file, config.MAX_DOC_BYTES); file.filename = safe_name(file.filename)
-    if file.filename.lower().endswith(".pdf"):
+    p = owned(s, pid, o); data = await read_capped(file, config.MAX_DOC_BYTES)
+    original_name = safe_name(file.filename or "document")
+    if original_name.lower().endswith(".pdf"):
         import io; from pypdf import PdfReader
         text = "\n".join((pg.extract_text() or "") for pg in PdfReader(io.BytesIO(data)).pages)
     else: text = data.decode("utf-8", "ignore")
     if not text.strip(): raise HTTPException(422, "No readable text found in document.")
     chunks = rag.chunk_text(text)
-    for c, v in zip(chunks, rag.embed_many(chunks)): s.add(Chunk(persona_id=p.id, source="doc:" + file.filename, text=c, embedding=json.dumps(v)))
-    s.commit(); return {"name": file.filename, "chunks": len(chunks)}
+    object_path = storage.put(f"personas/{p.id}/documents/{uuid.uuid4().hex}-{original_name}", data, file.content_type or "application/octet-stream")
+    try:
+        s.add(DocumentAsset(persona_id=p.id, original_name=original_name, object_path=object_path,
+                            content_type=file.content_type or "application/octet-stream", size_bytes=len(data),
+                            checksum_sha256=hashlib.sha256(data).hexdigest()))
+        for c, v in zip(chunks, rag.embed_many(chunks)):
+            s.add(Chunk(persona_id=p.id, source="doc:" + original_name, text=c, embedding=json.dumps(v)))
+        s.commit()
+    except Exception:
+        s.rollback()
+        try: storage.delete(object_path)
+        except Exception: log.exception("Failed to clean up document object after DB failure")
+        raise
+    return {"name": original_name, "chunks": len(chunks)}
 
 @app.post("/api/personas/{pid}/voice")
 async def upload_voice(pid: str, file: UploadFile = File(...), o=Depends(current_owner), s=Depends(db)):
@@ -802,29 +845,44 @@ async def owner_reply(cid: str, b: OwnerMsg, o=Depends(current_owner), s=Depends
     await hub.send(cid, {"type": "message", "role": "owner", "text": b.text}); return {"ok": True}
 
 @app.websocket("/ws/conversations/{cid}")
-async def ws_conv(ws: WebSocket, cid: str):
+async def ws_conv(ws: WebSocket, cid: str, token: str = ""):
+    if token:
+        s = SessionLocal()
+        try:
+            sess = s.get(AuthSession, token); conv = s.get(Conversation, cid)
+            if not sess or not conv or not s.scalar(select(Persona).where(Persona.id == conv.persona_id, Persona.owner_id == sess.owner_id)):
+                await ws.close(code=1008); return
+        finally:
+            s.close()
     await ws.accept(); hub.rooms[cid].add(ws)
     try:
         while True: await ws.receive_text()
     except WebSocketDisconnect: hub.rooms[cid].discard(ws)
 
-# ---------------- seed ----------------
-@app.on_event("startup")
-def seed():
-    init_db(); s = SessionLocal()
-    if not s.scalar(select(Persona).where(Persona.handle == "hardik")):
-        o = s.scalar(select(Owner).where(Owner.email == "hardikgupta8792@gmail.com")) or Owner(email="hardikgupta8792@gmail.com", name="Hardik Gupta")
-        s.add(o); s.flush()
-        p = Persona(owner_id=o.id, handle="hardik", name="Hardik Gupta", headline="Full-stack and AI engineer, KIIT University",
-            bio="I build AI products end to end: Next.js frontends, Python backends and voice agents for Indian languages. I take freelance builds and I am open to internships.",
-            rates="Freelance MVP builds start at 25,000 rupees per week. A 30 minute discovery call is free.",
-            faqs=json.dumps([{"q": "What do you work on?", "a": "Voice AI agents, full-stack web apps and LLM tooling, mostly with Next.js, FastAPI and Postgres."},
-                             {"q": "Are you available for internships?", "a": "Yes, I am open to AI and full-stack internships starting January 2027."},
-                             {"q": "Which languages can I talk to you in?", "a": "English, Hindi and Hinglish work best. My Twyn also understands Tamil, Telugu, Kannada and other Indian languages."}]),
-            links=json.dumps([{"label": "GitHub", "url": "https://github.com/"}, {"label": "LinkedIn", "url": "https://linkedin.com/"}]))
-        s.add(p); s.commit(); s.refresh(p); reindex_profile(s, p); s.commit()
-    h = s.scalar(select(Persona).where(Persona.handle == "hardik"))
-    if h and not h.published: h.published = True; h.onboarding_step = 6; s.commit()
-    n = rag.reembed_stale(s, Chunk)
-    if n: print(f"re-embedded {n} chunks with {rag.embedder().name}")
-    s.close()
+def seed_demo_data(reindex=False):
+    """Explicitly seed the demo persona; never run this from application startup.
+
+    Profile reindexing and stale embedding rewrites are opt-in because they
+    delete/rewrite application data and can load the embedding model.
+    """
+    s = SessionLocal()
+    try:
+        if not s.scalar(select(Persona).where(Persona.handle == "hardik")):
+            o = s.scalar(select(Owner).where(Owner.email == "hardikgupta8792@gmail.com")) or Owner(email="hardikgupta8792@gmail.com", name="Hardik Gupta")
+            s.add(o); s.flush()
+            p = Persona(owner_id=o.id, handle="hardik", name="Hardik Gupta", headline="Full-stack and AI engineer, KIIT University",
+                bio="I build AI products end to end: Next.js frontends, Python backends and voice agents for Indian languages. I take freelance builds and I am open to internships.",
+                rates="Freelance MVP builds start at 25,000 rupees per week. A 30 minute discovery call is free.",
+                faqs=json.dumps([{"q": "What do you work on?", "a": "Voice AI agents, full-stack web apps and LLM tooling, mostly with Next.js, FastAPI and Postgres."},
+                                 {"q": "Are you available for internships?", "a": "Yes, I am open to AI and full-stack internships starting January 2027."},
+                                 {"q": "Which languages can I talk to you in?", "a": "English, Hindi and Hinglish work best. My Twyn also understands Tamil, Telugu, Kannada and other Indian languages."}]),
+                links=json.dumps([{"label": "GitHub", "url": "https://github.com/"}, {"label": "LinkedIn", "url": "https://linkedin.com/"}]))
+            s.add(p); s.commit(); s.refresh(p); reindex_profile(s, p); s.commit()
+        h = s.scalar(select(Persona).where(Persona.handle == "hardik"))
+        if h and not h.published:
+            h.published = True; h.onboarding_step = 6; s.commit()
+        if reindex:
+            n = rag.reembed_stale(s, Chunk)
+            if n: log.info("re-embedded %s chunks with %s", n, rag.embedder().name)
+    finally:
+        s.close()

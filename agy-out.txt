@@ -1,0 +1,23 @@
+I have initiated the TypeScript type check (`npx tsc --noEmit` in `web`) to verify the baseline status and will proceed with implementing the avatar, sound wave, and Orb improvements once finished.
+The task has been completed according to all requirements and rules.
+
+### Summary of Changes
+
+1. **Landing Page Call Card** ([`web/app/page.tsx`](file:///C:/Users/hardi/twyn/web/app/page.tsx#L40-L75)):
+   - Replaced `<Orb size={30} />` in [`CallCard`](file:///C:/Users/hardi/twyn/web/app/page.tsx#L40) with a 36px round avatar (`bg-lilac`, initials `"H"` in `text-ink` with `font-display`, `clay-sm` outer shadow) featuring a 12px `bg-mint` "live" dot at the bottom right.
+   - Added [`SoundWave`](file:///C:/Users/hardi/twyn/web/app/page.tsx#L18) next to the call timer (`01:42`), rendering 5 thin 2px rounded bars in pastel `var(--color-lilac-deep)` at 60% opacity with staggered framer-motion height animations.
+   - Added support for `prefers-reduced-motion` via `useReducedMotion()`.
+
+2. **Orb Component** ([`web/components/Orb.tsx`](file:///C:/Users/hardi/twyn/web/components/Orb.tsx#L5-L70)):
+   - Fixed [`Orb`](file:///C:/Users/hardi/twyn/web/components/Orb.tsx#L5) so at small sizes (`< 48px`), its bars are thin (`2px`), rounded, pastel (`deep` at 65% opacity), and never black.
+   - Proportional shadow scaling with soft outer shadows only (no inset, no glow).
+   - Rings and bars respect `prefers-reduced-motion`.
+   - Verified existing usages at sizes 64px, 72px, 88px, and 150px retain their proper rendering.
+
+3. **Verification & Delivery**:
+   - Verified types with `npx tsc --noEmit` in `web` (clean exit, 0 errors).
+   - Committed changes and pushed to `origin/master` (commit: `67593fdafdd1dda00f1d48e3b8ddcb4245a38357`).
+   - Wrote report to [twyn-report.txt](file:///C:/Users/hardi/twyn/twyn-report.txt) in the repo root (uncommitted).
+
+---
+*Skipped modifying other pages where larger orbs are intentionally used; no known risks.*

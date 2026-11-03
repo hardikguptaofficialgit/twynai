@@ -4,8 +4,8 @@ import { useEffect, useRef, useState } from "react";
 import { useParams } from "next/navigation";
 import { motion, AnimatePresence } from "motion/react";
 import { ArrowUpRight, Check, Clock, Microphone as Mic, PaperPlaneRight as Send, ChatCircle as MessageSquare, Waveform as AudioLines, Stop as Square, CalendarCheck, UserPlus, MagnifyingGlass as Search } from "@phosphor-icons/react";
-import { api, API, WS, Persona, ACCENTS, encodeWav } from "@/lib/api";
-import { Backdrop, Logo, Pill } from "@/components/ui";
+import { api, API, connectWs, Persona, ACCENTS, encodeWav } from "@/lib/api";
+import { Backdrop, Logo, Pill, TwynLoader } from "@/components/ui";
 import { Orb } from "@/components/Orb";
 
 type Msg = { role: "visitor" | "persona" | "owner"; text: string; tools?: any[] };
@@ -13,6 +13,10 @@ const TOOL_LABEL: Record<string, [string, any, string]> = {
   check_availability: ["Checked calendar", Search, "sky"], book_meeting: ["Meeting booked", CalendarCheck, "mint"], capture_lead: ["Saved as lead", UserPlus, "butter"],
 };
 const LANG: Record<string, string> = { hinglish: "Hinglish", "hi-IN": "Hindi", "ta-IN": "Tamil", "en-IN": "English", "te-IN": "Telugu", "kn-IN": "Kannada", "bn-IN": "Bengali", "mr-IN": "Marathi" };
+const linkLabel = (link: { label?: string; url: string }) => {
+  if (link.label?.trim()) return link.label.trim();
+  try { return new URL(link.url).hostname.replace(/^www\./, ""); } catch { return link.url || "Website"; }
+};
 
 export default function PublicPersona() {
   const { handle } = useParams<{ handle: string }>();
@@ -30,6 +34,7 @@ export default function PublicPersona() {
   const [lat, setLat] = useState<{ stt_ms: number; llm_ms: number; tts_ms: number; total_ms: number; client_ms: number; first_audio_ms: number } | null>(null);
   const [note, setNote] = useState("");
   const rec = useRef<MediaRecorder | null>(null);
+  const micStream = useRef<MediaStream | null>(null);
   const raf = useRef<number>(0);
   const callActive = useRef(false);
   const turnStarted = useRef(false);
@@ -42,16 +47,16 @@ export default function PublicPersona() {
     callActive.current = false;
     if (turnStopTimer.current) window.clearTimeout(turnStopTimer.current);
     if (rec.current?.state === "recording") rec.current.stop();
+    micStream.current?.getTracks().forEach((t) => t.stop());
+    micStream.current = null;
     speechSynthesis?.cancel();
     cancelAnimationFrame(raf.current);
   }, []);
   useEffect(() => {
     if (!cid) return;
-    const ws = new WebSocket(`${WS}/ws/conversations/${cid}`);
-    ws.onmessage = (e) => { const d = JSON.parse(e.data);
+    return connectWs(`/ws/conversations/${cid}`, (d) => {
       if (d.type === "takeover") setHuman(d.on);
-      if (d.type === "message" && d.role === "owner") setMsgs((m) => [...m, { role: "owner", text: d.text }]); };
-    return () => ws.close();
+      if (d.type === "message" && d.role === "owner") setMsgs((m) => [...m, { role: "owner", text: d.text }]); });
   }, [cid]);
 
   const accent = ACCENTS[p?.accent || "lilac"] || ACCENTS.lilac;
@@ -80,7 +85,8 @@ export default function PublicPersona() {
     if (rec.current?.state === "recording") return;
     setErr("");
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const stream = micStream.current?.active ? micStream.current : await navigator.mediaDevices.getUserMedia({ audio: true });
+      micStream.current = stream;
       const ctx = new AudioContext(); const source = ctx.createMediaStreamSource(stream); const analyser = ctx.createAnalyser(); analyser.fftSize = 512; source.connect(analyser);
       const samples = new Uint8Array(analyser.frequencyBinCount); const chunks: Blob[] = [];
       const r = new MediaRecorder(stream); rec.current = r;
@@ -100,7 +106,9 @@ export default function PublicPersona() {
       };
       r.onstop = async () => {
         cancelAnimationFrame(raf.current); if (turnStopTimer.current) window.clearTimeout(turnStopTimer.current); turnStopTimer.current = null;
-        source.disconnect(); await ctx.close(); stream.getTracks().forEach((t) => t.stop()); setLevel(0);
+        source.disconnect(); await ctx.close();
+        if (!callActive.current) { stream.getTracks().forEach((t) => t.stop()); if (micStream.current === stream) micStream.current = null; }
+        setLevel(0);
         if (!turnStarted.current || !chunks.length) {
           setOrb("idle");
           if (callActive.current) window.setTimeout(() => startTalk(), 300);
@@ -119,6 +127,8 @@ export default function PublicPersona() {
     callActive.current = false; speechSynthesis?.cancel(); cancelAnimationFrame(raf.current);
     if (turnStopTimer.current) window.clearTimeout(turnStopTimer.current);
     if (rec.current?.state === "recording") rec.current.stop();
+    micStream.current?.getTracks().forEach((t) => t.stop());
+    micStream.current = null;
     setOrb("idle"); setLevel(0); setNote("");
   }
 
@@ -227,7 +237,7 @@ export default function PublicPersona() {
   }
 
   if (err && !p) return <main className="grid min-h-screen place-items-center"><Backdrop /><div className="glass px-6 py-5 text-[13.5px] text-ink-soft">{err}</div></main>;
-  if (!p) return <main className="grid min-h-screen place-items-center"><Backdrop /><div className="clay h-12 w-12 animate-pulse rounded-full" /></main>;
+  if (!p) return <main className="grid min-h-screen place-items-center"><Backdrop /><TwynLoader label="Finding this Twyn" /></main>;
 
   const first = p.name.split(" ")[0];
   const initials = p.name.split(" ").map((w) => w[0]).join("").slice(0, 2);
@@ -266,10 +276,10 @@ export default function PublicPersona() {
             {p.rates && <div className="clay-pressed mt-3 px-3 py-2.5 text-[13px]"><div className="eyebrow mb-0.5">Rates</div>{p.rates}</div>}
             <button onClick={() => setMode("book")} className="mt-3 flex h-9 w-full items-center justify-center gap-2 rounded-full bg-ink text-[13px] font-medium text-canvas hover:bg-ink-soft"><CalendarCheck size={14} />Book a call</button>
           </div>
-          {p.links.length > 0 && <div className="glass p-2">
+          {p.links.length > 0 && <div className="glass space-y-1 p-3">
             {p.links.map((l) => (
-              <a key={l.url} href={l.url} target="_blank" rel="noreferrer" className="group flex h-9 items-center justify-between rounded-lg px-3 text-[13px] hover:bg-white/70">
-                <span className="truncate">{l.label}</span><ArrowUpRight size={13} className="text-ink-mute group-hover:text-ink" />
+              <a key={l.url} href={l.url} target="_blank" rel="noreferrer" className="group flex min-h-10 items-center justify-between gap-3 rounded-xl border border-rule/70 bg-white/65 px-3 py-2 text-[13px] text-ink transition-colors hover:bg-white">
+                <span className="min-w-0 flex-1 truncate font-medium text-ink">{linkLabel(l)}</span><ArrowUpRight size={14} className="shrink-0 text-ink-mute group-hover:text-ink" />
               </a>))}
           </div>}
           {p.faqs.length > 0 && <div className="glass p-4"><div className="eyebrow mb-2">Ask me</div>

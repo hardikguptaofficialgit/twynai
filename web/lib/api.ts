@@ -1,9 +1,34 @@
 export const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8100";
-export const WS = API.replace(/^http/, "ws");
+export const WS = process.env.NEXT_PUBLIC_WS_URL || API.replace(/^http/, "ws");
 
 export function token() {
   if (typeof window === "undefined") return "";
   return localStorage.getItem("proxy_token") || "";
+}
+
+export function wsUrl(path: string) {
+  const t = token();
+  return `${WS}${path}${t ? `${path.includes("?") ? "&" : "?"}token=${encodeURIComponent(t)}` : ""}`;
+}
+
+export function connectWs(path: string, onMessage: (data: any) => void) {
+  let stopped = false;
+  let attempt = 0;
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  let socket: WebSocket | undefined;
+  const open = () => {
+    if (stopped) return;
+    socket = new WebSocket(wsUrl(path));
+    socket.onopen = () => { attempt = 0; };
+    socket.onmessage = (event) => onMessage(JSON.parse(event.data));
+    socket.onclose = () => {
+      if (stopped) return;
+      const delay = Math.min(1000 * 2 ** attempt++, 10000);
+      timer = setTimeout(open, delay);
+    };
+  };
+  open();
+  return () => { stopped = true; if (timer) clearTimeout(timer); socket?.close(); };
 }
 
 export async function api<T = any>(path: string, opts: RequestInit = {}): Promise<T> {

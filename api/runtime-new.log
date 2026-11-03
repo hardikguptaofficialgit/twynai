@@ -1,0 +1,360 @@
+INFO:     Started server process [302124]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://127.0.0.1:8100 (Press CTRL+C to quit)
+INFO:     127.0.0.1:64842 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54941 - "GET /api/auth/google/login?next=%2Fonboarding HTTP/1.1" 302 Found
+INFO:     127.0.0.1:60324 - "GET /api/auth/google/login?next=%2Fonboarding HTTP/1.1" 302 Found
+INFO:     127.0.0.1:55979 - "OPTIONS /api/personas/f48388f8a3ca HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55979 - "PUT /api/personas/f48388f8a3ca HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59682 - "GET /api/auth/google/login?next=%2Fonboarding HTTP/1.1" 302 Found
+INFO:     127.0.0.1:51873 - "OPTIONS /api/me HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51873 - "GET /api/me HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51873 - "OPTIONS /api/me/personas HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51873 - "GET /api/me/personas HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51674 - "GET /api/me HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51674 - "GET /api/me/personas HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63467 - "GET /api/auth/google/login?next=%2Fonboarding HTTP/1.1" 302 Found
+INFO:     127.0.0.1:51811 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51811 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51811 - "OPTIONS /api/auth/dev HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51811 - "POST /api/auth/dev HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51811 - "GET /api/me HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51811 - "GET /api/me HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60412 - "GET /api/me/personas HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51811 - "GET /api/me HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51811 - "GET /api/me HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60412 - "GET /api/me/personas HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60412 - "GET /api/me/personas HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60412 - "GET /api/me/personas HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51811 - "GET /api/me HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60412 - "GET /api/me/personas HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51811 - "GET /api/me HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51121 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51121 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51123 - "GET /api/auth/google/login?next=&handle= HTTP/1.1" 302 Found
+INFO:     127.0.0.1:57049 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:49386 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:49698 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:64339 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:50864 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:50916 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:51005 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:65304 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:65348 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:61231 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:56720 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:56720 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:52664 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:61572 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:61572 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:53100 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:61559 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:61559 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:61658 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:58463 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:58463 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:61407 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:51376 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:51376 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:62820 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:62869 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:62869 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:54317 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:54399 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:54399 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:54818 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:58313 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:49388 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:55493 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:56831 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:64877 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:54696 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:63725 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:64305 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:60247 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:49731 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:56618 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:60275 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:62635 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:55900 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:52147 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:58591 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:58732 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:63122 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:65240 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:65091 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:65139 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:56455 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:64779 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:54034 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:59264 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:59316 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:51450 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:58071 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:51773 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:54758 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:51388 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:62353 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:62402 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:51126 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:52078 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:49386 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:52459 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:50991 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:63557 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:60544 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:53776 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:60927 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:55717 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:63395 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:63459 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:60021 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:62604 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:57140 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:55711 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:52974 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:51308 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:51355 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:59923 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:51444 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:64056 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:58493 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:57344 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:56393 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:65453 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:65498 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:49695 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:53202 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:62862 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:62910 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:55922 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:55969 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:56013 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:65409 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:58277 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:58277 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:50413 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:50451 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:50451 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:54072 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:58482 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:58482 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:56306 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:52531 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:52531 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:60226 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:60971 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:60971 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:56523 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:56570 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:56570 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:56978 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:60226 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:60226 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:57037 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:64206 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:64206 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:65390 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:56817 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:56817 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:60780 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:63215 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:63215 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:61826 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:61871 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:61800 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53664 - "GET /api/auth/google/login?next=&handle= HTTP/1.1" 302 Found
+INFO:     127.0.0.1:56672 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:54248 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:54292 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:54218 - "GET /api/auth/google/callback?state=KQ_CFshTXyHnTYE16u1GJtKhJLrOagFM&iss=https://accounts.google.com&code=4/0AUn6Hd-1Tgqsc0ZIi9a47lIzku6VFC3ZJ_U8k58TcpBTKZomTHkqUp7-CBnxHw1jQlaV-w&scope=email%20profile%20https://www.googleapis.com/auth/userinfo.profile%20https://www.googleapis.com/auth/userinfo.email%20openid%20https://www.googleapis.com/auth/calendar.events%20https://www.googleapis.com/auth/calendar.readonly&authuser=6&prompt=consent HTTP/1.1" 302 Found
+INFO:     127.0.0.1:62047 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:59734 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:59778 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:62168 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:60737 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:60737 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:60047 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:56887 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:56887 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:58537 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:51597 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:51597 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:63532 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:60143 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:60143 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:60100 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:58021 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:58021 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:57352 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:60117 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:60117 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:64345 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:64346 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:64346 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:53086 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:58203 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:58203 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:63432 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:49385 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:49385 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:51250 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:51164 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:51164 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:51260 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:60921 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:60921 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:65447 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:59305 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:59305 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:58519 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:58587 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:58587 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:54294 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:54344 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:54344 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:54440 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:56962 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:56962 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:59984 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:50864 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:50864 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:52417 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:51187 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:51187 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:54736 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:53166 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:53166 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:58076 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:55192 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:55192 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:62935 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:62982 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:62982 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:64807 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:55553 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:55553 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:62971 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:62249 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:62249 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:53608 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:49700 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:49700 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:56906 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:53160 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:53160 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:55867 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:55916 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:55916 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:55078 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:59496 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:59496 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:56545 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:62645 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:62645 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:62025 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:60138 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:60138 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:57561 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:62100 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:62100 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:57415 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:63999 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:63999 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:57291 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:63471 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:63471 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:49387 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:56991 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:56991 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:52320 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:50444 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:50444 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:64552 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:64851 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:64851 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:64938 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:54162 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:54162 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:57197 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:57225 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:57225 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:53479 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:51981 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:51981 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:52068 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:59223 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:59223 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:58882 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:58957 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:58957 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:63019 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:53659 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:53659 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:55400 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:61959 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:61959 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:64441 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:62408 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:62408 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:58396 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:61704 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:61704 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:60748 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:63916 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:63916 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:49697 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:57438 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:57438 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:59599 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:59663 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:59663 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:58029 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:59725 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:59725 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:57842 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:57085 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:57085 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:63722 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:57859 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:57859 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:55984 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:60087 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:60087 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:59225 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:64787 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:64787 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:59577 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:55897 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:55897 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:61523 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:55645 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:55645 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:59115 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:49924 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:49924 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:62205 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:60694 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:60694 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:64001 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:53616 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:53616 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:53922 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:53442 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:53442 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:53529 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:52330 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:52330 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:63333 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:64016 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:50609 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63161 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58091 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49674 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49674 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49677 - "GET /api/auth/google/login?next=&handle= HTTP/1.1" 302 Found
+INFO:     127.0.0.1:49684 - "GET /api/auth/google/callback?state=ooeflvHA6EzXNwQqZsr7Yiy7DTxTW4ZU&iss=https://accounts.google.com&code=4/0AUn6Hd80IGw7d6h-5MR3lS3JsQatgJaS9vtBbg8tzUmezjFtquWQaPs_Y2YwU71GDZyWgQ&scope=email%20profile%20https://www.googleapis.com/auth/calendar.events%20https://www.googleapis.com/auth/calendar.readonly%20https://www.googleapis.com/auth/userinfo.profile%20https://www.googleapis.com/auth/userinfo.email%20openid&authuser=0&prompt=consent HTTP/1.1" 302 Found
+INFO:     127.0.0.1:49708 - "OPTIONS /api/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49708 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49713 - "GET /api/health HTTP/1.1" 200 OK

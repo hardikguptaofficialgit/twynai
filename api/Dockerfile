@@ -1,16 +1,15 @@
-# Proxy API. Build:  docker build -t proxy-api ./api   Run: docker run -p 8100:8100 --env-file .env -v proxy-data:/data proxy-api
-FROM python:3.12-slim
-ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 PIP_NO_CACHE_DIR=1 \
-    DATABASE_URL=sqlite:////data/proxy.db UPLOAD_DIR=/data/uploads HF_HOME=/models FASTEMBED_CACHE_PATH=/models PORT=8100
+# syntax=docker/dockerfile:1
+FROM python:3.13-slim
+ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 PIP_NO_CACHE_DIR=1 PORT=8080 FASTEMBED_CACHE_PATH=/opt/fastembed HF_HOME=/opt/fastembed UPLOAD_DIR=/tmp/twyn-uploads
 WORKDIR /app
 COPY requirements.txt .
-RUN pip install -r requirements.txt
-# Bake the embedding model into the image so cold starts don't download it
-RUN python -c "from fastembed import TextEmbedding; TextEmbedding('sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2')"
+RUN pip install --no-cache-dir -r requirements.txt
+RUN mkdir -p /opt/fastembed /tmp/twyn-uploads && FASTEMBED_CACHE_PATH=/opt/fastembed python -c "from fastembed import TextEmbedding; TextEmbedding(model_name='sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2', cache_dir='/opt/fastembed')"
 COPY app ./app
-RUN useradd -u 10001 proxy && mkdir -p /data && chown -R proxy /data /models
-USER proxy
-VOLUME /data
-EXPOSE 8100
-HEALTHCHECK --interval=30s --timeout=5s CMD python -c "import urllib.request,os;urllib.request.urlopen(f'http://localhost:{os.environ[\"PORT\"]}/api/health')"
-CMD ["sh", "-c", "uvicorn app.main:app --host 0.0.0.0 --port ${PORT} --proxy-headers --forwarded-allow-ips='*'"]
+COPY alembic.ini ./alembic.ini
+COPY alembic ./alembic
+RUN useradd --system --uid 10001 --create-home twyn && chown -R twyn:twyn /app /opt/fastembed /tmp/twyn-uploads
+USER twyn
+EXPOSE 8080
+HEALTHCHECK --interval=30s --timeout=5s --start-period=90s --retries=3 CMD python -c "import os,urllib.request; urllib.request.urlopen('http://127.0.0.1:' + os.getenv('PORT','8080') + '/api/health', timeout=4)"
+CMD ["sh", "-c", "exec uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8080} --proxy-headers --forwarded-allow-ips='*' --timeout-keep-alive 75"]

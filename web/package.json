@@ -26,6 +26,7 @@
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3",
+    "@neon/config": "^1.10.0",
     "@opennextjs/cloudflare": "^1.20.15",
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
