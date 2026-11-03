@@ -1,6 +1,14 @@
 import type { Metadata } from "next";
-import { Gloock, Hanken_Grotesk, JetBrains_Mono, Noto_Sans_Tamil, Noto_Sans_Devanagari } from "next/font/google";
-const tamil = Noto_Sans_Tamil({ subsets: ["tamil"], variable: "--font-tamil", weight: ["400", "500"] });
+import { Gloock, Hanken_Grotesk, JetBrains_Mono, Noto_Sans_Devanagari } from "next/font/google";
+import localFont from "next/font/local";
+const tamil = localFont({
+  src: [
+    { path: "./fonts/NotoSansTamil-Regular.ttf", weight: "400", style: "normal" },
+    { path: "./fonts/NotoSansTamil-Medium.ttf", weight: "500", style: "normal" },
+  ],
+  variable: "--font-tamil",
+  display: "swap",
+});
 const deva = Noto_Sans_Devanagari({ subsets: ["devanagari"], variable: "--font-deva", weight: ["400", "500"] });
 import "./globals.css";
 import SmoothScroll from "@/components/SmoothScroll";

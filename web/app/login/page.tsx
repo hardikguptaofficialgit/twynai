@@ -22,7 +22,6 @@ function Login() {
           </a>
           {sp.get("error") && <p className="mt-2 text-center text-[12px] text-peach-deep">{sp.get("error")}</p>}
           {sp.get("mock") && <p className="mt-2 text-center text-[12px] text-peach-deep">Google sign-in is not configured yet. Check the app&apos;s OAuth settings.</p>}
-          <p className="mt-4 text-center text-[11.5px] text-ink-mute">New accounts are created automatically. Returning users go to their Studio.</p>
         </div>
         <p className="mt-5 flex items-center justify-center gap-1.5 text-[12px] text-ink-mute">Voice by Gnani · LLM by <Image src="/brands/groq.svg" alt="Groq" width={11} height={11} /> Groq</p>
       </div>
