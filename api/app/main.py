@@ -2,7 +2,7 @@ import time
 import hashlib
 import hmac
 import re
-import json, base64, re, datetime as dt, asyncio, urllib.parse
+import json, base64, re, datetime as dt, asyncio, urllib.parse, uuid
 from collections import defaultdict
 import httpx
 from fastapi import FastAPI, HTTPException, UploadFile, File, Form, Header, Cookie, WebSocket, WebSocketDisconnect, Depends
@@ -10,7 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse, StreamingResponse
 from pydantic import BaseModel
 from sqlalchemy import select
-from . import config, rag, llm, voice, calendar_svc
+from . import config, rag, llm, voice, calendar_svc, storage
 from .db import SessionLocal, init_db, Owner, Persona, Chunk, Conversation, Message, Lead, Booking, AuthSession, row, now
 
 import logging
@@ -76,7 +76,12 @@ def public_owner(o):
     pic = ""
     try: pic = json.loads(o.google_tokens or "{}").get("picture", "")
     except Exception: pass
-    return {k: v for k, v in row(o).items() if k != "google_tokens"} | {"google_tokens": st == "connected", "calendar_status": st, "picture": pic}
+    is_google = False
+    try:
+        tok = json.loads(o.google_tokens or "{}")
+        is_google = bool(tok.get("google_email") or tok.get("refresh_token") or tok.get("access_token") or tok.get("picture") or o.google_tokens)
+    except Exception: pass
+    return {k: v for k, v in row(o).items() if k != "google_tokens"} | {"google_tokens": st == "connected", "google_connected": is_google, "calendar_status": st, "calendar_connected": st == "connected", "picture": pic}
 class DevLogin(BaseModel):
     email: str
     name: str = ""
@@ -102,7 +107,8 @@ def dev_login(b: DevLogin, s=Depends(db)):
     sess = AuthSession(owner_id=o.id); s.add(sess); s.commit()
     return {"token": sess.id, "owner": public_owner(o)}
 
-SCOPES = "openid email profile https://www.googleapis.com/auth/calendar.events https://www.googleapis.com/auth/calendar.readonly"
+AUTH_SCOPES = "openid email profile"
+CALENDAR_SCOPES = "openid email profile https://www.googleapis.com/auth/calendar.events https://www.googleapis.com/auth/calendar.readonly"
 OAUTH_STATE_COOKIE = "twyn_oauth_state"
 OAUTH_STATE_TTL = 600
 
@@ -111,33 +117,34 @@ def _redirect_uri(): return config.GOOGLE_REDIRECT_URI
 def _safe_next(value: str) -> str:
     return value if value.startswith("/") and not value.startswith("//") else ""
 
-def _oauth_state(next_path: str) -> str:
+def _oauth_state(next_path: str, calendar: bool = False) -> str:
     """A signed, short-lived state value. The matching HttpOnly cookie binds it to the browser."""
     import secrets
-    payload = json.dumps({"iat": int(time.time()), "next": _safe_next(next_path), "nonce": secrets.token_urlsafe(12)}, separators=(",", ":")).encode()
+    payload = json.dumps({"iat": int(time.time()), "next": _safe_next(next_path), "calendar": calendar, "nonce": secrets.token_urlsafe(12)}, separators=(",", ":")).encode()
     raw = base64.urlsafe_b64encode(payload).decode().rstrip("=")
     sig = hmac.new(config.GOOGLE_CLIENT_SECRET.encode(), raw.encode(), hashlib.sha256).digest()
     return raw + "." + base64.urlsafe_b64encode(sig).decode().rstrip("=")
 
-def _read_oauth_state(state: str) -> str | None:
+def _read_oauth_state(state: str) -> dict | None:
     try:
         raw, supplied_sig = state.split(".", 1)
         expected_sig = base64.urlsafe_b64encode(hmac.new(config.GOOGLE_CLIENT_SECRET.encode(), raw.encode(), hashlib.sha256).digest()).decode().rstrip("=")
         if not hmac.compare_digest(supplied_sig, expected_sig): return None
         payload = json.loads(base64.urlsafe_b64decode(raw + "=" * (-len(raw) % 4)))
         if not isinstance(payload.get("iat"), int) or time.time() - payload["iat"] > OAUTH_STATE_TTL: return None
-        return _safe_next(str(payload.get("next", "")))
+        return {"next": _safe_next(str(payload.get("next", ""))), "calendar": payload.get("calendar") is True}
     except (ValueError, TypeError, json.JSONDecodeError):
         return None
 
 @app.get("/api/auth/google/login")
-def google_login(next: str = ""):
+def google_login(next: str = "", calendar: bool = True, auth_only: bool = False):
     if not (config.GOOGLE_CLIENT_ID and config.GOOGLE_CLIENT_SECRET): return RedirectResponse(config.WEB_ORIGIN + "/login?mock=1", status_code=302)
-    st = _oauth_state(next)
+    want_calendar = calendar and not auth_only
+    st = _oauth_state(next, want_calendar)
     q = urllib.parse.urlencode({"client_id": config.GOOGLE_CLIENT_ID, "redirect_uri": _redirect_uri(), "response_type": "code",
         # Google still shows consent when it is needed, but do not force the
         # full consent screen on every reconnect once access is already granted.
-        "scope": SCOPES, "access_type": "offline", "prompt": "select_account", "include_granted_scopes": "true", "state": st})
+        "scope": CALENDAR_SCOPES if want_calendar else AUTH_SCOPES, "access_type": "offline", "prompt": "consent select_account", "include_granted_scopes": "true", "state": st})
     response = RedirectResponse("https://accounts.google.com/o/oauth2/v2/auth?" + q, status_code=302)
     response.set_cookie(OAUTH_STATE_COOKIE, st, httponly=True, secure=config.WEB_ORIGIN.startswith("https://"), samesite="lax", max_age=OAUTH_STATE_TTL, path="/api/auth/google")
     return response
@@ -165,16 +172,29 @@ def google_callback(code: str = "", state: str = "", error: str = "", oauth_cook
     o = s.scalar(select(Owner).where(Owner.email == email))
     if not o: o = Owner(email=email, name=info.get("name", "") or email.split("@")[0]); s.add(o); s.flush()
     old = json.loads(o.google_tokens or "{}") if o.google_tokens else {}
-    if not t.get("refresh_token") and not old.get("refresh_token"):
-        return fail("Google did not grant offline access. Please sign in again and allow calendar access.")
     granted = t.get("scope", "")
-    tok = {"access_token": t.get("access_token", ""), "refresh_token": t.get("refresh_token") or old.get("refresh_token", ""),
-           "expires_at": int(time.time()) + int(t.get("expires_in", 3600)), "scope": t.get("scope", ""), "picture": info.get("picture", "")}
-    if "calendar" not in granted: tok["status"] = "needs_reconnect"   # user unticked calendar on the consent screen
+    has_cal = ("calendar" in granted)
+    rt = t.get("refresh_token") or old.get("refresh_token", "")
+    pic = info.get("picture", "") or old.get("picture", "")
+    if has_cal and rt:
+        cal_status = "connected"
+    elif requested.get("calendar") and not has_cal:
+        cal_status = "needs_reconnect"
+    else:
+        cal_status = "disconnected"
+    tok = {
+        "access_token": t.get("access_token", "") if has_cal else old.get("access_token", ""),
+        "refresh_token": rt if has_cal else (old.get("refresh_token", "") if old.get("status") == "connected" else ""),
+        "expires_at": int(time.time()) + int(t.get("expires_in", 3600)),
+        "scope": granted,
+        "picture": pic,
+        "status": cal_status,
+        "google_email": email
+    }
     o.google_tokens = json.dumps(tok)   # server-side only; never returned to the browser
     sess = AuthSession(owner_id=o.id); s.add(sess); s.commit()
     has = s.scalar(select(Persona).where(Persona.owner_id == o.id))
-    nxt = requested or ("/studio" if has and has.published else "/onboarding")
+    nxt = requested["next"] or ("/studio" if has and has.published else "/onboarding")
     response = RedirectResponse(f"{config.WEB_ORIGIN}/login?token={sess.id}&next={urllib.parse.quote(nxt, safe='/')}", status_code=302)
     response.delete_cookie(OAUTH_STATE_COOKIE, path="/api/auth/google")
     return response
@@ -186,10 +206,13 @@ def google_disconnect(o=Depends(current_owner), s=Depends(db)):
         if t.get("refresh_token") or t.get("access_token"):
             httpx.post("https://oauth2.googleapis.com/revoke", data={"token": t.get("refresh_token") or t.get("access_token")}, timeout=10)
     except Exception: pass
-    o = s.get(Owner, o.id); pic = ""
-    try: pic = json.loads(o.google_tokens or "{}").get("picture", "")
+    o = s.get(Owner, o.id); pic = ""; g_email = o.email
+    try:
+        old_tok = json.loads(o.google_tokens or "{}")
+        pic = old_tok.get("picture", "")
+        g_email = old_tok.get("google_email", o.email)
     except Exception: pass
-    o.google_tokens = json.dumps({"status": "disconnected", "picture": pic}); s.commit()
+    o.google_tokens = json.dumps({"status": "disconnected", "picture": pic, "google_email": g_email}); s.commit()
     return public_owner(o)
 
 @app.delete("/api/me")
@@ -296,16 +319,25 @@ async def upload_doc(pid: str, file: UploadFile = File(...), o=Depends(current_o
 @app.post("/api/personas/{pid}/voice")
 async def upload_voice(pid: str, file: UploadFile = File(...), o=Depends(current_owner), s=Depends(db)):
     p = owned(s, pid, o); data = await read_capped(file, config.MAX_AUDIO_BYTES); file.filename = safe_name(file.filename)
-    path = config.UPLOAD_DIR / f"{p.id}-voice-{file.filename}"; path.write_bytes(data)
-    p.voice_sample_path = str(path)
     secs = voice.wav_seconds(data)
     if secs is not None and not 5 <= secs <= 31: raise HTTPException(422, f"Sample is {secs:.0f}s. Gnani cloning needs 5 to 30 seconds.")
+    old_sample = p.voice_sample_path
+    new_sample = storage.put(f"personas/{p.id}/voice/{uuid.uuid4().hex}-{file.filename}", data, file.content_type or "application/octet-stream")
     try: p.voice_embedding = await voice.clone_embedding(data, file.filename)
     except Exception as e:
+        try: storage.delete(new_sample)
+        except Exception: log.exception("Failed to clean up an unsuccessful voice upload")
         log.exception("Voice clone error: %s", e)
         raise HTTPException(502, f"voice clone failed: {getattr(e, 'message', str(e)) or type(e).__name__}")
-    (config.UPLOAD_DIR / f"{p.id}-preview.wav").unlink(missing_ok=True)  # old preview no longer matches
-    s.commit(); return {"ok": True, "mock": not config.GNANI_API_KEY, "seconds": secs, "dims": (json.loads(p.voice_embedding).get("shape") if p.voice_embedding else None)}
+    p.voice_sample_path = new_sample
+    preview_key = f"personas/{p.id}/voice-preview.wav"
+    preview_ref = f"object://{preview_key}" if config.OBJECT_STORAGE_ENABLED else str(config.UPLOAD_DIR / preview_key)
+    if storage.exists(preview_ref): storage.delete(preview_ref)
+    s.commit()
+    if old_sample and old_sample != new_sample:
+        try: storage.delete(old_sample)
+        except Exception: log.exception("Failed to remove the replaced voice sample")
+    return {"ok": True, "mock": not config.GNANI_API_KEY, "seconds": secs, "dims": (json.loads(p.voice_embedding).get("shape") if p.voice_embedding else None)}
 
 @app.post("/api/personas/{pid}/avatar")
 async def upload_avatar(pid: str, file: UploadFile = File(...), o=Depends(current_owner), s=Depends(db)):
@@ -320,10 +352,12 @@ async def upload_avatar(pid: str, file: UploadFile = File(...), o=Depends(curren
         if data.startswith(signature): ext, media = value; break
     if data[:4] == b"RIFF" and data[8:12] == b"WEBP": ext, media = "webp", "image/webp"
     if not ext or not media: raise HTTPException(422, "Upload a JPG, PNG, or WebP image.")
-    old = _P(p.avatar_path) if p.avatar_path else None
-    path = config.UPLOAD_DIR / f"{p.id}-avatar.{ext}"
-    path.write_bytes(data); p.avatar_path = str(path); s.commit()
-    if old and old != path: old.unlink(missing_ok=True)
+    old = p.avatar_path
+    p.avatar_path = storage.put(f"personas/{p.id}/avatar.{ext}", data, media)
+    s.commit()
+    if old and old != p.avatar_path:
+        try: storage.delete(old)
+        except Exception: log.exception("Failed to remove the replaced avatar")
     return {"avatar_url": f"/api/p/{p.handle}/avatar"}
 
 @app.post("/api/personas/{pid}/voice/preview")
@@ -333,15 +367,16 @@ async def preview_voice(pid: str, o=Depends(current_owner), s=Depends(db)):
     from fastapi.responses import Response
     p = owned(s, pid, o)
     if not p.voice_embedding: raise HTTPException(400, "No voice sample yet")
-    path = config.UPLOAD_DIR / f"{p.id}-preview.wav"
-    if not path.exists():
+    path = f"personas/{p.id}/voice-preview.wav"
+    ref = f"object://{path}" if config.OBJECT_STORAGE_ENABLED else str(config.UPLOAD_DIR / path)
+    if not storage.exists(ref):
         line = f"Hi, this is {p.name.split()[0] if p.name else 'me'}'s Twyn. Thanks for reaching out, how can I help you today?"
         emb = "" if "mock" in p.voice_embedding else p.voice_embedding
         try: wav, mock = await voice.tts(line, "en-IN", emb)
         except Exception as e: raise HTTPException(502, f"preview failed: {type(e).__name__}")
         if mock: return Response(wav, media_type="audio/wav", headers={"X-Mock": "1"})
-        path.write_bytes(wav)
-    return Response(path.read_bytes(), media_type="audio/wav")
+        ref = storage.put(path, wav, "audio/wav")
+    return Response(storage.get(ref), media_type="audio/wav")
 
 # ---------------- public persona + agent loop ----------------
 @app.get("/api/p/{handle}")
@@ -354,10 +389,11 @@ def public_persona(handle: str, s=Depends(db)):
 def public_avatar(handle: str, s=Depends(db)):
     from fastapi.responses import Response
     p = s.scalar(select(Persona).where(Persona.handle == handle))
-    path = _P(p.avatar_path) if p and p.avatar_path else None
-    if not path or not path.is_file(): raise HTTPException(404, "avatar not found")
-    media = {".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".png": "image/png", ".webp": "image/webp"}.get(path.suffix.lower(), "application/octet-stream")
-    return Response(path.read_bytes(), media_type=media, headers={"Cache-Control": "public, max-age=3600"})
+    path = p.avatar_path if p and p.avatar_path else ""
+    if not path or not storage.exists(path): raise HTTPException(404, "avatar not found")
+    ext = _P(path.removeprefix("object://")).suffix.lower()
+    media = {".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".png": "image/png", ".webp": "image/webp"}.get(ext, "application/octet-stream")
+    return Response(storage.get(path), media_type=media, headers={"Cache-Control": "public, max-age=3600"})
 
 class DirectBook(BaseModel):
     start: str; name: str; email: str; topic: str = ""
@@ -627,6 +663,19 @@ async def agent_stream(s, p, conv, text, voice_mode=True):
     yield "text", "Let me get back to you on that."
     yield "done", {"content": "Let me get back to you on that.", "tools": tools_used, "provider": "fallback", "sources": []}
 
+async def summarize_conversation(conversation_id: str):
+    s = SessionLocal()
+    try:
+        conv = s.get(Conversation, conversation_id)
+        if conv:
+            transcript = "\n".join(f"{m.role}: {m.text}" for m in conv.messages)
+            conv.summary = await llm.summarize(transcript)
+            s.commit()
+    except Exception:
+        log.exception("conversation summary failed for %s", conversation_id)
+    finally:
+        s.close()
+
 @app.post("/api/p/{handle}/voice/stream")
 async def voice_stream(handle: str, audio: UploadFile = File(...), conversation_id: str = Form(""), text_hint: str = Form("")):
     """Streaming voice turn as NDJSON events: transcript, text (LLM tokens), audio (raw PCM16
@@ -712,7 +761,7 @@ async def voice_stream(handle: str, audio: UploadFile = File(...), conversation_
             await hub.send(conv.id, {"type": "message", "role": "persona", "text": reply, "tools": info["tools"]})
             lat["total_ms"] = ms()
             yield ev({"type": "done", "reply": reply, "tools": info["tools"], "provider": info["provider"], "fallback": fallback, "latency": lat, "conversation_id": conv.id})
-            s.refresh(conv); conv.summary = await llm.summarize("\n".join(f"{m.role}: {m.text}" for m in conv.messages)); s.commit()
+            asyncio.create_task(summarize_conversation(conv.id))
         finally:
             s.close()
     return StreamingResponse(gen(), media_type="application/x-ndjson", headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})

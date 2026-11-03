@@ -72,6 +72,44 @@ def test_live_reply_language(q, lang):
 def test_plain_joins_line_lists():
     assert plain("Slots this week: Monday 10 AM IST\nTuesday 11 AM IST\nLet me know.") == "Slots this week: Monday 10 AM IST; Tuesday 11 AM IST. Let me know."
 
+def test_llm_provider_order_and_models(monkeypatch):
+    from app import llm
+    monkeypatch.setattr(llm.config, "NVIDIA_API_KEY", "nvidia-test")
+    monkeypatch.setattr(llm.config, "NVIDIA_MODEL", "openai/gpt-oss-20b")
+    monkeypatch.setattr(llm.config, "META_API_KEY", "meta-test")
+    monkeypatch.setattr(llm.config, "META_MODEL", "muse-spark-1.3")
+    monkeypatch.setattr(llm.config, "GROQ_API_KEY", "groq-test")
+    monkeypatch.setattr(llm.config, "OPENROUTER_API_KEY", "router-test")
+    chain = llm.providers()
+    assert [p[0] for p in chain] == ["nvidia", "groq", "openrouter", "meta"]
+    assert chain[0][3] == "openai/gpt-oss-20b"
+    assert chain[3][3] == "muse-spark-1.3"
+
+def test_llm_provider_chain_skips_unconfigured(monkeypatch):
+    from app import llm
+    for key in ("NVIDIA_API_KEY", "META_API_KEY", "GROQ_API_KEY", "OPENROUTER_API_KEY"):
+        monkeypatch.setattr(llm.config, key, "")
+    assert llm.providers() == []
+
+def test_meta_monthly_budget_reserves_and_stops_at_cap(monkeypatch):
+    from sqlalchemy import create_engine, select
+    from sqlalchemy.orm import sessionmaker
+    from app.db import Base, ProviderSpend
+    from app import llm
+    test_engine = create_engine("sqlite://")
+    Base.metadata.create_all(test_engine)
+    monkeypatch.setattr(llm, "engine", test_engine)
+    monkeypatch.setattr(llm, "SessionLocal", sessionmaker(bind=test_engine, expire_on_commit=False))
+    monkeypatch.setattr(llm.config, "META_MONTHLY_BUDGET_USD", 0.01)
+    reservation = llm._reserve_meta([{"role": "user", "content": "hello"}])
+    assert reservation
+    llm._settle_meta(reservation, {"prompt_tokens": 1000, "completion_tokens": 1000})
+    assert llm._reserve_meta([{"role": "user", "content": "hello"}])
+    assert llm._reserve_meta([{"role": "user", "content": "hello"}]) is None
+    with sessionmaker(bind=test_engine)() as s:
+        spend = s.scalar(select(ProviderSpend))
+        assert spend.spent_micros == 5500
+
 def test_voice_lang_codemix():
     from app.main import voice_lang
     assert voice_lang("भाई, क्या हार्दिक is week एक quick call के लिए free है?", {"language": "hi-IN"}) == "hinglish"
@@ -177,8 +215,11 @@ def test_google_login_redirect(monkeypatch):
     assert r.status_code == 302
     loc = r.headers["location"]
     assert loc.startswith("https://accounts.google.com/o/oauth2/v2/auth?") and "client_id=cid.apps" in loc
-    assert "access_type=offline" in loc and "prompt=select_account" in loc and "state=" in loc and "calendar.readonly" in loc
+    assert "access_type=offline" in loc and "prompt=consent+select_account" in loc and "state=" in loc
+    assert "calendar.readonly" in loc
     assert "twyn_oauth_state=" in r.headers["set-cookie"]
+    auth_only = _client().get("/api/auth/google/login?auth_only=1", follow_redirects=False)
+    assert "calendar.readonly" not in auth_only.headers["location"]
 
 def test_google_callback_rejects_bad_state_and_denied():
     c = _client()
@@ -204,3 +245,85 @@ def test_session_token_and_logout():
     assert "google_tokens" in me and me["calendar_status"] == "not_connected"
     c.post("/api/auth/logout", headers=h)
     assert c.get("/api/me", headers=h).status_code == 401
+
+def test_google_callback_calendar_states(monkeypatch):
+    from app import config
+    from app.main import _oauth_state, OAUTH_STATE_COOKIE
+    from app.db import init_db, SessionLocal, Owner
+    init_db()
+    monkeypatch.setattr(config, "GOOGLE_CLIENT_ID", "cid.apps.googleusercontent.com")
+    monkeypatch.setattr(config, "GOOGLE_CLIENT_SECRET", "secret123")
+    
+    # Mock httpx token and userinfo responses
+    import httpx
+    
+    # Case 1: Calendar permission granted with refresh token
+    def mock_post(url, **kwargs):
+        req = httpx.Request("POST", url)
+        return httpx.Response(200, request=req, json={
+            "access_token": "ya29.fake_access",
+            "refresh_token": "1//fake_refresh",
+            "expires_in": 3600,
+            "scope": "openid email profile https://www.googleapis.com/auth/calendar.events https://www.googleapis.com/auth/calendar.readonly"
+        })
+    def mock_get(url, **kwargs):
+        req = httpx.Request("POST", url)
+        return httpx.Response(200, request=req, json={
+            "email": "user_with_cal@example.com",
+            "email_verified": True,
+            "name": "User With Cal",
+            "picture": "https://lh3.googleusercontent.com/photo.jpg"
+        })
+        
+    monkeypatch.setattr(httpx, "post", mock_post)
+    monkeypatch.setattr(httpx, "get", mock_get)
+    
+    c = _client()
+    st = _oauth_state("/onboarding", calendar=True)
+    c.cookies.set(OAUTH_STATE_COOKIE, st)
+    r = c.get(f"/api/auth/google/callback?code=mock_code&state={st}", follow_redirects=False)
+    assert r.status_code == 302
+    assert "token=" in r.headers["location"]
+    
+    # Verify owner in DB
+    s = SessionLocal()
+    o = s.query(Owner).filter(Owner.email == "user_with_cal@example.com").first()
+    assert o is not None
+    import json
+    tok = json.loads(o.google_tokens)
+    assert tok["status"] == "connected"
+    assert tok["picture"] == "https://lh3.googleusercontent.com/photo.jpg"
+    s.close()
+
+    # Case 2: User unchecks / denies calendar scope, sign-in still succeeds and calendar is disconnected
+    def mock_post_no_cal(url, **kwargs):
+        req = httpx.Request("POST", url)
+        return httpx.Response(200, request=req, json={
+            "access_token": "ya29.auth_only_access",
+            "expires_in": 3600,
+            "scope": "openid email profile"
+        })
+    def mock_get_no_cal(url, **kwargs):
+        req = httpx.Request("POST", url)
+        return httpx.Response(200, request=req, json={
+            "email": "user_no_cal@example.com",
+            "email_verified": True,
+            "name": "User No Cal",
+            "picture": ""
+        })
+        
+    monkeypatch.setattr(httpx, "post", mock_post_no_cal)
+    monkeypatch.setattr(httpx, "get", mock_get_no_cal)
+    
+    st2 = _oauth_state("/onboarding", calendar=True)
+    c.cookies.set(OAUTH_STATE_COOKIE, st2)
+    r2 = c.get(f"/api/auth/google/callback?code=mock_code_2&state={st2}", follow_redirects=False)
+    assert r2.status_code == 302
+    assert "token=" in r2.headers["location"]
+    
+    s = SessionLocal()
+    o2 = s.query(Owner).filter(Owner.email == "user_no_cal@example.com").first()
+    assert o2 is not None
+    tok2 = json.loads(o2.google_tokens)
+    assert tok2["status"] == "needs_reconnect"  # Marked as disconnected / needs_reconnect
+    s.close()

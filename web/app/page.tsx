@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { motion, useReducedMotion } from "motion/react";
 import { ArrowRight, ArrowUpRight, CalendarCheck, ChatCircle, Microphone, BookOpenText, Hand, Users, ShieldCheck, Translate, Waveform, UserPlus, MagnifyingGlass } from "@phosphor-icons/react";
 import { Backdrop, Logo, Nav, SectionHead, W } from "@/components/ui";
+import { token } from "@/lib/api";
 import HeroAscii from "@/components/bg/HeroAscii";
 import { Marquee } from "@/components/ui-kit/marquee";
 import { AnimatedList } from "@/components/ui-kit/animated-list";
@@ -45,7 +46,11 @@ function SoundWave() {
 
 function ClaimBar({ className = "" }: { className?: string }) {
   const r = useRouter(); const [h, setH] = useState("");
-  const go = () => r.push(`/onboarding?handle=${encodeURIComponent(h.toLowerCase().replace(/[^a-z0-9-]/g, ""))}`);
+  const go = () => {
+    const clean = h.toLowerCase().replace(/[^a-z0-9-]/g, "");
+    const target = token() ? `/onboarding?handle=${encodeURIComponent(clean)}` : `/login?next=${encodeURIComponent(`/onboarding?handle=${clean}`)}&handle=${encodeURIComponent(clean)}`;
+    r.push(target);
+  };
   return (
     <form onSubmit={(e) => { e.preventDefault(); go(); }} className={`clay flex w-full max-w-[22rem] items-center gap-1 p-1 ${className}`} style={{ borderRadius: 999 }}>
       <label htmlFor="claim" className="pl-3.5 font-mono text-[12.5px] text-ink-mute">twyn.ai/</label>
@@ -59,11 +64,11 @@ function ClaimBar({ className = "" }: { className?: string }) {
 }
 
 function CallCard() {
-  const lines: [string, string][] = [
-    ["them", "Bhai aapka rate kitna hai?"],
-    ["twyn", "MVP builds 25,000 rupees per week se start hote hain. Discovery call free hai."],
-    ["them", "Kal 3 baje ho sakta hai?"],
-  ];
+ const lines: [string, string][] = [
+  ["them", "Bhai, ek app banwana tha. Kitna charge karte ho?"],
+  ["twyn", "Depends on the scope. Usually we start with a quick discovery call to understand what you need."],
+  ["them", "Achha, kal 3 baje baat kar sakte hain?"],
+];
   return (
     <div className="glass p-2" style={{ borderRadius: 22 }}>
       <div className="clay flex items-center gap-3 p-3" style={{ borderRadius: 16 }}>

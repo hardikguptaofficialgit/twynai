@@ -46,6 +46,20 @@ export function Mark({ size = 24, className }: { size?: number; className?: stri
   return <img src="/brand/mark.svg" alt="" width={size} height={size} className={className} />;
 }
 
+export function TwynLoader({ label = "Getting things ready", compact = false }: { label?: string; compact?: boolean }) {
+  return (
+    <div role="status" aria-live="polite" className={`flex flex-col items-center justify-center ${compact ? "gap-2 py-8" : "min-h-[70vh] gap-3"}`}>
+      <span className={`twyn-loader-mark grid place-items-center rounded-full bg-white/80 ${compact ? "h-12 w-12" : "h-16 w-16"}`}>
+        <Mark size={compact ? 23 : 29} />
+      </span>
+      <span className="text-[12.5px] font-medium text-ink-soft">{label}</span>
+      <span aria-hidden="true" className="flex items-center gap-1.5">
+        {[0, 1, 2].map((i) => <i key={i} className="twyn-loader-dot h-1.5 w-1.5 rounded-full bg-lilac-deep" style={{ animationDelay: `${i * 160}ms` }} />)}
+      </span>
+    </div>
+  );
+}
+
 export function Logo({ href = "/" }: { href?: string }) {
   return (
     <Link href={href} aria-label="Twyn home" className="group flex items-center gap-1.5">
@@ -77,7 +91,7 @@ export function Nav({ right }: { right?: ReactNode }) {
         <nav className="flex items-center gap-1 text-[13px]">
           {right ?? (<>
             <Link className="rounded-full px-2.5 py-1 text-ink-soft transition-colors hover:text-ink" href="/login">Sign in</Link>
-            <Link href="/onboarding" className="ml-1 inline-flex h-7 items-center rounded-full bg-ink px-3 text-[12.5px] font-medium text-canvas transition-colors hover:bg-ink-soft">Get your link</Link>
+            <Link href="/login?next=/onboarding" className="ml-1 inline-flex h-7 items-center rounded-full bg-ink px-3 text-[12.5px] font-medium text-canvas transition-colors hover:bg-ink-soft">Create Your Twin</Link>
           </>)}
         </nav>
       </div>

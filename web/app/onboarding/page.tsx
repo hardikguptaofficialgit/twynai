@@ -4,10 +4,10 @@ import { useEffect, useRef, useState, Suspense } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { AnimatePresence, motion } from "motion/react";
-import { ArrowLeft, ArrowRight, Camera, Check, Copy, FileText, Link as Link2, CircleNotch as Loader2, Microphone as Mic, Plus, Stop as Square, Trash as Trash2, UploadSimple as Upload, X, ArrowSquareOut as ExternalLink, SpeakerHigh as Volume2 } from "@phosphor-icons/react";
+import { ArrowLeft, ArrowRight, Camera, Check, Copy, FileText, Link as Link2, CircleNotch as Loader2, Microphone as Mic, Plus, Stop as Square, Trash as Trash2, UploadSimple as Upload, WarningCircle, X, ArrowSquareOut as ExternalLink, SpeakerHigh as Volume2 } from "@phosphor-icons/react";
 import clsx from "clsx";
 import { api, API, encodeWav, Persona, token } from "@/lib/api";
-import { Logo, Backdrop } from "@/components/ui";
+import { Logo, Backdrop, TwynLoader } from "@/components/ui";
 import { Orb } from "@/components/Orb";
 import { VoiceCloner } from "@/components/VoiceCloner";
 import { AiImport } from "@/components/AiImport";
@@ -17,18 +17,51 @@ const LANGS: [string, string][] = [["en", "English"], ["hi", "Hindi"], ["hinglis
 const TONES = ["Warm and concise", "Friendly and casual", "Crisp and professional", "Playful"];
 const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 const DEFAULT_AVAIL = { days: [0, 1, 2, 3, 4], start: "10:00", end: "18:00", duration: 30, buffer: 15, notice: 12 };
+const AVATAR_DB = "twyn-onboarding";
+
+function storeAvatar(file?: File | null): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open(AVATAR_DB, 1);
+    req.onupgradeneeded = () => req.result.createObjectStore("draft");
+    req.onerror = () => reject(req.error);
+    req.onsuccess = () => {
+      const tx = req.result.transaction("draft", "readwrite");
+      if (file) tx.objectStore("draft").put(file, "avatar");
+      else tx.objectStore("draft").delete("avatar");
+      tx.oncomplete = () => { req.result.close(); resolve(); };
+      tx.onerror = () => { req.result.close(); reject(tx.error); };
+    };
+  });
+}
+
+function loadAvatar(): Promise<File | null> {
+  return new Promise((resolve) => {
+    const req = indexedDB.open(AVATAR_DB, 1);
+    req.onupgradeneeded = () => req.result.createObjectStore("draft");
+    req.onerror = () => resolve(null);
+    req.onsuccess = () => {
+      const get = req.result.transaction("draft").objectStore("draft").get("avatar");
+      get.onsuccess = () => { req.result.close(); resolve(get.result || null); };
+      get.onerror = () => { req.result.close(); resolve(null); };
+    };
+  });
+}
 
 type Draft = Omit<Persona, "id" | "has_voice"> & { id?: string; has_voice?: boolean; languages: string[]; availability: any; published?: boolean; onboarding_step?: number };
 const empty = (name = ""): Draft => ({ handle: "", name, headline: "", bio: "", rates: "", faqs: [], links: [], tone: TONES[0], accent: "lilac", languages: ["en", "hinglish"], availability: DEFAULT_AVAIL });
 
 const input = "field clay-pressed text-ink placeholder:text-ink-mute/70";
 
+function InlineError({ children, className = "" }: { children: React.ReactNode; className?: string }) {
+  return <p role="alert" className={`mt-2 flex items-start gap-2 rounded-xl border border-peach-deep/20 bg-peach/25 px-3 py-2.5 text-[12.5px] leading-relaxed text-peach-deep ${className}`}><WarningCircle size={16} className="mt-0.5 shrink-0" /><span>{children}</span></p>;
+}
+
 function Label({ t, hint, children, err }: any) {
   return (
     <div className="block">
-      <div className="mb-1.5 flex items-baseline justify-between"><span className="text-[13px] font-medium">{t}</span>{hint && <span className="text-[11px] text-ink-mute">{hint}</span>}</div>
+      <div className="mb-1.5 flex items-baseline justify-between"><span className={clsx("text-[13px] font-medium", err && "text-peach-deep")}>{t}</span>{hint && <span className="text-[11px] text-ink-mute">{hint}</span>}</div>
       {children}
-      {err && <p className="mt-1.5 text-xs text-peach-deep">{err}</p>}
+      {err && <InlineError>{err}</InlineError>}
     </div>
   );
 }
@@ -76,10 +109,23 @@ function OnboardingInner() {
   const [dir, setDir] = useState(1);
   const [errs, setErrs] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState("");
   const [saved, setSaved] = useState("");
   const [loaded, setLoaded] = useState(false);
   const [avatarFile, setAvatarFile] = useState<File | null>(null);
-  const set = (p: Partial<Draft>) => setD((x) => ({ ...x, ...p }));
+  const set = (p: Partial<Draft>) => {
+    setD((x) => ({ ...x, ...p }));
+    setErrs((current) => {
+      const next = { ...current };
+      for (const key of ["handle", "name", "headline", "bio", "languages"]) if (key in p) delete next[key];
+      if ("availability" in p) delete next.avail;
+      if ("links" in p) for (const key of Object.keys(next)) if (key.startsWith("link")) delete next[key];
+      return next;
+    });
+    setSaveError("");
+  };
+
+  useEffect(() => { loadAvatar().then((file) => { if (file) setAvatarFile(file); }); }, []);
 
   // Local-first: load from localStorage; if signed in, merge API persona
   useEffect(() => {
@@ -90,15 +136,33 @@ function OnboardingInner() {
 
     if (token()) {
       api("/api/me")
-        .then((owner) => { setMe(owner); return api("/api/me/personas"); })
-        .then((ps: any[]) => {
+        .then((owner) => {
+          // Older onboarding builds silently created this placeholder identity.
+          if (/^creator_\d+@twyn\.app$/i.test(owner.email || "")) {
+            localStorage.removeItem("proxy_token");
+            if (local) {
+              setD({ ...local, handle: claim || local.handle });
+              setStep(Math.min(local.onboarding_step || 0, 10));
+              setMax(Math.min(local.onboarding_step || 0, 10));
+            } else set({ handle: claim });
+            return null;
+          }
+          setMe(owner);
+          if (owner?.name && !local?.name) {
+            setD((prev) => ({ ...prev, name: prev.name || owner.name }));
+          }
+          return api("/api/me/personas");
+        })
+        .then((ps: any[] | null) => {
+          if (!ps) return;
           if (ps[0]) {
             const p = ps[0];
             setD({ ...empty(), ...p, availability: { ...DEFAULT_AVAIL, ...(p.availability || {}) } });
-            const s = Math.min(p.onboarding_step || 1, 6);
-            setStep(p.published ? 6 : s); setMax(p.published ? 6 : s);
+            const s = Math.min(p.onboarding_step || 1, 10);
+            setStep(p.published ? 10 : s); setMax(p.published ? 10 : s);
           } else if (local) {
             setD({ ...local, handle: claim || local.handle });
+            setStep(Math.min(local.onboarding_step || 0, 10)); setMax(Math.min(local.onboarding_step || 0, 10));
           } else {
             set({ handle: claim });
           }
@@ -107,10 +171,11 @@ function OnboardingInner() {
           localStorage.removeItem("proxy_token");
           if (local) setD({ ...local, handle: claim || local.handle });
           else set({ handle: claim });
+          if (local) { setStep(Math.min(local.onboarding_step || 0, 10)); setMax(Math.min(local.onboarding_step || 0, 10)); }
         })
         .finally(() => setLoaded(true));
     } else {
-      if (local) setD({ ...local, handle: claim || local.handle });
+      if (local) { setD({ ...local, handle: claim || local.handle }); setStep(Math.min(local.onboarding_step || 0, 10)); setMax(Math.min(local.onboarding_step || 0, 10)); }
       else set({ handle: claim });
       setLoaded(true);
     }
@@ -144,19 +209,7 @@ function OnboardingInner() {
 
   async function ensurePersona(): Promise<string | null> {
     if (d.id) return d.id;
-    if (!token()) {
-      try {
-        const guestEmail = `creator_${Date.now()}@twyn.app`;
-        const res = await api("/api/auth/dev", {
-          method: "POST",
-          body: JSON.stringify({ email: guestEmail, name: d.name || "Creator" }),
-        });
-        localStorage.setItem("proxy_token", res.token);
-      } catch (err) {
-        console.error("Session creation failed", err);
-        return null;
-      }
-    }
+    if (!token()) return null;
     try {
       const handle = d.handle?.trim() || `user-${Math.random().toString(36).substring(2, 7)}`;
       const body = {
@@ -178,14 +231,16 @@ function OnboardingInner() {
 
   async function persist(nextStep: number, extra: Partial<Draft> = {}) {
     setSaving(true);
+    setSaveError("");
     try {
       if (!token()) {
-        const guestEmail = `creator_${Date.now()}@twyn.app`;
-        const res = await api("/api/auth/dev", {
-          method: "POST",
-          body: JSON.stringify({ email: guestEmail, name: d.name || "Creator" }),
-        });
-        localStorage.setItem("proxy_token", res.token);
+        const draft = { ...d, ...extra, onboarding_step: nextStep };
+        localStorage.setItem("proxy_draft", JSON.stringify(draft));
+        if (avatarFile) await storeAvatar(avatarFile);
+        setD((x) => ({ ...x, ...draft }));
+        setSaved("Saved on this device");
+        setTimeout(() => setSaved(""), 1600);
+        return true;
       }
       const body = {
         ...d,
@@ -197,11 +252,16 @@ function OnboardingInner() {
       const p: any = d.id
         ? await api(`/api/personas/${d.id}`, { method: "PUT", body: JSON.stringify(body) })
         : await api("/api/personas", { method: "POST", body: JSON.stringify(body) });
+      // Keep the newly-created persona id even if the separate photo upload fails,
+      // so retrying Continue updates this persona instead of colliding on handle.
+      setD((x) => ({ ...x, ...p, availability: { ...DEFAULT_AVAIL, ...(p.availability || {}) } }));
       let withAvatar = p;
       if (avatarFile) {
         const fd = new FormData(); fd.append("file", avatarFile);
         const uploaded = await api(`/api/personas/${p.id}/avatar`, { method: "POST", body: fd });
-        withAvatar = { ...p, ...uploaded }; setAvatarFile(null);
+        withAvatar = { ...p, ...uploaded };
+        await storeAvatar(null);
+        setAvatarFile(null);
       }
       setD((x) => ({ ...x, ...withAvatar, availability: { ...DEFAULT_AVAIL, ...(p.availability || {}) } }));
       localStorage.removeItem("proxy_draft");
@@ -210,7 +270,9 @@ function OnboardingInner() {
       setTimeout(() => setSaved(""), 1600);
       return true;
     } catch (e: any) {
-      setErrs({ handle: e.message.includes("taken") ? "That handle is taken." : "Could not save. Check the API is running." });
+      const message = e?.message || "Could not save. Please try again.";
+      setSaveError(message);
+      if (message.toLowerCase().includes("taken")) setErrs({ handle: "That handle is taken." });
       return false;
     } finally {
       setSaving(false);
@@ -228,7 +290,7 @@ function OnboardingInner() {
 
   const viewByStep: Record<number, React.ReactNode> = {
     0: <HandleStep d={d} set={set} avail={avail} errs={errs} />,
-    1: <ProfilePhotoStep d={d} avatarFile={avatarFile} setAvatarFile={setAvatarFile} />,
+    1: <ProfilePhotoStep d={d} set={set} errs={errs} avatarFile={avatarFile} setAvatarFile={setAvatarFile} />,
     2: <RoleStep d={d} set={set} errs={errs} />,
     3: <BioStep d={d} set={set} errs={errs} />,
     4: <LanguagesStep d={d} set={set} errs={errs} />,
@@ -237,7 +299,7 @@ function OnboardingInner() {
     7: <VoiceStep d={d} set={set} ensurePersona={ensurePersona} />,
     8: <CalendarStep me={me} />,
     9: <AvailabilityStep d={d} set={set} errs={errs} />,
-    10: <PublishStep d={d} publish={() => persist(10, { published: true }).then(() => set({ published: true }))} saving={saving} />,
+    10: <PublishStep d={d} publish={async () => { if (await persist(10, { published: true })) set({ published: true }); }} saving={saving} />,
   };
 
   return (
@@ -256,7 +318,23 @@ function OnboardingInner() {
       <div className="mx-auto w-[min(860px,calc(100%-2rem))] pb-16 pt-8">
         <p className="eyebrow mb-3 text-center">Set up your Twyn</p><Progress step={step} max={max} go={go} />
         <div className="clay relative mt-6 overflow-hidden p-6 md:p-10">
-          {!loaded ? <div className="grid h-64 place-items-center text-ink-mute"><Loader2 className="animate-spin" /></div> : (
+          {!loaded ? <TwynLoader label="Loading your setup" compact /> : !token() ? (
+            <div className="mx-auto max-w-[420px] text-center py-6">
+              <Head k="Get Started" t="Create Your Twin" d="Sign in with Google to set up your AI Twin, personalize your knowledge, and sync your calendar." />
+              <div className="glass mt-6 p-6 text-left">
+                <a
+                  href={`${API}/api/auth/google/login?${new URLSearchParams({ next: "/onboarding", handle: d.handle || "", calendar: "1" }).toString()}`}
+                  className="clay-sm flex h-10 w-full items-center justify-center gap-2.5 bg-white text-[13.5px] font-medium hover:bg-canvas transition-colors"
+                >
+                  <Image src="/brands/google.svg" alt="" width={15} height={15} />
+                  Continue with Google
+                </a>
+                <p className="mt-3 text-center text-xs text-ink-mute">
+                  Requests identity and optional calendar permissions to auto-book your free slots.
+                </p>
+              </div>
+            </div>
+          ) : (
             <AnimatePresence mode="wait" custom={dir} initial={false}>
               <motion.div className="mx-auto max-w-[620px]" key={step} custom={dir}
                 initial={{ opacity: 0, x: dir * 36 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: dir * -36 }}
@@ -265,11 +343,12 @@ function OnboardingInner() {
               </motion.div>
             </AnimatePresence>
           )}
-          {loaded && step < 10 && (
+          {loaded && token() && step < 10 && saveError && <InlineError className="mx-auto mt-5 max-w-[620px]">{saveError}</InlineError>}
+          {loaded && token() && step < 10 && (
             <div className="mt-8 flex items-center justify-between border-t border-rule pt-5">
               <button onClick={back} disabled={step === 0} className="inline-flex items-center gap-1.5 rounded-xl px-3 py-2 text-sm text-ink-soft hover:text-ink disabled:invisible"><ArrowLeft size={15} />Back</button>
               <div className="flex items-center gap-2">
-                {[1, 6, 7, 8].includes(step) && <button onClick={next} className="rounded-xl h-9 px-4 text-[13.5px] text-ink-soft hover:text-ink">Skip for now</button>}
+                {[6, 7, 8].includes(step) && <button onClick={next} className="rounded-xl h-9 px-4 text-[13.5px] text-ink-soft hover:text-ink">Skip for now</button>}
                 <motion.button whileTap={{ scale: 0.97 }} onClick={next} disabled={saving}
                   className="inline-flex items-center gap-2 rounded-full bg-ink h-9 px-4 text-[13.5px] font-medium text-canvas hover:bg-ink-soft disabled:opacity-60">
                   {saving ? <Loader2 size={15} className="animate-spin" /> : null}{step === 9 ? "Review" : "Continue"}<ArrowRight size={15} />
@@ -292,9 +371,9 @@ function HandleStep({ d, set, avail, errs }: any) {
     <div>
       <Head k="Your link" t="Claim your handle" d="This is the link people will use to talk to your Twyn. Keep it short and easy to say." />
       <Label t="Handle" err={errs.handle}>
-        <div className="clay-pressed flex items-center px-4">
+        <div className={clsx("clay-pressed flex items-center px-4", errs.handle && "border border-peach-deep/50")}>
           <span className="text-ink-mute">twyn.ai/</span>
-          <input autoFocus disabled={!!d.id} value={d.handle} onChange={(e) => set({ handle: e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, "") })}
+          <input autoFocus disabled={!!d.id} aria-invalid={!!errs.handle} value={d.handle} onChange={(e) => set({ handle: e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, "") })}
             placeholder="yourname" className="min-w-0 flex-1 bg-transparent py-2 text-[14px] font-medium outline-none placeholder:text-ink-mute/70" />
           {d.id ? <span className="text-xs text-ink-mute">locked</span> : avail === true ? <span className="flex items-center gap-1 text-xs text-mint-deep"><Check size={13} />Available</span> : avail === false ? <span className="flex items-center gap-1 text-xs text-peach-deep"><X size={13} />Taken</span> : null}
         </div>
@@ -307,7 +386,7 @@ function HandleStep({ d, set, avail, errs }: any) {
   );
 }
 
-function ProfilePhotoStep({ d, avatarFile, setAvatarFile }: any) {
+function ProfilePhotoStep({ d, set, errs, avatarFile, setAvatarFile }: any) {
   const [preview, setPreview] = useState("");
   const [photoError, setPhotoError] = useState("");
   useEffect(() => {
@@ -318,31 +397,40 @@ function ProfilePhotoStep({ d, avatarFile, setAvatarFile }: any) {
   const initials = d.name ? d.name.split(" ").map((w: string) => w[0]).join("").slice(0, 2).toUpperCase() : "YOU";
   return (
     <div>
-      <Head k="Your profile" t="Add a profile photo" d="Help people recognize your Twyn. You can also do this later." />
-      <div className="mb-3 flex flex-col items-center gap-2 text-center">
-        <label className="group relative grid h-24 w-24 cursor-pointer place-items-center overflow-hidden rounded-full border border-rule bg-lilac text-xl font-medium text-ink shadow-sm">
+      <Head k="Your profile" t="Add your name and photo" d="Your name is required. A profile photo is optional and can be added later." />
+      <Label t="Your name" err={errs.name}><input aria-invalid={!!errs.name} className={clsx(input, errs.name && "border-peach-deep/50")} value={d.name} onChange={(e) => set({ name: e.target.value })} placeholder="Your name" /></Label>
+      <div className="glass mt-6 flex flex-col items-center gap-4 p-5 text-center sm:flex-row sm:text-left">
+        <div className="grid h-20 w-20 shrink-0 place-items-center overflow-hidden rounded-full border border-rule bg-lilac text-xl font-medium text-ink shadow-sm ring-4 ring-white/70">
           {preview || d.avatar_url ? <img src={preview || `${API}${d.avatar_url}`} alt="Profile preview" className="h-full w-full object-cover" /> : initials}
-          <span className="absolute inset-x-0 bottom-0 flex h-8 items-center justify-center gap-1 bg-ink/75 text-[11px] text-canvas opacity-0 transition-opacity group-hover:opacity-100"><Camera size={12} />Change</span>
-          <input type="file" accept="image/jpeg,image/png,image/webp" className="sr-only" onChange={(e) => {
+        </div>
+        <div className="min-w-0 flex-1">
+          <p className="text-sm font-medium">Profile photo <span className="font-normal text-ink-mute">· optional</span></p>
+          <p className="mt-1 text-xs text-ink-mute">Use a clear JPG, PNG, or WebP image up to 3 MB.</p>
+          <label htmlFor="profile-photo" className="mt-3 inline-flex h-9 cursor-pointer items-center gap-2 rounded-full border border-rule bg-white px-4 text-[13px] font-medium text-ink transition-colors hover:bg-canvas">
+            <Camera size={15} />{avatarFile || d.avatar_url ? "Change photo" : "Choose photo"}
+          </label>
+          {avatarFile && <p className="mt-2 truncate text-xs text-ink-mute">Selected: {avatarFile.name}</p>}
+          <input id="profile-photo" type="file" accept="image/jpeg,image/png,image/webp" className="sr-only" onChange={(e) => {
             const f = e.target.files?.[0]; if (!f) return;
-            if (!["image/jpeg", "image/png", "image/webp"].includes(f.type)) { setPhotoError("Use a JPG, PNG, or WebP image."); return; }
-            if (f.size > 3 * 1024 * 1024) { setPhotoError("Keep the photo under 3 MB."); return; }
+            if (!["image/jpeg", "image/png", "image/webp"].includes(f.type)) { setPhotoError("Use a JPG, PNG, or WebP image."); e.target.value = ""; return; }
+            if (f.size > 3 * 1024 * 1024) { setPhotoError("Keep the photo under 3 MB."); e.target.value = ""; return; }
             setPhotoError(""); setAvatarFile(f);
           }} />
-        </label>
-        <p className="text-[12px] text-ink-mute">JPG, PNG, or WebP up to 3 MB · optional</p>
-        {photoError && <p className="text-[12px] text-peach-deep">{photoError}</p>}
+        </div>
+      </div>
+      <div className="w-full">
+        {photoError && <InlineError>{photoError}</InlineError>}
       </div>
     </div>
   );
 }
 
 function RoleStep({ d, set, errs }: any) {
-  return <div><Head k="About you" t="What do you do?" d="A short role helps visitors understand how you can help." /><Label t="Your role" err={errs.headline}><input autoFocus className={input} value={d.headline} onChange={(e) => set({ headline: e.target.value })} placeholder="Designer, founder, engineer…" /></Label></div>;
+  return <div><Head k="About you" t="What do you do?" d="A short role helps visitors understand how you can help." /><Label t="Your role" err={errs.headline}><input aria-invalid={!!errs.headline} className={clsx(input, errs.headline && "border-peach-deep/50")} value={d.headline} onChange={(e) => set({ headline: e.target.value })} placeholder="Designer, founder, engineer…" /></Label></div>;
 }
 
 function BioStep({ d, set, errs }: any) {
-  return <div><Head k="About you" t="Tell us a little more" d="What do you work on, and what do people usually ask you about?" /><Label t="A short introduction" hint={`${d.bio.length} characters`} err={errs.bio}><textarea autoFocus rows={5} className={input + " resize-none"} value={d.bio} onChange={(e) => set({ bio: e.target.value })} placeholder="I help… I work with… People usually reach out about…" /></Label></div>;
+  return <div><Head k="About you" t="Tell us a little more" d="What do you work on, and what do people usually ask you about?" /><Label t="A short introduction" hint={`${d.bio.length} characters`} err={errs.bio}><textarea aria-invalid={!!errs.bio} rows={5} className={clsx(input, "resize-none", errs.bio && "border-peach-deep/50")} value={d.bio} onChange={(e) => set({ bio: e.target.value })} placeholder="I help… I work with… People usually reach out about…" /></Label></div>;
 }
 
 function LanguagesStep({ d, set, errs }: any) {
@@ -384,7 +472,7 @@ function KnowledgeStep({ d, set, errs, ensurePersona }: any) {
         pid = await ensurePersona();
       }
       if (!pid) {
-        setDocErr("Please enter your handle in Step 1 before uploading documents.");
+        setDocErr("Sign in at the final step to save documents to your account. You can skip this for now.");
         return;
       }
       const fd = new FormData();
@@ -440,13 +528,13 @@ function KnowledgeStep({ d, set, errs, ensurePersona }: any) {
       <div className="mt-2 space-y-2.5">
         {d.links.map((l: any, i: number) => (
           <div key={i}>
-            <div className="clay-pressed flex items-center gap-3 px-4 py-2.5">
+            <div className={clsx("clay-pressed flex items-center gap-3 px-4 py-2.5", errs["link" + i] && "border border-peach-deep/50")}>
               <Link2 size={15} className="text-ink-mute" />
               <input className="w-28 bg-transparent text-sm font-medium outline-none placeholder:text-ink-mute/70" placeholder="Label" value={l.label} onChange={(e) => upd("links", i, { label: e.target.value })} />
               <input className="flex-1 bg-transparent text-sm outline-none placeholder:text-ink-mute/70" placeholder="https://" value={l.url} onChange={(e) => upd("links", i, { url: e.target.value })} />
               <button type="button" onClick={() => del("links", i)} className="text-ink-mute hover:text-ink" aria-label="Remove"><Trash2 size={15} /></button>
             </div>
-            {errs["link" + i] && <p className="mt-1 text-xs text-peach-deep">{errs["link" + i]}</p>}
+            {errs["link" + i] && <InlineError>{errs["link" + i]}</InlineError>}
           </div>
         ))}
       </div>
@@ -480,7 +568,7 @@ function KnowledgeStep({ d, set, errs, ensurePersona }: any) {
             onChange={(e) => e.target.files?.[0] && upload(e.target.files[0])}
           />
         </label>
-        {docErr && <p className="mt-2 text-xs text-peach-deep">{docErr}</p>}
+        {docErr && <InlineError>{docErr}</InlineError>}
         <div className="mt-2 flex flex-wrap gap-2">
           {docs.map((x) => (
             <span key={x.name} className="inline-flex items-center gap-1.5 rounded-full bg-white/70 px-3 py-1 text-xs">
@@ -527,17 +615,43 @@ function VoiceStep({ d, set, ensurePersona }: any) {
 }
 
 function CalendarStep({ me }: any) {
-  const on = !!me?.google_tokens;
+  const isConnected = me?.calendar_status === "connected";
   return (
     <div>
-      <Head k="Calendar" t="Connect Google Calendar" d="Twyn checks when you are free and books meetings straight into your calendar. It never sees event details, only busy times." />
-      <div className="glass flex flex-wrap items-center gap-5 p-6">
+      <Head k="Calendar" t="Google Calendar Integration" d="Twyn checks your busy slots and places confirmed bookings directly onto your calendar." />
+      <div className="glass flex flex-wrap items-center gap-5 p-6" style={{ borderRadius: 18 }}>
         <span className="clay-sm grid h-12 w-12 place-items-center bg-white"><Image src="/brands/google-calendar.svg" alt="Google Calendar" width={22} height={22} /></span>
-        <div className="flex-1"><p className="font-medium">Google Calendar</p><p className="text-sm text-ink-soft">{on ? `Connected as ${me.email}` : "Free/busy and event creation only"}</p></div>
-        {on ? <span className="inline-flex items-center gap-1.5 rounded-full bg-mint px-3 py-1.5 text-sm font-medium"><Check size={14} />Connected</span>
-          : <a href={`${API}/api/auth/google/login?next=%2Fonboarding`} className="rounded-full bg-ink h-9 px-4 text-[13.5px] font-medium text-canvas inline-flex items-center">Connect</a>}
+        <div className="flex-1">
+          <div className="flex items-center gap-2">
+            <p className="font-medium">Google Calendar</p>
+            <span className={clsx("rounded-full px-2.5 py-0.5 text-xs font-medium", isConnected ? "bg-mint text-mint-deep" : "bg-peach/30 text-peach-deep")}>
+              {isConnected ? "Connected" : "Disconnected"}
+            </span>
+          </div>
+          <p className="text-sm text-ink-soft mt-1">
+            {isConnected
+              ? `Connected as ${me?.email}. Real busy slots are synced and bookings include a Google Meet link.`
+              : "Calendar permissions were skipped or disconnected. Twyn will use your local availability rules, and you can connect Google Calendar anytime."}
+          </p>
+        </div>
+        {isConnected ? (
+          <span className="inline-flex items-center gap-1.5 rounded-full bg-mint px-3.5 py-1.5 text-sm font-medium text-mint-deep">
+            <Check size={14} weight="bold" />Connected
+          </span>
+        ) : (
+          <a
+            href={`${API}/api/auth/google/login?next=%2Fonboarding&calendar=1`}
+            className="rounded-full bg-ink h-9 px-4 text-[13.5px] font-medium text-canvas inline-flex items-center gap-1.5 hover:bg-ink-soft transition-colors"
+          >
+            <Image src="/brands/google.svg" alt="" width={14} height={14} />Connect Calendar
+          </a>
+        )}
       </div>
-      {!on && <p className="mt-4 text-sm text-ink-mute">Skip this and Twyn will offer slots from your availability rules, then email you each booking to confirm.</p>}
+      {!isConnected && (
+        <p className="mt-4 text-xs text-ink-mute">
+          You can continue without connecting Google Calendar. Twyn's built-in availability rules will manage your meeting slots.
+        </p>
+      )}
     </div>
   );
 }
@@ -548,23 +662,21 @@ function AvailabilityStep({ d, set, errs }: any) {
   return (
     <div>
       <Head k="Availability" t="When can people book you?" d="Twyn only offers times inside these rules, and skips anything already on your calendar." />
-      <Label t="Days" err={errs.avail}><div className="flex flex-wrap gap-2">{DAYS.map((x, i) => <Chip key={x} on={a.days.includes(i)} onClick={() => up({ days: a.days.includes(i) ? a.days.filter((y: number) => y !== i) : [...a.days, i].sort() })}>{x}</Chip>)}</div></Label>
+      <Label t="Days"><div className="flex flex-wrap gap-2">{DAYS.map((x, i) => <Chip key={x} on={a.days.includes(i)} onClick={() => up({ days: a.days.includes(i) ? a.days.filter((y: number) => y !== i) : [...a.days, i].sort() })}>{x}</Chip>)}</div></Label>
       <div className="mt-6 grid gap-5 sm:grid-cols-2">
         <Label t="Hours"><div className="flex items-center gap-2"><input type="time" className={sel} value={a.start} onChange={(e) => up({ start: e.target.value })} /><span className="text-ink-mute">to</span><input type="time" className={sel} value={a.end} onChange={(e) => up({ end: e.target.value })} /><span className="text-xs text-ink-mute">IST</span></div></Label>
         <Label t="Meeting length"><div className="flex gap-2">{[15, 30, 45, 60].map((m) => <Chip key={m} on={a.duration === m} onClick={() => up({ duration: m })}>{m} min</Chip>)}</div></Label>
         <Label t="Buffer between meetings"><select className={sel} value={a.buffer} onChange={(e) => up({ buffer: +e.target.value })}>{[0, 10, 15, 30].map((m) => <option key={m} value={m}>{m} minutes</option>)}</select></Label>
         <Label t="Minimum notice"><select className={sel} value={a.notice} onChange={(e) => up({ notice: +e.target.value })}>{[2, 12, 24, 48].map((m) => <option key={m} value={m}>{m} hours</option>)}</select></Label>
       </div>
+      {errs.avail && <InlineError>{errs.avail}</InlineError>}
     </div>
   );
 }
 
-function PublishStep({ d, publish, saving, onEmailAuth }: any) {
+function PublishStep({ d, publish, saving }: any) {
   const link = typeof window !== "undefined" ? `${window.location.origin}/p/${d.handle}` : `/p/${d.handle}`;
   const [copied, setCopied] = useState(false);
-  const [emailInput, setEmailInput] = useState("");
-  const [authBusy, setAuthBusy] = useState(false);
-  const [authErr, setAuthErr] = useState("");
 
   const copy = () => { navigator.clipboard?.writeText(link); setCopied(true); setTimeout(() => setCopied(false), 1500); };
   const a = d.availability;
@@ -576,68 +688,21 @@ function PublishStep({ d, publish, saving, onEmailAuth }: any) {
     ["Availability", `${a.days.map((i: number) => DAYS[i]).join(", ")} · ${a.start} to ${a.end} IST · ${a.duration} min`],
   ];
 
-  async function handleEmailAuth(e: React.FormEvent) {
-    e.preventDefault();
-    if (!emailInput.trim()) return;
-    setAuthBusy(true);
-    setAuthErr("");
-    try {
-      const res = await api("/api/auth/dev", {
-        method: "POST",
-        body: JSON.stringify({ email: emailInput.trim(), name: d.name || emailInput.split("@")[0] }),
-      });
-      localStorage.setItem("proxy_token", res.token);
-      await publish();
-    } catch (err: any) {
-      setAuthErr(err.message || "Sign-in failed. Please try again.");
-    } finally {
-      setAuthBusy(false);
-    }
-  }
-
   // Sign-in prompt when not authenticated
   if (!token() && !d.published) {
     return (
       <div className="mx-auto max-w-md text-center">
-        <Head k="Almost there" t="Create your account to go live" d="Sign in to publish your Twyn. Your draft is ready to be published immediately." />
+        <Head k="Almost there" t="Create your account to go live" d="Create an account or sign in with Google. Your onboarding draft is ready to publish." />
         <div className="glass mt-6 p-6 text-left">
           <a
             href={`${API}/api/auth/google/login?next=%2Fonboarding`}
             className="clay-sm flex h-10 w-full items-center justify-center gap-2.5 bg-white text-[13.5px] font-medium hover:bg-canvas transition-colors"
           >
             <Image src="/brands/google.svg" alt="" width={15} height={15} />
-            Continue with Google
+            Create account or sign in with Google
           </a>
 
-          <div className="my-4 flex items-center gap-3 text-[11px] text-ink-mute">
-            <span className="h-px flex-1 bg-rule" />
-            or continue with email
-            <span className="h-px flex-1 bg-rule" />
-          </div>
-
-          <form onSubmit={handleEmailAuth} className="space-y-3">
-            <div>
-              <label htmlFor="auth-email" className="block text-[12px] font-medium text-ink-mute mb-1">Your email</label>
-              <input
-                id="auth-email"
-                type="email"
-                required
-                className="field clay-pressed"
-                placeholder="you@example.com"
-                value={emailInput}
-                onChange={(e) => setEmailInput(e.target.value)}
-              />
-            </div>
-            <button
-              type="submit"
-              disabled={authBusy}
-              className="inline-flex h-9 w-full items-center justify-center gap-2 rounded-full bg-ink text-[13.5px] font-medium text-canvas hover:bg-ink-soft disabled:opacity-60 transition-colors"
-            >
-              {authBusy ? <Loader2 size={15} className="animate-spin" /> : null}
-              Publish as twyn.ai/{d.handle}
-            </button>
-            {authErr && <p className="text-[12px] text-peach-deep text-center">{authErr}</p>}
-          </form>
+          <p className="mt-4 text-center text-xs text-ink-mute">Your draft is saved on this device. Sign in with Google to publish and keep it in your account.</p>
         </div>
       </div>
     );

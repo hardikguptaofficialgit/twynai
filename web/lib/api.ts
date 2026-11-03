@@ -22,6 +22,18 @@ export async function api<T = any>(path: string, opts: RequestInit = {}): Promis
   return r.json();
 }
 
+export type Owner = {
+  id: string;
+  email: string;
+  name: string;
+  picture?: string;
+  google_connected?: boolean;
+  google_tokens?: boolean;
+  calendar_status?: "connected" | "disconnected" | "needs_reconnect" | "revoked" | "api_disabled" | "not_connected";
+  calendar_connected?: boolean;
+  created_at?: string;
+};
+
 export type Persona = {
   id: string; handle: string; name: string; headline: string; bio: string; rates: string;
   faqs: { q: string; a: string }[]; links: { label: string; url: string }[]; tone: string; accent: string; has_voice: boolean; languages?: string[];
