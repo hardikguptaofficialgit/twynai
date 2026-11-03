@@ -1,7 +1,57 @@
-"""LLM provider chain: Groq -> OpenRouter -> mock. All OpenAI-compatible with tool calling."""
-import json, re, httpx, logging
+"""LLM provider chain: Meta -> NVIDIA -> Groq -> OpenRouter -> mock."""
+import json, re, httpx, logging, math
+from datetime import datetime, timezone
 from . import config
+from .db import SessionLocal, ProviderSpend, engine
+from sqlalchemy import update
+from sqlalchemy.dialects.sqlite import insert as sqlite_insert
+from sqlalchemy.dialects.postgresql import insert as postgres_insert
 log = logging.getLogger("llm")
+
+META_OUTPUT_LIMIT = 700
+META_INPUT_PER_MILLION_USD = 1.25
+META_OUTPUT_PER_MILLION_USD = 4.25
+
+def _reserve_meta(messages, tools=None):
+    # Reserve by UTF-8 byte count (a conservative token upper bound) before sending.
+    payload = json.dumps({"messages": messages, "tools": tools}, ensure_ascii=False).encode("utf-8")
+    reserve = len(payload) * 2 + math.ceil(META_OUTPUT_LIMIT * META_OUTPUT_PER_MILLION_USD)
+    month = datetime.now(timezone.utc).strftime("%Y-%m")
+    budget = max(0, int(config.META_MONTHLY_BUDGET_USD * 1_000_000))
+    if reserve > budget: return None
+    insert = sqlite_insert if engine.dialect.name == "sqlite" else postgres_insert
+    s = SessionLocal()
+    try:
+        stmt = insert(ProviderSpend).values(month=month, spent_micros=0, reserved_micros=reserve)
+        stmt = stmt.on_conflict_do_update(index_elements=[ProviderSpend.month], set_={"reserved_micros": ProviderSpend.reserved_micros + reserve}, where=ProviderSpend.spent_micros + ProviderSpend.reserved_micros + reserve <= budget).returning(ProviderSpend.month)
+        allowed = s.execute(stmt).first() is not None
+        s.commit()
+        return (month, reserve) if allowed else None
+    except Exception:
+        s.rollback()
+        log.exception("Meta budget reservation failed")
+        return None
+    finally:
+        s.close()
+
+def _settle_meta(reservation, usage=None, charge_reserve=False):
+    if not reservation: return
+    month, reserved = reservation
+    if usage and isinstance(usage, dict):
+        input_tokens = int(usage.get("prompt_tokens", usage.get("input_tokens", 0)) or 0)
+        output_tokens = int(usage.get("completion_tokens", usage.get("output_tokens", 0)) or 0)
+        actual = math.ceil(input_tokens * META_INPUT_PER_MILLION_USD + output_tokens * META_OUTPUT_PER_MILLION_USD)
+    else:
+        actual = reserved if charge_reserve else 0
+    s = SessionLocal()
+    try:
+        s.execute(update(ProviderSpend).where(ProviderSpend.month == month).values(spent_micros=ProviderSpend.spent_micros + actual, reserved_micros=ProviderSpend.reserved_micros - reserved))
+        s.commit()
+    except Exception:
+        s.rollback()
+        log.exception("Meta budget settlement failed")
+    finally:
+        s.close()
 
 TOOLS = [
     {"type": "function", "function": {"name": "check_availability", "description": "List the owner's free meeting slots for the next days.",
@@ -15,6 +65,8 @@ TOOLS = [
 
 def providers():
     out = []
+    if config.META_API_KEY: out.append(("meta", "https://api.meta.ai/v1/chat/completions", config.META_API_KEY, config.META_MODEL))
+    if config.NVIDIA_API_KEY: out.append(("nvidia", "https://integrate.api.nvidia.com/v1/chat/completions", config.NVIDIA_API_KEY, config.NVIDIA_MODEL))
     if config.GROQ_API_KEY: out.append(("groq", "https://api.groq.com/openai/v1/chat/completions", config.GROQ_API_KEY, config.GROQ_MODEL))
     if config.OPENROUTER_API_KEY: out.append(("openrouter", "https://openrouter.ai/api/v1/chat/completions", config.OPENROUTER_API_KEY, config.OPENROUTER_MODEL))
     return out
@@ -22,14 +74,26 @@ def providers():
 async def complete(messages, tools=None):
     """Returns (assistant_message_dict, provider_name)."""
     for name, url, key, model in providers():
+        reservation = None
         try:
             body = {"model": model, "messages": messages, "temperature": 0.4}
+            if name in ("nvidia", "meta"): body["max_tokens"] = META_OUTPUT_LIMIT
+            if name == "nvidia": body["reasoning_effort"] = "low"
             if tools: body["tools"] = tools
-            async with httpx.AsyncClient(timeout=30) as c:
+            reservation = _reserve_meta(messages, tools) if name == "meta" else None
+            if name == "meta" and not reservation:
+                log.warning("Meta monthly budget reached; skipping Meta provider")
+                continue
+            async with httpx.AsyncClient(timeout=12 if name == "nvidia" else 30) as c:
                 r = await c.post(url, headers={"Authorization": f"Bearer {key}"}, json=body)
             r.raise_for_status()
-            return r.json()["choices"][0]["message"], name
+            data = r.json()
+            if name == "meta":
+                _settle_meta(reservation, data.get("usage"), charge_reserve=True)
+                reservation = None
+            return data["choices"][0]["message"], name
         except Exception as e:
+            if name == "meta" and reservation: _settle_meta(reservation)
             log.warning("provider %s failed: %s", name, e)
     return mock_complete(messages, tools), "mock"
 
@@ -91,17 +155,29 @@ async def stream(messages, tools=None):
     before any token was sent."""
     for name, url, key, model in providers():
         sent, content, calls = False, "", {}
+        reservation, usage = None, None
         try:
             body = {"model": model, "messages": messages, "temperature": 0.4, "stream": True}
+            if name in ("nvidia", "meta"): body["max_tokens"] = META_OUTPUT_LIMIT
+            if name == "nvidia": body["reasoning_effort"] = "low"
             if tools: body["tools"] = tools
-            async with httpx.AsyncClient(timeout=httpx.Timeout(30, read=30)) as c:
+            if name == "meta":
+                reservation = _reserve_meta(messages, tools)
+                if not reservation:
+                    log.warning("Meta monthly budget reached; skipping Meta provider")
+                    continue
+                body["stream_options"] = {"include_usage": True}
+            timeout = 12 if name == "nvidia" else 30
+            async with httpx.AsyncClient(timeout=httpx.Timeout(timeout, read=timeout)) as c:
                 async with c.stream("POST", url, headers={"Authorization": f"Bearer {key}"}, json=body) as r:
                     r.raise_for_status()
                     async for line in r.aiter_lines():
                         if not line.startswith("data:"): continue
                         data = line[5:].strip()
                         if data == "[DONE]": break
-                        ch = (json.loads(data).get("choices") or [{}])[0].get("delta") or {}
+                        packet = json.loads(data)
+                        if packet.get("usage"): usage = packet["usage"]
+                        ch = (packet.get("choices") or [{}])[0].get("delta") or {}
                         if ch.get("content"):
                             content += ch["content"]; sent = True; yield "text", ch["content"]
                         for tc in ch.get("tool_calls") or []:
@@ -110,9 +186,14 @@ async def stream(messages, tools=None):
                             f = tc.get("function") or {}
                             slot["function"]["name"] += f.get("name") or ""
                             slot["function"]["arguments"] += f.get("arguments") or ""
+            if name == "meta":
+                _settle_meta(reservation, usage, charge_reserve=True)
+                reservation = None
             yield "done", {"content": content, "tool_calls": [calls[i] for i in sorted(calls)], "provider": name}
             return
         except Exception as e:
+            if name == "meta" and reservation:
+                _settle_meta(reservation, usage, charge_reserve=sent)
             log.warning("stream %s failed: %s", name, e)
             if sent:
                 yield "done", {"content": content, "tool_calls": [], "provider": name}; return

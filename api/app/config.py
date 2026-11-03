@@ -24,6 +24,11 @@ GNANI_API_KEY = os.getenv("GNANI_API_KEY", "")
 GNANI_BASE = os.getenv("GNANI_BASE_URL", "https://api.vachana.ai")
 GNANI_TTS_MODEL = os.getenv("GNANI_TTS_MODEL", "timbre-v3.0")
 GNANI_DEFAULT_VOICE = os.getenv("GNANI_DEFAULT_VOICE", "Shivani")
+NVIDIA_API_KEY = os.getenv("NVIDIA_API_KEY", "")
+NVIDIA_MODEL = os.getenv("NVIDIA_MODEL", "openai/gpt-oss-20b")
+META_API_KEY = os.getenv("META_API_KEY", "")
+META_MODEL = os.getenv("META_MODEL", "muse-spark-1.3")
+META_MONTHLY_BUDGET_USD = float(os.getenv("META_MONTHLY_BUDGET_USD", "30"))
 GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
 GROQ_MODEL = os.getenv("GROQ_MODEL", "openai/gpt-oss-120b")
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY", "")
@@ -34,10 +39,18 @@ WEB_ORIGIN = os.getenv("WEB_ORIGIN", "http://localhost:3100")
 GOOGLE_REDIRECT_URI = os.getenv("GOOGLE_REDIRECT_URI", "http://localhost:8100/api/auth/google/callback")
 UPLOAD_DIR = Path(os.getenv("UPLOAD_DIR", str(Path(__file__).resolve().parents[1] / "uploads")))
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+OBJECT_STORAGE_ENDPOINT = os.getenv("OBJECT_STORAGE_ENDPOINT", os.getenv("AWS_ENDPOINT_URL_S3", "")).strip()
+OBJECT_STORAGE_REGION = os.getenv("OBJECT_STORAGE_REGION", os.getenv("AWS_REGION", "us-east-2")).strip()
+OBJECT_STORAGE_ACCESS_KEY_ID = os.getenv("OBJECT_STORAGE_ACCESS_KEY_ID", os.getenv("AWS_ACCESS_KEY_ID", "")).strip()
+OBJECT_STORAGE_SECRET_ACCESS_KEY = os.getenv("OBJECT_STORAGE_SECRET_ACCESS_KEY", os.getenv("AWS_SECRET_ACCESS_KEY", "")).strip()
+OBJECT_STORAGE_BUCKET = os.getenv("OBJECT_STORAGE_BUCKET", "").strip()
+OBJECT_STORAGE_ENABLED = bool(OBJECT_STORAGE_ENDPOINT and OBJECT_STORAGE_ACCESS_KEY_ID and OBJECT_STORAGE_SECRET_ACCESS_KEY and OBJECT_STORAGE_BUCKET)
+if any((OBJECT_STORAGE_ENDPOINT, OBJECT_STORAGE_ACCESS_KEY_ID, OBJECT_STORAGE_SECRET_ACCESS_KEY, OBJECT_STORAGE_BUCKET)) and not OBJECT_STORAGE_ENABLED:
+    raise RuntimeError("Set the object storage endpoint, access key, secret key, and bucket together.")
 
 def modes():
     return {
-        "llm": "groq" if GROQ_API_KEY else ("openrouter" if OPENROUTER_API_KEY else "mock"),
+        "llm": "meta" if META_API_KEY else ("nvidia" if NVIDIA_API_KEY else ("groq" if GROQ_API_KEY else ("openrouter" if OPENROUTER_API_KEY else "mock"))),
         "voice": "gnani" if GNANI_API_KEY else "mock",
         "calendar": "google" if GOOGLE_CLIENT_ID else "mock",
         "google_login": bool(GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET),

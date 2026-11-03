@@ -81,9 +81,9 @@ def test_llm_provider_order_and_models(monkeypatch):
     monkeypatch.setattr(llm.config, "GROQ_API_KEY", "groq-test")
     monkeypatch.setattr(llm.config, "OPENROUTER_API_KEY", "router-test")
     chain = llm.providers()
-    assert [p[0] for p in chain] == ["nvidia", "groq", "openrouter", "meta"]
-    assert chain[0][3] == "openai/gpt-oss-20b"
-    assert chain[3][3] == "muse-spark-1.3"
+    assert [p[0] for p in chain] == ["meta", "nvidia", "groq", "openrouter"]
+    assert chain[0][3] == "muse-spark-1.3"
+    assert chain[1][3] == "openai/gpt-oss-20b"
 
 def test_llm_provider_chain_skips_unconfigured(monkeypatch):
     from app import llm
@@ -327,3 +327,51 @@ def test_google_callback_calendar_states(monkeypatch):
     tok2 = json.loads(o2.google_tokens)
     assert tok2["status"] == "needs_reconnect"  # Marked as disconnected / needs_reconnect
     s.close()
+
+def test_llm_meta_fallback_to_nvidia(monkeypatch):
+    from app import llm
+    import httpx
+
+    # Set keys for both Meta and NVIDIA
+    monkeypatch.setattr(llm.config, "META_API_KEY", "meta-key")
+    monkeypatch.setattr(llm.config, "NVIDIA_API_KEY", "nvidia-key")
+    monkeypatch.setattr(llm.config, "GROQ_API_KEY", "")
+    monkeypatch.setattr(llm.config, "OPENROUTER_API_KEY", "")
+
+    # Meta fails with 500 error, NVIDIA succeeds
+    def mock_post(url, **kwargs):
+        req = httpx.Request("POST", url)
+        if "meta.ai" in url:
+            return httpx.Response(500, request=req, text="Internal Server Error")
+        elif "nvidia.com" in url:
+            return httpx.Response(200, request=req, json={
+                "choices": [{"message": {"role": "assistant", "content": "NVIDIA fallback response"}}]
+            })
+        return httpx.Response(404, request=req)
+
+    # Allow meta budget reservation
+    monkeypatch.setattr(llm, "_reserve_meta", lambda msgs, tools: ("2026-11", 500))
+    monkeypatch.setattr(llm, "_settle_meta", lambda res, usage=None, charge_reserve=False: None)
+
+    import asyncio
+    async def run_test():
+        async with httpx.AsyncClient() as client:
+            pass
+        # monkeypatch httpx AsyncClient post
+        orig_post = httpx.AsyncClient.post
+        async def fake_post(self, url, **kwargs):
+            req = httpx.Request("POST", str(url))
+            if "meta.ai" in str(url):
+                return httpx.Response(500, request=req, text="Meta Error")
+            elif "nvidia.com" in str(url):
+                return httpx.Response(200, request=req, json={
+                    "choices": [{"message": {"role": "assistant", "content": "Hello from NVIDIA fallback"}}]
+                })
+            return httpx.Response(404, request=req)
+        monkeypatch.setattr(httpx.AsyncClient, "post", fake_post)
+
+        msg, prov = await llm.complete([{"role": "user", "content": "test"}])
+        assert prov == "nvidia"
+        assert msg["content"] == "Hello from NVIDIA fallback"
+
+    asyncio.run(run_test())

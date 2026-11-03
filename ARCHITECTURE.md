@@ -17,7 +17,7 @@ This document provides a comprehensive, technically accurate architectural speci
 - **Low-Latency Streaming Voice:** Employs concurrent asynchronous worker pipelines where the LLM token stream is segmented at natural sentence boundaries and immediately piped into Server-Sent Events (SSE) TTS streaming. Audio begins playback in the browser before the LLM finishes generating the full response.
 - **Verbal Fillers for Zero Perceived Latency:** When an LLM executes a tool call (such as querying calendar availability), the system immediately dispatches a cached, localized spoken filler (e.g., *"One sec, checking the calendar"* / *"Ek second, calendar dekh raha hoon"*), eliminating awkward silence.
 - **Resilient Multi-Tier Fallback Chain:**
-  - **LLM:** NVIDIA AI Endpoints $\rightarrow$ Groq LPU $\rightarrow$ OpenRouter $\rightarrow$ Meta AI (with micro-spend budget locks) $\rightarrow$ Deterministic Mock Brain.
+  - **LLM:** Meta AI (with micro-spend budget locks) $\rightarrow$ NVIDIA AI Endpoints $\rightarrow$ Groq LPU $\rightarrow$ OpenRouter (with micro-spend budget locks) $\rightarrow$ Deterministic Mock Brain.
   - **Voice:** Gnani Prisma v3 & Timbre v3 $\rightarrow$ Browser Web Speech synthesis.
   - **Calendar:** Google Calendar API $\rightarrow$ Configurable Local Deterministic Engine.
   - **RAG Embeddings:** FastEmbed (ONNX Multilingual MiniLM) $\rightarrow$ Deterministic Token Hash Embedder.
