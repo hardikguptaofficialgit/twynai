@@ -1,5 +1,4 @@
 import type { Metadata } from "next";
-import { Lora, Hanken_Grotesk, JetBrains_Mono, Noto_Sans_Devanagari } from "next/font/google";
 import localFont from "next/font/local";
 const tamil = localFont({
   src: [
@@ -9,14 +8,9 @@ const tamil = localFont({
   variable: "--font-tamil",
   display: "swap",
 });
-const deva = Noto_Sans_Devanagari({ subsets: ["devanagari"], variable: "--font-deva", weight: ["400", "500"] });
 import "./globals.css";
 import SmoothScroll from "@/components/SmoothScroll";
 import BackendStatus from "@/components/BackendStatus";
-
-const disp = Lora({ subsets: ["latin"], weight: ["400", "500"], variable: "--font-disp", display: "swap" });
-const body = Hanken_Grotesk({ subsets: ["latin"], weight: ["400", "500", "700"], variable: "--font-body", display: "swap" });
-const jb = JetBrains_Mono({ subsets: ["latin"], weight: ["400"], variable: "--font-jb", display: "swap" });
 
 export const metadata: Metadata = {
   metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3100"),
@@ -25,7 +19,7 @@ export const metadata: Metadata = {
   applicationName: "Twyn AI",
   manifest: "/manifest.webmanifest",
   icons: {
-    icon: [{ url: "/brand/favicon.ico", sizes: "any" }, { url: "/brand/icon.svg", type: "image/svg+xml" }, { url: "/brand/icon-192.png", sizes: "192x192", type: "image/png" }],
+    icon: [{ url: "/brand/icon.svg", type: "image/svg+xml", sizes: "any" }],
     apple: [{ url: "/brand/apple-touch-icon.png", sizes: "180x180" }],
   },
   openGraph: { title: "Twyn AI, an AI you at a link", description: "Chats, calls and bookings in your voice, in Indian languages.", images: [{ url: "/brand/og.png", width: 1200, height: 630, alt: "Twyn AI" }], siteName: "Twyn AI", type: "website" },
@@ -39,7 +33,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className={`${disp.variable} ${body.variable} ${jb.variable} ${tamil.variable} ${deva.variable}`} suppressHydrationWarning>
+    <html lang="en" className={tamil.variable} suppressHydrationWarning>
       <body
         className={`antialiased`}
         suppressHydrationWarning

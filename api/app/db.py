@@ -14,6 +14,14 @@ SessionLocal = sessionmaker(bind=engine, expire_on_commit=False)
 def uid(): return uuid.uuid4().hex[:12]
 def now(): return dt.datetime.utcnow()
 
+_AVATAR_STYLES = {f"twyn-{i:02d}" for i in range(1, 13)} | {f"critters-{i:02d}" for i in range(1, 13)}
+def avatar_style(value: str) -> str:
+    value = (value or "").strip().lower()
+    return value if value in _AVATAR_STYLES else "twyn-01"
+def avatar_marker(value: str) -> str: return f"avatar://{avatar_style(value)}"
+def avatar_style_from_path(path: str) -> str:
+    return avatar_style(path.removeprefix("avatar://")) if (path or "").startswith("avatar://") else "twyn-01"
+
 class Base(DeclarativeBase): pass
 
 class Owner(Base):
@@ -55,7 +63,7 @@ class Persona(Base):
     def to_dict(self, public=False):
         d = dict(id=self.id, handle=self.handle, name=self.name, headline=self.headline, bio=self.bio,
                  rates=self.rates, faqs=json.loads(self.faqs or "[]"), links=json.loads(self.links or "[]"),
-                 tone=self.tone, accent=self.accent, avatar_url=(f"/api/p/{self.handle}/avatar" if self.avatar_path else ""), languages=json.loads(self.languages or "[]"), availability=json.loads(self.availability or "{}"), published=bool(self.published), onboarding_step=self.onboarding_step or 0, has_voice=bool(self.voice_embedding or self.voice_sample_path))
+                 tone=self.tone, accent=self.accent, avatar_url=(f"/api/p/{self.handle}/avatar" if self.avatar_path and not self.avatar_path.startswith("avatar://") else ""), avatar_seed=avatar_style_from_path(self.avatar_path), languages=json.loads(self.languages or "[]"), availability=json.loads(self.availability or "{}"), published=bool(self.published), onboarding_step=self.onboarding_step or 0, has_voice=bool(self.voice_embedding or self.voice_sample_path))
         if not public: d["owner_id"] = self.owner_id
         return d
 

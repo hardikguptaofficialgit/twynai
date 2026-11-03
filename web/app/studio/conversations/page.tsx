@@ -1,8 +1,9 @@
 "use client";
+import Image from "next/image";
 import { Suspense, useEffect, useState, useCallback } from "react";
 import { useSearchParams } from "next/navigation";
 import { motion } from "motion/react";
-import { ChatCircle as MessageSquare, Hand, PaperPlaneRight as Send } from "@phosphor-icons/react";
+import { ArrowLeft, ChatCircle as MessageSquare, Hand, PaperPlaneRight as Send, PaperPlaneTilt } from "@phosphor-icons/react";
 import { api, connectWs } from "@/lib/api";
 import { Button, Card, Pill } from "@/components/ui";
 import { useStudio, Page, Empty, Skeleton, ago } from "../ctx";
@@ -16,16 +17,37 @@ function Conversations() {
   const [conv, setConv] = useState<any>(null);
   const [reply, setReply] = useState("");
   const loadConv = useCallback(async () => { if (sel) try { setConv(await api(`/api/conversations/${sel}`)); } catch { toast("Could not load conversation", "err"); } }, [sel]); // eslint-disable-line
-  useEffect(() => { loadConv(); if (!sel) return; return connectWs(`/ws/conversations/${sel}`, () => loadConv()); }, [sel, loadConv]);
+  useEffect(() => {
+    loadConv(); if (!sel) return;
+    return connectWs(`/ws/conversations/${sel}`, (event) => {
+      if (event.type === "takeover") setConv((current: any) => current ? { ...current, takeover: !!event.on } : current);
+      if (event.type === "message") setConv((current: any) => {
+        if (!current || current.messages.some((message: any) => message.id === event.id)) return current;
+        return { ...current, messages: [...current.messages, { id: event.id || `live-${Date.now()}`, role: event.role, text: event.text, tools: event.tools || [] }] };
+      });
+    });
+  }, [sel, loadConv]);
   useEffect(() => { if (!sel && ov?.conversations?.[0] && window.innerWidth >= 1024) setSel(ov.conversations[0].id); }, [ov, sel]);
-  async function takeover(on: boolean) { try { await api(`/api/conversations/${sel}/takeover`, { method: "POST", body: JSON.stringify({ on }) }); toast(on ? "You are live in this chat" : "Handed back to Twyn"); loadConv(); } catch (e: any) { toast(e.message, "err"); } }
-  async function send() { if (!reply.trim()) return; try { await api(`/api/conversations/${sel}/reply`, { method: "POST", body: JSON.stringify({ text: reply }) }); setReply(""); loadConv(); } catch (e: any) { toast(e.message, "err"); } }
+  async function takeover(on: boolean) {
+    const previous = !!conv?.takeover; setConv((current: any) => current ? { ...current, takeover: on } : current);
+    try { await api(`/api/conversations/${sel}/takeover`, { method: "POST", body: JSON.stringify({ on }) }); toast(on ? "You are live in this chat" : "Handed back to Twyn"); }
+    catch (e: any) { setConv((current: any) => current ? { ...current, takeover: previous } : current); toast(e.message, "err"); }
+  }
+  async function send() {
+    const text = reply.trim(); if (!text || !conv?.takeover) return;
+    setReply("");
+    try { await api(`/api/conversations/${sel}/reply`, { method: "POST", body: JSON.stringify({ text }) }); }
+    catch (e: any) { setReply(text); toast(e.message, "err"); }
+  }
+  const comingSoon = (label: string, icon: React.ReactNode) => <span className="group relative grid h-8 w-8 place-items-center rounded-full border border-rule bg-white/70 text-ink-soft" aria-label={`${label} coming soon`}>
+    {icon}<span role="tooltip" className="pointer-events-none absolute right-0 top-full z-20 mt-2 whitespace-nowrap rounded-lg bg-ink px-2 py-1 text-[10px] font-medium text-canvas opacity-0 shadow-sm transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">Coming soon</span>
+  </span>;
   return (
-    <Page title="Conversations" sub="Every chat and call. Take over any time to reply as yourself.">
+    <Page title="Conversations" sub="Every chat and call. Take over any time to reply as yourself." actions={<div className="flex items-center gap-1.5" aria-label="Messaging channels">{comingSoon("WhatsApp", <Image src="/brands/whatsapp.svg" alt="" width={15} height={15} />)}{comingSoon("Telegram", <PaperPlaneTilt size={15} weight="fill" className="text-[#229ED9]" />)}{comingSoon("iMessage", <img src="https://cdn.simpleicons.org/imessage/0A84FF" alt="" width={16} height={16} />)}{comingSoon("Google Messages", <img src="https://cdn.simpleicons.org/googlemessages/4285F4" alt="" width={16} height={16} />)}</div>}>
       <div className="grid gap-3 lg:grid-cols-[300px_1fr]">
-          <Card glass className="flex h-[calc(100vh-170px)] min-h-[420px] flex-col overflow-hidden p-0">
+          <Card glass className={`flex h-[calc(100dvh-170px)] min-h-[420px] flex-col overflow-hidden p-0 ${sel ? "hidden lg:flex" : "flex"}`}>
             <div className="flex items-center justify-between border-b border-rule px-4 py-2.5 text-[12px] font-medium text-ink-mute"><span>Conversations</span><span className="normal-case tracking-normal">{ov?.conversations.length ?? 0} total</span></div>
-            <div className="min-h-0 flex-1 overflow-y-auto p-1.5">
+            <div data-lenis-prevent="true" className="twyn-scrollbar min-h-0 flex-1 overflow-y-scroll overscroll-contain p-1.5 [touch-action:pan-y]" onWheel={(event) => event.stopPropagation()}>
             {!ov ? <Skeleton rows={5} /> : ov.conversations.length === 0 && <Empty icon={<MessageSquare size={18} />} title="No conversations yet" sub="Share your link and chats will show up here." />}
             {ov?.conversations?.map((c: any) => (
               <button key={c.id} onClick={() => setSel(c.id)} className={`mb-1 w-full rounded-xl px-3 py-2.5 text-left transition ${sel === c.id ? "clay-sm bg-white" : "hover:bg-white/50"}`}>
@@ -35,13 +57,13 @@ function Conversations() {
               </button>))}
             </div>
           </Card>
-          <Card className="flex h-[calc(100vh-170px)] min-h-[420px] flex-col overflow-hidden p-0">
+          <Card className={`flex h-[calc(100dvh-170px)] min-h-[420px] flex-col overflow-hidden p-0 ${sel ? "flex" : "hidden lg:flex"}`}>
             {conv ? <>
               <div className="flex items-center justify-between border-b border-rule px-4 py-3">
-                <div><div className="text-[14px] font-medium">{conv.visitor_name}</div><p className="mt-0.5 max-w-xl text-[12.5px] text-ink-soft">{conv.summary}</p></div>
-                <Button size="sm" variant={conv.takeover ? "mint" : "primary"} onClick={() => takeover(!conv.takeover)}><Hand size={13} />{conv.takeover ? "Hand back to Twyn" : "Take over"}</Button>
+                <div className="flex min-w-0 items-center gap-2"><button type="button" aria-label="Back to conversations" onClick={() => setSel("")} className="grid h-8 w-8 shrink-0 place-items-center rounded-full border border-rule bg-white text-ink-soft lg:hidden"><ArrowLeft size={15} /></button><div className="min-w-0"><div className="truncate text-[14px] font-medium">{conv.visitor_name}</div><p className="mt-0.5 max-w-xl truncate text-[12.5px] text-ink-soft">{conv.summary}</p></div></div>
+                <Button size="sm" variant={conv.takeover ? "mint" : "primary"} onClick={() => takeover(!conv.takeover)}><Hand size={13} /><span className="hidden sm:inline">{conv.takeover ? "Hand back to Twyn" : "Take over"}</span><span className="sm:hidden">{conv.takeover ? "Hand back" : "Take over"}</span></Button>
               </div>
-              <div className="min-h-0 flex-1 space-y-2.5 overflow-y-auto p-4">{conv.messages.map((m: any) => (
+              <div data-lenis-prevent="true" className="twyn-scrollbar min-h-0 flex-1 space-y-2.5 overflow-y-scroll overscroll-contain p-4 [touch-action:pan-y]" onWheel={(event) => event.stopPropagation()}>{conv.messages.map((m: any) => (
                 <motion.div key={m.id} initial={{ opacity: 0 }} animate={{ opacity: 1 }} className={m.role === "visitor" ? "flex justify-start" : "flex justify-end"}>
                   <div className="max-w-[75%]">
                     <div className="mb-0.5 text-[11px] text-ink-mute">{m.role === "visitor" ? conv.visitor_name : m.role === "owner" ? "You" : `Twyn${m.meta?.provider ? " · " + m.meta.provider : ""}`}</div>

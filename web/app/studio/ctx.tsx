@@ -81,6 +81,6 @@ export async function savePersona(p: any, patch: any) {
   const x = { ...p, ...patch };
   const body = { handle: x.handle, name: x.name, headline: x.headline || "", bio: x.bio || "", rates: x.rates || "", faqs: (x.faqs || []).filter((f: any) => f.q?.trim()),
     links: (x.links || []).filter((l: any) => l.url?.trim()), tone: x.tone || "", accent: x.accent || "lilac", languages: x.languages || ["en"], availability: x.availability || {},
-    published: !!x.published, onboarding_step: x.onboarding_step || 0, avatar_style: x.avatar_style || "notionists-neutral", avatar_background: x.avatar_background || "d9cdf6" };
+    published: !!x.published, onboarding_step: x.onboarding_step || 0, avatar_seed: x.avatar_seed || "twyn-01" };
   return api(`/api/personas/${p.id}`, { method: "PUT", body: JSON.stringify(body) });
 }

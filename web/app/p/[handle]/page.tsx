@@ -4,12 +4,15 @@ import { useEffect, useRef, useState } from "react";
 import { useParams } from "next/navigation";
 import { motion, AnimatePresence } from "motion/react";
 import { ArrowUpRight, Check, Clock, Microphone as Mic, PaperPlaneRight as Send, ChatCircle as MessageSquare, Waveform as AudioLines, Stop as Square, CalendarCheck, UserPlus, MagnifyingGlass as Search, SquaresFour, X } from "@phosphor-icons/react";
-import { api, API, connectWs, Persona, ACCENTS, encodeWav } from "@/lib/api";
+import { api, API, connectWs, Persona, ACCENTS, encodeWav, token } from "@/lib/api";
 import { Backdrop, Logo, Pill, TwynLoader } from "@/components/ui";
 import { Orb } from "@/components/Orb";
 import { ProfileAvatar, profileAvatarUrl } from "@/components/ProfileAvatar";
 
 type Msg = { role: "visitor" | "persona" | "owner"; text: string; tools?: any[] };
+type BookingSlot = { start: string; say: string };
+type BookingDraft = BookingSlot & { name?: string; email?: string; topic?: string };
+type ConversationSnapshot = { conversationId: string; messages: Msg[]; bookingDraft: BookingDraft | null; savedAt: number };
 const TOOL_LABEL: Record<string, [string, any, string]> = {
   check_availability: ["Checked calendar", Search, "sky"], book_meeting: ["Meeting booked", CalendarCheck, "mint"], capture_lead: ["Saved as lead", UserPlus, "butter"],
 };
@@ -18,6 +21,39 @@ const linkLabel = (link: { label?: string; url: string }) => {
   if (link.label?.trim()) return link.label.trim();
   try { return new URL(link.url).hostname.replace(/^www\./, ""); } catch { return link.url || "Website"; }
 };
+
+function SlotPicker({ slots, onConfirm, disabled = false }: { slots: BookingSlot[]; onConfirm: (slot: BookingSlot) => void; disabled?: boolean }) {
+  const days = Array.from(new Map(slots.map((slot) => [slot.start.slice(0, 10), slot])).entries()).map(([key, slot]) => ({ key, label: new Intl.DateTimeFormat("en-IN", { weekday: "short", day: "numeric", month: "short" }).format(new Date(`${key}T12:00:00`)) }));
+  const [day, setDay] = useState(days[0]?.key || "");
+  const [selected, setSelected] = useState("");
+  useEffect(() => { if (!days.some((item) => item.key === day)) { setDay(days[0]?.key || ""); setSelected(""); } }, [day, days]);
+  const daySlots = slots.filter((slot) => slot.start.startsWith(day));
+  const chosen = daySlots.find((slot) => slot.start === selected);
+  return <div className="mt-2 rounded-2xl border border-rule bg-white/70 p-3">
+    <div className="mb-2 flex items-center justify-between"><span className="text-[11px] font-medium uppercase tracking-[0.12em] text-ink-mute">Choose a day</span><span className="text-[10.5px] text-ink-mute">{slots.length} times available</span></div>
+    <div className="twyn-scrollbar flex gap-1.5 overflow-x-scroll pb-1 [touch-action:pan-x]">
+      {days.map((item) => <button key={item.key} type="button" onClick={() => { setDay(item.key); setSelected(""); }} className={`shrink-0 rounded-xl border px-2.5 py-1.5 text-[11px] transition ${day === item.key ? "border-ink bg-ink text-canvas" : "border-rule bg-white text-ink-soft hover:bg-lilac"}`}>{item.label}</button>)}
+    </div>
+    <div className="mt-3 grid grid-cols-2 gap-1.5 sm:grid-cols-3">
+      {daySlots.map((slot) => <button key={slot.start} type="button" disabled={disabled} onClick={() => setSelected(slot.start)} className={`rounded-xl border px-2.5 py-2 text-left text-[11.5px] transition ${selected === slot.start ? "border-ink bg-lilac text-ink" : "border-rule bg-white text-ink-soft hover:bg-lilac/60"}`}><span className="block font-medium text-ink">{slot.say}</span><span className="text-[10px]">Available</span></button>)}
+    </div>
+    <button type="button" disabled={!chosen || disabled} onClick={() => chosen && onConfirm(chosen)} className="mt-3 h-9 w-full rounded-full bg-ink text-[12px] font-medium text-canvas transition hover:bg-ink-soft disabled:cursor-not-allowed disabled:opacity-40">{chosen ? `Continue with ${chosen.say}` : "Select a time to continue"}</button>
+  </div>;
+}
+
+function BookingDetailsForm({ draft, onSubmit, disabled = false }: { draft: BookingDraft; onSubmit: (details: { name: string; email: string; topic: string }) => void; disabled?: boolean }) {
+  const [details, setDetails] = useState({ name: draft.name || "", email: draft.email || "", topic: draft.topic || "" });
+  return <form onSubmit={(event) => { event.preventDefault(); onSubmit(details); }} className="mt-2 rounded-2xl border border-rule bg-white/85 p-3">
+    <div className="text-[11px] font-medium uppercase tracking-[0.12em] text-ink-mute">Booking details</div>
+    <div className="mt-1 text-[12px] text-ink-soft">{draft.say}</div>
+    <div className="mt-2 grid gap-1.5 sm:grid-cols-2">
+      <input required autoComplete="name" className="field h-9 text-[12px]" placeholder="Your name" value={details.name} onChange={(event) => setDetails({ ...details, name: event.target.value })} />
+      <input required type="email" autoComplete="email" className="field h-9 text-[12px]" placeholder="you@email.com" value={details.email} onChange={(event) => setDetails({ ...details, email: event.target.value })} />
+    </div>
+    <input className="field mt-1.5 h-9 w-full text-[12px]" placeholder="What is it about? (optional)" value={details.topic} onChange={(event) => setDetails({ ...details, topic: event.target.value })} />
+    <button type="submit" disabled={disabled} className="mt-2 h-9 w-full rounded-full bg-ink text-[12px] font-medium text-canvas disabled:cursor-not-allowed disabled:opacity-40">{disabled ? "Confirming…" : "Confirm booking"}</button>
+  </form>;
+}
 
 export default function PublicPersona() {
   const { handle } = useParams<{ handle: string }>();
@@ -36,6 +72,7 @@ export default function PublicPersona() {
   const [err, setErr] = useState("");
   const [lat, setLat] = useState<{ stt_ms: number; llm_ms: number; tts_ms: number; total_ms: number; client_ms: number; first_audio_ms: number } | null>(null);
   const [note, setNote] = useState("");
+  const [bookingDraft, setBookingDraft] = useState<BookingDraft | null>(null);
   const rec = useRef<MediaRecorder | null>(null);
   const micStream = useRef<MediaStream | null>(null);
   const raf = useRef<number>(0);
@@ -44,8 +81,31 @@ export default function PublicPersona() {
   const turnStopTimer = useRef<number | null>(null);
   const end = useRef<HTMLDivElement>(null);
   const mobileClose = useRef<HTMLButtonElement>(null);
+  const bookingSubmitLock = useRef(false);
+  const skipConversationPersist = useRef(false);
 
   useEffect(() => { api<Persona>(`/api/p/${handle}`).then(setP).catch(() => setErr("This Twyn does not exist.")); }, [handle]);
+  useEffect(() => {
+    if (!handle || typeof window === "undefined") return;
+    const key = `twyn-public-conversation-v1:${handle}`;
+    skipConversationPersist.current = true;
+    setCid(""); setMsgs([]); setBookingDraft(null);
+    try {
+      const saved = JSON.parse(localStorage.getItem(key) || "null") as ConversationSnapshot | null;
+      const fresh = saved && Date.now() - saved.savedAt < 30 * 24 * 60 * 60 * 1000;
+      if (fresh) {
+        setCid(typeof saved.conversationId === "string" ? saved.conversationId : "");
+        setMsgs(Array.isArray(saved.messages) ? saved.messages.filter((message) => message && (message.role === "visitor" || message.role === "persona" || message.role === "owner") && typeof message.text === "string") : []);
+        setBookingDraft(saved.bookingDraft && typeof saved.bookingDraft.start === "string" && typeof saved.bookingDraft.say === "string" ? saved.bookingDraft : null);
+      } else if (saved) localStorage.removeItem(key);
+    } catch { /* local storage can be unavailable in private browsing */ }
+  }, [handle]);
+  useEffect(() => {
+    if (!handle || typeof window === "undefined") return;
+    if (skipConversationPersist.current) { skipConversationPersist.current = false; return; }
+    if (!cid && !msgs.length && !bookingDraft) return;
+    try { localStorage.setItem(`twyn-public-conversation-v1:${handle}`, JSON.stringify({ conversationId: cid, messages: msgs, bookingDraft, savedAt: Date.now() } satisfies ConversationSnapshot)); } catch { /* a full or disabled storage must not interrupt chat */ }
+  }, [handle, cid, msgs, bookingDraft]);
   useEffect(() => { end.current?.scrollIntoView({ behavior: "smooth" }); }, [msgs, busy]);
   useEffect(() => {
     const locked = mobileActionOpen || !!mobileMode;
@@ -77,13 +137,27 @@ export default function PublicPersona() {
 
   async function send(t = text) {
     if (!t.trim() || busy) return;
-    setMsgs((m) => [...m, { role: "visitor", text: t }]); setText(""); setBusy(true);
+    setMsgs((m) => [...m, { role: "visitor", text: t }, { role: "persona", text: "" }]); setText(""); setBusy(true);
     try {
-      const d = await api(`/api/p/${handle}/chat`, { method: "POST", body: JSON.stringify({ text: t, conversation_id: cid }) });
-      setCid(d.conversation_id); setHuman(d.takeover);
-      if (d.reply) setMsgs((m) => [...m, { role: "persona", text: d.reply, tools: d.tools }]);
-    } catch { setMsgs((m) => [...m, { role: "persona", text: "Something went wrong. Please try again." }]); }
-    setBusy(false);
+      const response = await fetch(`${API}/api/p/${handle}/chat/stream`, { method: "POST", headers: { "Content-Type": "application/json", ...(token() ? { Authorization: `Bearer ${token()}` } : {}) }, body: JSON.stringify({ text: t, conversation_id: cid }) });
+      if (!response.ok || !response.body) throw new Error("The conversation could not be reached.");
+      const reader = response.body.getReader(); const decoder = new TextDecoder(); let pending = ""; let tools: any[] = [];
+      const updateReply = (reply: string, nextTools = tools) => setMsgs((messages) => { const next = [...messages]; const index = next.length - 1; next[index] = { role: "persona", text: reply, tools: nextTools }; return next; });
+      for (;;) {
+        const { value, done } = await reader.read(); if (done) break;
+        pending += decoder.decode(value, { stream: true });
+        let newline; while ((newline = pending.indexOf("\n")) >= 0) {
+          const line = pending.slice(0, newline).trim(); pending = pending.slice(newline + 1); if (!line) continue;
+          const event = JSON.parse(line);
+          if (event.type === "conversation") setCid(event.conversation_id);
+          else if (event.type === "text") setMsgs((messages) => { const next = [...messages]; const index = next.length - 1; next[index] = { ...next[index], text: `${next[index].text}${event.delta}` }; return next; });
+          else if (event.type === "tool") tools = [...tools, { name: event.name, result: event.result }];
+          else if (event.type === "done") { setCid(event.conversation_id || cid); setHuman(event.takeover); updateReply(event.reply || "", event.tools || tools); if (event.tools?.some((tool: any) => tool.name === "book_meeting" && tool.result?.booked)) setBookingDraft(null); }
+          else if (event.type === "error") throw new Error(event.message || "The conversation could not be reached.");
+        }
+      }
+    } catch (error: any) { setMsgs((m) => { const next = [...m]; next[next.length - 1] = { role: "persona", text: error?.message || "Something went wrong. Please try again." }; return next; }); }
+    finally { setBusy(false); }
   }
 
   function meter(stream: MediaStream | null, el?: HTMLAudioElement) {
@@ -242,6 +316,7 @@ export default function PublicPersona() {
       const d = await api(`/api/p/${handle}/voice`, { method: "POST", body: fd });
       setCid(d.conversation_id); setLang(d.language || "");
       setMsgs((m) => [...m, { role: "visitor", text: d.transcript }, ...(d.reply ? [{ role: "persona" as const, text: d.reply, tools: d.tools }] : [])]);
+      if (d.tools?.some((tool: any) => tool.name === "book_meeting" && tool.result?.booked)) setBookingDraft(null);
       setNote(d.fallback?.length ? `Fallback: ${d.fallback.join(", ")}` : d.mock_tts ? "Demo voice (browser speech) until the Gnani key is set" : "");
       const segs: string[] = d.segments?.length ? d.segments : d.audio ? [d.audio] : [];
       const first = await playQueue(d.reply, d.mock_tts ? [] : segs, d.language);
@@ -255,13 +330,32 @@ export default function PublicPersona() {
 
   const first = p.name.split(" ")[0];
   const initials = p.name.split(" ").map((w) => w[0]).join("").slice(0, 2);
-  const avatarImage = p.avatar_url ? `${API}${p.avatar_url}` : profileAvatarUrl(p.name, p.avatar_style, p.avatar_background);
+  const avatarImage = p.avatar_url ? `${API}${p.avatar_url}` : profileAvatarUrl(p.name, p.avatar_seed);
   const share = typeof window !== "undefined" ? window.location.href : "";
   const TABS = [["chat", "Chat", MessageSquare], ["voice", "Talk", AudioLines], ["book", "Book", CalendarCheck]] as const;
+  const latestBookingMessage = [...msgs].reverse().find((message) => (message.tools || []).some((tool: any) => tool.name === "check_availability" || tool.name === "book_meeting"));
+  const bookingComplete = !!latestBookingMessage?.tools?.some((tool: any) => tool.name === "book_meeting" && tool.result?.booked);
+  const latestAvailabilityIndex = [...msgs].map((message, index) => ({ message, index })).reverse().find(({ message }) => (message.tools || []).some((tool: any) => tool.name === "check_availability" && (tool.result?.slots || []).length > 0))?.index ?? -1;
+  const latestVoiceSlots = ([...msgs].reverse().map((message) => (message.tools || []).flatMap((tool: any) => tool.name === "check_availability" ? (tool.result?.slots || []) : [])).find((slots) => slots.length > 0) || []) as BookingSlot[];
+  const chooseSlot = (slot: BookingSlot) => { setBookingDraft(slot); setNote(`Selected ${slot.say}. Add your details to continue.`); };
+  async function submitBooking(details: { name: string; email: string; topic: string }) {
+    if (!bookingDraft || busy || bookingSubmitLock.current) return;
+    bookingSubmitLock.current = true;
+    const slot = bookingDraft;
+    setBusy(true);
+    setMsgs((messages) => [...messages, { role: "visitor", text: `I’d like to book ${slot.say}.` }]);
+    try {
+      const result = await api(`/api/p/${handle}/book`, { method: "POST", body: JSON.stringify({ start: slot.start, name: details.name, email: details.email, topic: details.topic, conversation_id: cid }) });
+      setMsgs((messages) => [...messages, { role: "persona", text: `Your meeting is confirmed for ${result.label} (${result.minutes} min).`, tools: [{ name: "book_meeting", result: { booked: true } }] }]);
+      setBookingDraft(null);
+    } catch (error: any) {
+      setMsgs((messages) => [...messages, { role: "persona", text: error?.message || "I couldn’t confirm that time. Please choose another available slot." }]);
+    } finally { bookingSubmitLock.current = false; setBusy(false); }
+  }
   const modeContent = mode === "book" ? <BookPanel handle={handle} first={first} conversationId={cid} />
     : mode === "voice" ? (
-      <div className="flex flex-1 flex-col items-center justify-center gap-4 bg-paper-2/30 p-3 md:p-6">
-        <div className="glass flex w-full max-w-[560px] flex-1 flex-col items-center justify-center gap-4 rounded-[30px] p-6 md:p-8">
+      <div data-lenis-prevent="true" className="twyn-scrollbar min-h-0 flex-1 overflow-y-auto overscroll-contain bg-paper-2/30 p-3 [touch-action:pan-y] md:p-6" onWheel={(event) => event.stopPropagation()}>
+        <div className="glass mx-auto flex min-h-full w-full max-w-[560px] flex-col items-center justify-start gap-4 rounded-[30px] p-6 pb-8 md:p-8">
           <Orb size={150} state={orb} level={level} color={accent.soft} deep={accent.deep} initials={initials} image={avatarImage} />
           <div className="text-center">
             <div className="text-[15px] font-medium">{{ idle: callActive.current ? "Your turn" : "Start a live conversation", listening: "Listening", thinking: "Thinking", speaking: `${first} is speaking` }[orb]}</div>
@@ -269,6 +363,8 @@ export default function PublicPersona() {
             {lat && <div className="mt-2 flex flex-wrap justify-center gap-1 text-[11px]">{([["Hear", lat.stt_ms], ["First token", lat.llm_ms], ["TTS chunk", lat.tts_ms], ["First audio", lat.first_audio_ms]] as const).map(([k, v]) => (
               <span key={k} className="hairline rounded-full bg-white/70 px-2 py-0.5 text-ink-soft">{k} <span className="font-medium text-ink tnum">{((v || 0) / 1000).toFixed(1)}s</span></span>))}</div>}
             {note && <div className="mt-1.5 text-[11px] text-ink-mute">{note}</div>}
+          {latestVoiceSlots.length > 0 && !bookingDraft && !bookingComplete && <div className="w-full max-w-lg"><SlotPicker slots={latestVoiceSlots} onConfirm={chooseSlot} disabled={busy} /></div>}
+          {bookingDraft && <div className="w-full max-w-lg"><BookingDetailsForm draft={bookingDraft} onSubmit={submitBooking} disabled={busy} /></div>}
           </div>
           <motion.button aria-label={callActive.current ? "End live conversation" : "Start live conversation"} whileTap={{ scale: 0.94 }} onClick={() => callActive.current ? endCall() : beginCall()}
             className="grid h-12 w-12 place-items-center rounded-full text-white" style={{ background: orb === "listening" ? accent.deep : "var(--color-ink)" }}>
@@ -280,7 +376,7 @@ export default function PublicPersona() {
       </div>
     ) : (
       <>
-        <div data-lenis-prevent="true" className="twyn-scrollbar min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-contain px-3 py-4">
+        <div data-lenis-prevent="true" className="twyn-scrollbar min-h-0 flex-1 space-y-3 overflow-y-scroll overscroll-contain px-3 py-4 [touch-action:pan-y]" onWheel={(event) => event.stopPropagation()}>
           {msgs.length === 0 && (
             <div className="mx-auto mt-10 max-w-sm text-center">
               <div className="mx-auto w-fit"><Orb size={64} color={accent.soft} deep={accent.deep} initials={initials} image={avatarImage} /></div>
@@ -298,20 +394,13 @@ export default function PublicPersona() {
                   {m.role === "owner" && <div className="mb-0.5 text-[11px] font-medium text-peach-deep">{p.name} (live)</div>}
                   <div className={m.role === "visitor" ? "rounded-2xl rounded-br-md bg-ink px-3.5 py-2 text-[13.5px] leading-relaxed text-canvas" : "hairline whitespace-pre-wrap rounded-2xl rounded-bl-md px-3.5 py-2 text-[13.5px] leading-relaxed"} style={m.role === "visitor" ? {} : { background: m.role === "owner" ? "#f8dacb" : "#fbfbfd" }}>{m.text}</div>
                   {m.tools && m.tools.length > 0 && <div className="mt-1.5 flex flex-wrap gap-1">{m.tools.map((t, j) => { const [l, I, tone] = TOOL_LABEL[t.name] || [t.name, Search, "white"]; return <Pill key={j} tone={tone}><I size={11} />{l}</Pill>; })}</div>}
-                  {(m.tools || []).flatMap((t) => t.name === "check_availability" ? (t.result?.slots || []) : []).length > 0 && (
-                    <div className="mt-2 grid gap-1.5 sm:grid-cols-2">
-                      {(m.tools || []).flatMap((t) => t.name === "check_availability" ? (t.result?.slots || []) : []).map((slot: { start: string; say: string }) => (
-                        <button key={slot.start} type="button" onClick={() => send(`Please book the ${slot.say} slot (${slot.start}).`)} disabled={busy} className="hairline rounded-xl bg-white/85 px-3 py-2 text-left text-[12px] text-ink-soft transition hover:bg-lilac disabled:opacity-50">
-                          <span className="block font-medium text-ink">{slot.say}</span><span className="text-[10.5px]">Select this time</span>
-                        </button>
-                      ))}
-                    </div>
-                  )}
+                  {i === latestAvailabilityIndex && !bookingDraft && !bookingComplete && (m.tools || []).flatMap((t) => t.name === "check_availability" ? (t.result?.slots || []) : []).length > 0 && <SlotPicker slots={(m.tools || []).flatMap((t) => t.name === "check_availability" ? (t.result?.slots || []) : [])} onConfirm={chooseSlot} disabled={busy} />}
                 </div>
               </motion.div>
             ))}
           </AnimatePresence>
           {busy && <div className="hairline flex w-fit gap-1 rounded-2xl bg-[#fbfbfd] px-3.5 py-3">{[0, 1, 2].map((i) => <motion.span key={i} className="h-1.5 w-1.5 rounded-full bg-ink-mute" animate={{ y: [0, -3, 0] }} transition={{ duration: 0.8, repeat: Infinity, delay: i * 0.15 }} />)}</div>}
+          {bookingDraft && <BookingDetailsForm draft={bookingDraft} onSubmit={submitBooking} disabled={busy} />}
           <div ref={end} />
         </div>
         <form onSubmit={(e) => { e.preventDefault(); send(); }} className="clay-sm m-1 flex items-center gap-1 bg-white p-1">
@@ -336,7 +425,7 @@ export default function PublicPersona() {
         </div>
       </div>
       <div className="reveal mx-auto grid w-[min(1040px,calc(100%-2rem))] gap-4 pt-5 lg:h-[calc(100dvh-3rem)] lg:min-h-0 lg:grid-cols-[300px_minmax(0,1fr)] lg:overflow-hidden">
-        <aside data-lenis-prevent="true" className="twyn-scrollbar space-y-3 lg:min-h-0 lg:h-full lg:overflow-y-auto lg:pr-2">
+        <aside data-lenis-prevent="true" className="twyn-scrollbar space-y-3 lg:min-h-0 lg:h-full lg:overflow-y-scroll lg:pr-2 [touch-action:pan-y]" onWheel={(event) => event.stopPropagation()}>
           <div className="glass p-5">
             <div className="flex items-center gap-3">
               <ProfileAvatar seed={p.name} image={avatarImage} size={56} alt={`${p.name}'s profile`} className="clay-sm shrink-0 ring-2 ring-white/70" />
@@ -458,7 +547,7 @@ function BookPanel({ handle, first, conversationId }: { handle: string; first: s
         <p className="mt-1 text-[13px] text-ink-soft">{state.done} with {first}, {data.minutes} min. An invite is on its way to {f.email}.</p></div>
     </div>);
   return (
-    <div data-lenis-prevent="true" className="twyn-scrollbar relative grid min-h-0 flex-1 gap-4 overflow-y-auto overscroll-contain p-4 md:grid-cols-[minmax(0,1fr)_260px]">
+    <div data-lenis-prevent="true" className="twyn-scrollbar relative grid min-h-0 flex-1 gap-4 overflow-y-scroll overscroll-contain p-4 md:grid-cols-[minmax(0,1fr)_260px] [touch-action:pan-y]" onWheel={(event) => event.stopPropagation()}>
       {loading && <div className="pointer-events-none absolute right-4 top-3 z-10 rounded-full border border-rule bg-white/85 px-2.5 py-1 text-[11px] text-ink-mute">Updating times…</div>}
       <div>
         <div className="flex items-baseline justify-between"><h3 className="text-[15px] font-medium">Pick a time</h3><span className="flex items-center gap-1 text-[12px] text-ink-mute"><Clock size={12} />{data.minutes} min, IST</span></div>

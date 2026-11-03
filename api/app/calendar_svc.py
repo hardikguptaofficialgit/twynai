@@ -3,13 +3,58 @@ minus busy time from existing bookings and, when connected, Google Calendar free
 import datetime as dt, json, httpx
 
 IST = dt.timezone(dt.timedelta(hours=5, minutes=30))
-DEFAULT_RULES = {"days": [0, 1, 2, 3, 4], "start": "10:00", "end": "18:00", "duration": 30, "buffer": 15, "notice": 12}
+DEFAULT_RULES = {"days": [0, 1, 2, 3, 4], "start": "10:00", "end": "18:00", "duration": 30, "buffer": 15, "notice": 12, "max_days": 60, "blocked_dates": [], "date_overrides": {}}
+
+def _valid_date(value):
+    try:
+        return dt.date.fromisoformat(str(value)[:10]).isoformat()
+    except (TypeError, ValueError):
+        return None
+
+def _valid_time(value, fallback):
+    try:
+        h, m = _hm(str(value))
+        if 0 <= h <= 23 and 0 <= m <= 59:
+            return f"{h:02d}:{m:02d}"
+    except (AttributeError, TypeError, ValueError):
+        pass
+    return fallback
+
+def normalize_rules(value):
+    """Return a safe, backwards-compatible availability rule set.
+
+    Availability is user-editable JSON. Never let malformed persisted values
+    reach slot generation and turn a public booking request into a 500.
+    """
+    source = value if isinstance(value, dict) else {}
+    r = dict(DEFAULT_RULES)
+    r["date_overrides"] = {}
+    days = source.get("days", r["days"])
+    if isinstance(days, (list, tuple, set)):
+        r["days"] = sorted({int(x) for x in days if str(x).strip().lstrip("-").isdigit() and 0 <= int(x) <= 6})
+    r["start"] = _valid_time(source.get("start"), r["start"])
+    r["end"] = _valid_time(source.get("end"), r["end"])
+    for key, low, high, fallback in (("duration", 10, 240, 30), ("buffer", 0, 240, 15), ("notice", 0, 24 * 30, 12), ("max_days", 1, 370, 60)):
+        try: number = int(source.get(key, fallback))
+        except (TypeError, ValueError): number = fallback
+        r[key] = max(low, min(high, number))
+    blocked = source.get("blocked_dates", [])
+    r["blocked_dates"] = sorted({d for d in (_valid_date(x) for x in blocked if isinstance(blocked, (list, tuple, set))) if d})
+    overrides = source.get("date_overrides", {})
+    if isinstance(overrides, dict):
+        for raw_date, raw_override in overrides.items():
+            date_key = _valid_date(raw_date)
+            if not date_key or not isinstance(raw_override, dict): continue
+            item = {"enabled": raw_override.get("enabled") is not False}
+            if "start" in raw_override: item["start"] = _valid_time(raw_override.get("start"), r["start"])
+            if "end" in raw_override: item["end"] = _valid_time(raw_override.get("end"), r["end"])
+            r["date_overrides"][date_key] = item
+    return r
 
 def rules_of(persona):
-    r = dict(DEFAULT_RULES)
-    try: r.update(json.loads(persona.availability or "{}") if persona is not None else {})
-    except Exception: pass
-    return r
+    try: value = json.loads(persona.availability or "{}") if persona is not None else {}
+    except Exception: value = {}
+    return normalize_rules(value)
 
 def _hm(s): h, m = s.split(":"); return int(h), int(m)
 def label(st): return st.strftime("%a %d %b, %I:%M %p IST")
@@ -37,17 +82,30 @@ def local_label(st, lang="en-IN"):
 
 def generate(rules, busy, days=7, now=None, limit=12, per_day=None):
     """busy: list of (start, end) aware datetimes. Returns [{start:'YYYY-MM-DDTHH:MM', label}] in IST."""
+    rules = normalize_rules(rules)
     now = now or dt.datetime.now(IST)
-    dur = dt.timedelta(minutes=int(rules["duration"])); buf = dt.timedelta(minutes=int(rules["buffer"]))
-    earliest = now + dt.timedelta(hours=int(rules["notice"]))
+    if now.tzinfo is None: now = now.replace(tzinfo=IST)
+    dur = dt.timedelta(minutes=rules["duration"]); buf = dt.timedelta(minutes=rules["buffer"])
+    earliest = now + dt.timedelta(hours=rules["notice"])
     out = []
-    for d in range(0, days + 1):
+    try: requested_days = int(days)
+    except (TypeError, ValueError): requested_days = 0
+    window = min(max(0, requested_days), rules["max_days"])
+    blocked = set(rules["blocked_dates"])
+    overrides = rules["date_overrides"]
+    for d in range(0, window + 1):
         day = (now + dt.timedelta(days=d)).date()
-        if day.weekday() not in rules["days"]: continue
-        sh, sm = _hm(rules["start"]); eh, em = _hm(rules["end"])
+        date_key = day.isoformat()
+        override = overrides.get(date_key) or {}
+        if date_key in blocked or override.get("enabled") is False: continue
+        if override.get("enabled") is not True and day.weekday() not in rules["days"]: continue
+        start = override.get("start") or rules["start"]; end_time = override.get("end") or rules["end"]
+        try: sh, sm = _hm(start); eh, em = _hm(end_time)
+        except (AttributeError, TypeError, ValueError): continue
         st = dt.datetime(day.year, day.month, day.day, sh, sm, tzinfo=IST)
         end = dt.datetime(day.year, day.month, day.day, eh, em, tzinfo=IST)
         n_day = 0
+        if end <= st: continue
         while st + dur <= end and (per_day is None or n_day < per_day):
             if st >= earliest and not any(b0 < st + dur + buf and b1 + buf > st for b0, b1 in busy):
                 out.append({"start": st.isoformat()[:16], "label": label(st)}); n_day += 1
@@ -56,6 +114,7 @@ def generate(rules, busy, days=7, now=None, limit=12, per_day=None):
     return out
 
 def is_valid(rules, busy, start, now=None):
+    if not isinstance(start, str): return False
     return any(s["start"] == start[:16] for s in generate(rules, busy, days=30, now=now, limit=10_000))
 
 class MockCalendar:

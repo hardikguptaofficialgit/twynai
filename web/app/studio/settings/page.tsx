@@ -25,16 +25,15 @@ export default function Settings() {
   const [busy, setBusy] = useState("");
   const [confirmTxt, setConfirmTxt] = useState("");
   const [avatarError, setAvatarError] = useState("");
-  const [avatarStyle, setAvatarStyle] = useState<AvatarStyle>((p.avatar_style as AvatarStyle) || "notionists-neutral");
-  const [avatarBackground, setAvatarBackground] = useState(p.avatar_background || "d9cdf6");
+  const [avatarStyle, setAvatarStyle] = useState<AvatarStyle>(() => p.avatar_seed || "twyn-01");
   const st = STATUS[me.calendar_status] || STATUS.not_connected;
   const link = typeof window !== "undefined" ? `${location.origin}/p/${p.handle}` : "";
-  useEffect(() => { setAvatarStyle((p.avatar_style as AvatarStyle) || "notionists-neutral"); setAvatarBackground(p.avatar_background || "d9cdf6"); }, [p.id, p.avatar_style, p.avatar_background]);
-  async function chooseAvatar(style: AvatarStyle, background = avatarBackground) { setAvatarStyle(style); setAvatarBackground(background); localStorage.setItem(`twyn-avatar-style-${p.id}`, style); try { await savePersona(p, { avatar_style: style, avatar_background: background }); await reload(); } catch (e: any) { toast(e.message || "Could not save avatar", "err"); } }
+  useEffect(() => { const saved = localStorage.getItem(`twyn-avatar-style-${p.id}`) as AvatarStyle | null; setAvatarStyle(saved || p.avatar_seed || "twyn-01"); }, [p.id, p.avatar_seed]);
+  async function chooseAvatar(style: AvatarStyle) { setAvatarStyle(style); localStorage.setItem(`twyn-avatar-style-${p.id}`, style); try { await savePersona(p, { avatar_seed: style }); await reload(); } catch (e: any) { toast(e.message || "Could not save avatar", "err"); } }
   const connect = () => { window.location.href = `${API}/api/auth/google/login?next=${encodeURIComponent("/studio/settings")}&calendar=1`; };
   async function disconnect() { if (!confirm("Disconnect Google Calendar? Your Twyn will switch to a demo calendar.")) return; setBusy("dc"); try { await api("/api/me/google/disconnect", { method: "POST" }); await reloadMe(); toast("Google Calendar disconnected"); } catch (e: any) { toast(e.message, "err"); } finally { setBusy(""); } }
   async function logout() { await api("/api/auth/logout", { method: "POST" }).catch(() => {}); localStorage.removeItem("proxy_token"); r.replace("/login"); }
-  async function del() { setBusy("del"); try { await api("/api/me", { method: "DELETE" }); localStorage.removeItem("proxy_token"); r.replace("/"); } catch (e: any) { toast(e.message, "err"); setBusy(""); } }
+  async function del() { setBusy("del"); try { await api("/api/me", { method: "DELETE" }); for (const key of Object.keys(localStorage)) if (key.startsWith("twyn-")) localStorage.removeItem(key); localStorage.removeItem("proxy_token"); r.replace("/"); } catch (e: any) { toast(e.message || "Could not delete account", "err"); setBusy(""); } }
   async function uploadAvatar(file: File) {
     setAvatarError("");
     if (!["image/jpeg", "image/png", "image/webp"].includes(file.type)) { setAvatarError("Use a JPG, PNG, or WebP image."); return; }
@@ -63,11 +62,11 @@ export default function Settings() {
         </Card>
         <Card className="p-4">
           <div className="flex items-center gap-3">
-            <ProfileAvatar seed={p.name || me.name || me.email} image={p.avatar_url ? `${API}${p.avatar_url}` : undefined} style={avatarStyle} background={avatarBackground} size={64} className="ring-4 ring-white/70" />
-            <div className="min-w-0 flex-1"><h2 className="text-[14px] font-medium">Profile avatar</h2><p className="mt-0.5 text-[12.5px] text-ink-soft">Upload a photo for your public Twyn. A DiceBear avatar is used automatically until you add one.</p></div>
+            <ProfileAvatar seed={p.name || me.name || me.email} image={p.avatar_url ? `${API}${p.avatar_url}` : undefined} style={avatarStyle} size={64} className="ring-4 ring-white/70" />
+            <div className="min-w-0 flex-1"><h2 className="text-[14px] font-medium">Profile avatar</h2><p className="mt-0.5 text-[12.5px] text-ink-soft">Upload a photo for your public Twyn, or choose one of the illustrated avatars.</p></div>
             <label className="clay-sm inline-flex h-8 cursor-pointer items-center gap-1.5 bg-white px-3 text-[13px] font-medium hover:bg-canvas">{busy === "avatar" ? <CircleNotch size={14} className="animate-spin" /> : <Camera size={14} />}Change avatar<input type="file" accept="image/jpeg,image/png,image/webp" className="sr-only" disabled={!!busy} onChange={(e) => { const file = e.target.files?.[0]; if (file) uploadAvatar(file); e.currentTarget.value = ""; }} /></label>
           </div>
-          {!p.avatar_url && <div className="mt-4 border-t border-rule pt-3"><p className="mb-2 text-[11px] text-ink-mute">Choose an avatar</p><AvatarPickerModal seed={p.name || me.name || me.email} value={avatarStyle} background={avatarBackground} onChange={(style) => chooseAvatar(style)} onBackgroundChange={(color) => chooseAvatar(avatarStyle, color)} /></div>}
+          {!p.avatar_url && <div className="mt-4 border-t border-rule pt-3"><p className="mb-2 text-[11px] text-ink-mute">Choose an avatar</p><AvatarPickerModal seed={p.name || me.name || me.email} value={avatarStyle} onChange={chooseAvatar} /></div>}
           {avatarError && <p role="alert" className="mt-2 text-[12px] text-peach-deep">{avatarError}</p>}
         </Card>
         <Card className="p-4">

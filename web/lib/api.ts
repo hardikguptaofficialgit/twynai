@@ -67,10 +67,10 @@ export type Owner = {
 export type Persona = {
   id: string; handle: string; name: string; headline: string; bio: string; rates: string;
   faqs: { q: string; a: string }[]; links: { label: string; url: string }[]; tone: string; accent: string; has_voice: boolean; languages?: string[]; availability?: any; published?: boolean;
-  avatar_url?: string; avatar_style?: AvatarStyle; avatar_background?: string;
+  avatar_url?: string; avatar_seed?: AvatarStyle;
 };
 
-export type AvatarStyle = "lorelei-neutral" | "notionists-neutral" | "micah" | "big-smile" | "initial-face";
+export type AvatarStyle = "twyn-01" | "twyn-02" | "twyn-03" | "twyn-04" | "twyn-05" | "twyn-06" | "twyn-07" | "twyn-08" | "twyn-09" | "twyn-10" | "twyn-11" | "twyn-12" | "critters-01" | "critters-02" | "critters-03" | "critters-04" | "critters-05" | "critters-06" | "critters-07" | "critters-08" | "critters-09" | "critters-10" | "critters-11" | "critters-12";
 
 export const ACCENTS: Record<string, { soft: string; deep: string }> = {
   lilac: { soft: "#d9cdf6", deep: "#8b74d6" },

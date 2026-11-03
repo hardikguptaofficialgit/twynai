@@ -24,9 +24,9 @@
   --color-sky-deep: oklch(50% 0.11 245);
   --color-butter: oklch(93% 0.06 95);
   --color-butter-deep: oklch(52% 0.1 90);
-  --font-sans: var(--font-body), var(--font-deva), var(--font-tamil), ui-sans-serif, sans-serif;
-  --font-display: var(--font-disp), var(--font-deva), Georgia, serif;
-  --font-mono: var(--font-jb), ui-monospace, monospace;
+  --font-sans: ui-sans-serif, system-ui, var(--font-tamil), sans-serif;
+  --font-display: Georgia, var(--font-tamil), serif;
+  --font-mono: ui-monospace, SFMono-Regular, Consolas, monospace;
   --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
 }
 
@@ -139,7 +139,7 @@ body { font-size: 14px; line-height: 1.55; }
 .twyn-scrollbar::-webkit-scrollbar-thumb:hover { background: oklch(45% 0.025 285 / 0.62); background-clip: padding-box; }
 
 .nav-shell {
-  border-bottom: 1px solid var(--color-rule);
+  border-bottom: 1.5px solid var(--color-ink);
   border-radius: 0 0 48px 48px / 0 0 18px 18px;
   box-shadow: 0 1px 0 oklch(100% 0 0 / 0.7);
 }

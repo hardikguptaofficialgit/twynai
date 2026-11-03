@@ -12,7 +12,7 @@ from fastapi.responses import RedirectResponse, StreamingResponse
 from pydantic import BaseModel
 from sqlalchemy import select
 from . import config, rag, llm, voice, calendar_svc, storage
-from .db import SessionLocal, Owner, Persona, Chunk, DocumentAsset, Conversation, Message, Lead, Booking, AuthSession, row, now
+from .db import SessionLocal, Owner, Persona, Chunk, DocumentAsset, Conversation, Message, Lead, Booking, AuthSession, row, now, avatar_marker
 
 import logging
 log = logging.getLogger("proxy")
@@ -242,11 +242,23 @@ def google_disconnect(o=Depends(current_owner), s=Depends(db)):
 @app.delete("/api/me")
 def delete_account(o=Depends(current_owner), s=Depends(db)):
     from sqlalchemy import delete
+    try:
+        tokens = json.loads(o.google_tokens or "{}")
+        revoke_token = tokens.get("refresh_token") or tokens.get("access_token")
+        if revoke_token: httpx.post("https://oauth2.googleapis.com/revoke", data={"token": revoke_token}, timeout=10)
+    except Exception:
+        log.warning("Google token revoke failed during account deletion", exc_info=True)
     pids = [p.id for p in s.scalars(select(Persona).where(Persona.owner_id == o.id))]
+    personas = list(s.scalars(select(Persona).where(Persona.owner_id == o.id)))
     assets = list(s.scalars(select(DocumentAsset).where(DocumentAsset.persona_id.in_(pids))))
     for asset in assets:
         try: storage.delete(asset.object_path)
         except Exception: log.exception("Failed to remove document object during account deletion: %s", asset.id)
+    for persona in personas:
+        for path in (persona.avatar_path, persona.voice_sample_path):
+            if path and not path.startswith("avatar://"):
+                try: storage.delete(path)
+                except Exception: log.exception("Failed to remove persona object during account deletion: %s", persona.id)
     for M in (Chunk, DocumentAsset, Lead, Booking):
         s.execute(delete(M).where(M.persona_id.in_(pids)))
     cids = [c.id for c in s.scalars(select(Conversation).where(Conversation.persona_id.in_(pids)))]
@@ -270,7 +282,7 @@ def me(o=Depends(current_owner)): return public_owner(o)
 class PersonaIn(BaseModel):
     handle: str; name: str; headline: str = ""; bio: str = ""; rates: str = ""
     faqs: list = []; links: list = []; tone: str = "warm, concise, professional"; accent: str = "lilac"
-    languages: list = ["en", "hi"]; availability: dict = {}; published: bool = False; onboarding_step: int = 0
+    languages: list = ["en", "hi"]; availability: dict = {}; published: bool = False; onboarding_step: int = 0; avatar_seed: str = "twyn-01"
 
 def reindex_profile(s, p):
     for c in s.scalars(select(Chunk).where(Chunk.persona_id == p.id, Chunk.source.like("profile:%"))): s.delete(c)
@@ -294,15 +306,18 @@ def my_personas(o=Depends(current_owner), s=Depends(db)):
 def create_persona(b: PersonaIn, o=Depends(current_owner), s=Depends(db)):
     h = re.sub(r"[^a-z0-9-]", "", b.handle.lower())
     if not h or s.scalar(select(Persona).where(Persona.handle == h)): raise HTTPException(409, "handle taken")
-    p = Persona(owner_id=o.id, **(b.model_dump() | {"handle": h, "faqs": json.dumps(b.faqs), "links": json.dumps(b.links), "languages": json.dumps(b.languages), "availability": json.dumps(b.availability)}))
+    payload = b.model_dump(exclude={"avatar_seed"})
+    p = Persona(owner_id=o.id, **(payload | {"handle": h, "faqs": json.dumps(b.faqs), "links": json.dumps(b.links), "languages": json.dumps(b.languages), "availability": json.dumps(b.availability), "avatar_path": avatar_marker(b.avatar_seed)}))
     s.add(p); s.flush(); reindex_profile(s, p); s.commit(); return p.to_dict()
 
 @app.put("/api/personas/{pid}")
 def update_persona(pid: str, b: PersonaIn, o=Depends(current_owner), s=Depends(db)):
     p = owned(s, pid, o)
-    for k, v in b.model_dump().items():
+    for k, v in b.model_dump(exclude={"avatar_seed"}).items():
         if k == "handle": continue
         setattr(p, k, json.dumps(v) if k in ("faqs", "links", "languages", "availability") else v)
+    if b.avatar_seed and (not (p.avatar_path or "").strip() or (p.avatar_path or "").startswith("avatar://")):
+        p.avatar_path = avatar_marker(b.avatar_seed)
     reindex_profile(s, p); s.commit(); return p.to_dict()
 
 @app.get("/api/personas/{pid}/docs")
@@ -468,7 +483,8 @@ def public_slots(handle: str, days: int = 14, s=Depends(db)):
     if not p or not p.published: raise HTTPException(404, "not found")
     owner = s.get(Owner, p.owner_id); cal = calendar_svc.for_owner(owner, s); rules = calendar_svc.rules_of(p)
     bookings = list(s.scalars(select(Booking).where(Booking.persona_id == p.id)))
-    days = max(1, min(int(days), 370))
+    try: days = max(1, min(int(days), 370))
+    except (TypeError, ValueError): days = 14
     slots = calendar_svc.generate(rules, calendar_svc.all_busy(cal, bookings, days), days=days, limit=500, per_day=8)
     return {"minutes": int(rules["duration"]), "slots": [{"start": x["start"], "label": calendar_svc.label(dt.datetime.fromisoformat(x["start"]))} for x in slots]}
 
@@ -485,7 +501,8 @@ def public_book(handle: str, b: DirectBook, s=Depends(db)):
     if not name or not re.fullmatch(r"[^@\s]+@[^@\s]+\.[^@\s]+", email): raise HTTPException(422, "Add your name and a valid email.")
     owner = s.get(Owner, p.owner_id); cal = calendar_svc.for_owner(owner, s); rules = calendar_svc.rules_of(p); dur = int(rules["duration"])
     bookings = list(s.scalars(select(Booking).where(Booking.persona_id == p.id)))
-    start = b.start[:16]
+    start = b.start[:16] if isinstance(b.start, str) else ""
+    if not re.fullmatch(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}", start): raise HTTPException(422, "Choose a valid time slot.")
     if s.scalar(select(Booking).where(Booking.persona_id == p.id, Booking.start == start)):
         raise HTTPException(409, "That time was just taken. Pick another.")
     if not calendar_svc.is_valid(rules, calendar_svc.all_busy(cal, bookings, 30), start): raise HTTPException(409, "That time was just taken. Pick another.")
@@ -541,7 +558,8 @@ async def run_tool(s, p, conv, name, args):
     # Do not hold a database connection while checking or writing to Google Calendar.
     s.commit()
     if name == "check_availability":
-        days = min(int(args.get("days") or 7), 30)
+        try: days = max(0, min(int(args.get("days") or 7), 30))
+        except (TypeError, ValueError): days = 7
         requested_date = str(args.get("date") or "")[:10]
         slots = calendar_svc.generate(rules, calendar_svc.all_busy(cal, bookings, days), days=days, limit=200, per_day=8)
         if requested_date:
@@ -691,9 +709,9 @@ async def rewrite_lang(reply, lang):
 
 async def handle_turn(s, p, conv, text, voice_mode=False):
     turn_started = time.perf_counter()
-    s.add(Message(conversation_id=conv.id, role="visitor", text=text)); conv.updated_at = now(); s.commit()
+    visitor_message = Message(conversation_id=conv.id, role="visitor", text=text); s.add(visitor_message); conv.updated_at = now(); s.commit()
     log.info("chat_stage=visitor_saved latency_ms=%s", round((time.perf_counter() - turn_started) * 1000))
-    await hub.send(conv.id, {"type": "message", "role": "visitor", "text": text})
+    await hub.send(conv.id, {"type": "message", "id": visitor_message.id, "role": "visitor", "text": text})
     if conv.takeover:
         return None, [], "owner", []
     reply, tools, provider, sources = await agent_reply(s, p, conv, text, voice_mode)
@@ -701,10 +719,10 @@ async def handle_turn(s, p, conv, text, voice_mode=False):
     reply = repair_slots(plain(reply), tools)
     if reply and conv.language in LANG_NAMES and not matches_lang(reply, conv.language):
         reply = repair_slots(plain(await rewrite_lang(reply, conv.language) or reply), tools)
-    s.add(Message(conversation_id=conv.id, role="persona", text=reply, meta=json.dumps({"tools": tools, "provider": provider, "sources": sources})))
+    persona_message = Message(conversation_id=conv.id, role="persona", text=reply, meta=json.dumps({"tools": tools, "provider": provider, "sources": sources})); s.add(persona_message)
     s.commit()
     log.info("chat_stage=response_saved latency_ms=%s", round((time.perf_counter() - turn_started) * 1000))
-    await hub.send(conv.id, {"type": "message", "role": "persona", "text": reply, "tools": tools})
+    await hub.send(conv.id, {"type": "message", "id": persona_message.id, "role": "persona", "text": reply, "tools": tools})
     # Summarization is dashboard metadata, not part of the visitor's response.
     # Run it after the response path so a second provider call cannot hold the
     # chat request open or make a normal greeting feel stalled.
@@ -752,6 +770,47 @@ async def chat(handle: str, b: ChatIn, s=Depends(db)):
     conv.language = guess_lang(b.text)
     reply, tools, provider, sources = await handle_turn(s, p, conv, b.text)
     return {"conversation_id": conv.id, "reply": reply, "tools": tools, "provider": provider, "sources": sources, "takeover": bool(conv.takeover)}
+
+@app.post("/api/p/{handle}/chat/stream")
+async def chat_stream(handle: str, b: ChatIn):
+    """Stream the same agent/tool flow used by voice, without adding another model call."""
+    async def gen():
+        s = SessionLocal()
+        try:
+            p = s.scalar(select(Persona).where(Persona.handle == handle))
+            if not p:
+                yield json.dumps({"type": "error", "message": "not found"}) + "\n"; return
+            text = b.text.strip()[:config.MAX_TEXT_CHARS]
+            if not text:
+                yield json.dumps({"type": "error", "message": "empty message"}) + "\n"; return
+            conv = get_conv(s, p, b.conversation_id, b.visitor_name.strip()[:60], "chat")
+            conv.language = guess_lang(text)
+            visitor = Message(conversation_id=conv.id, role="visitor", text=text); s.add(visitor); conv.updated_at = now(); s.commit(); s.refresh(conv)
+            await hub.send(conv.id, {"type": "message", "id": visitor.id, "role": "visitor", "text": text})
+            yield json.dumps({"type": "conversation", "conversation_id": conv.id}) + "\n"
+            if conv.takeover:
+                yield json.dumps({"type": "done", "reply": "", "tools": [], "takeover": True}) + "\n"; return
+            reply_parts = []; tools_used = []; info = None
+            try:
+                async for kind, value in agent_stream(s, p, conv, text, voice_mode=False):
+                    if kind == "text":
+                        reply_parts.append(value); yield json.dumps({"type": "text", "delta": value}, ensure_ascii=False) + "\n"
+                    elif kind == "tool":
+                        tools_used.append(value); yield json.dumps({"type": "tool", **value}, ensure_ascii=False) + "\n"
+                    else: info = value
+            except Exception as e:
+                log.warning("chat stream failed: %s", type(e).__name__)
+                reply_parts = reply_parts or ["Sorry, I missed that. Could you try again?"]
+                info = {"content": "".join(reply_parts), "tools": tools_used, "provider": "fallback", "sources": []}
+            info = info or {"content": "".join(reply_parts), "tools": tools_used, "provider": "fallback", "sources": []}
+            reply = repair_slots(plain(info.get("content") or "".join(reply_parts)), info.get("tools", tools_used))
+            persona_message = Message(conversation_id=conv.id, role="persona", text=reply, meta=json.dumps({"tools": info.get("tools", tools_used), "provider": info.get("provider", "fallback"), "sources": info.get("sources", [])})); s.add(persona_message); s.commit()
+            await hub.send(conv.id, {"type": "message", "id": persona_message.id, "role": "persona", "text": reply, "tools": info.get("tools", tools_used)})
+            yield json.dumps({"type": "done", "reply": reply, "tools": info.get("tools", tools_used), "provider": info.get("provider", "fallback"), "conversation_id": conv.id, "takeover": bool(conv.takeover)}, ensure_ascii=False) + "\n"
+            asyncio.create_task(refresh_conversation_summary(conv.id))
+        finally:
+            s.close()
+    return StreamingResponse(gen(), media_type="application/x-ndjson", headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
 
 def voice_lang(text, r):
     """Prisma codemix writes Hindi in Devanagari and keeps English words in Latin. A Hindi
@@ -955,8 +1014,8 @@ class OwnerMsg(BaseModel):
 @app.post("/api/conversations/{cid}/reply")
 async def owner_reply(cid: str, b: OwnerMsg, o=Depends(current_owner), s=Depends(db)):
     c = s.get(Conversation, cid); owned(s, c.persona_id, o)
-    s.add(Message(conversation_id=cid, role="owner", text=b.text)); c.updated_at = now(); s.commit()
-    await hub.send(cid, {"type": "message", "role": "owner", "text": b.text}); return {"ok": True}
+    message = Message(conversation_id=cid, role="owner", text=b.text); s.add(message); c.updated_at = now(); s.commit()
+    await hub.send(cid, {"type": "message", "id": message.id, "role": "owner", "text": b.text}); return {"ok": True}
 
 @app.websocket("/ws/conversations/{cid}")
 async def ws_conv(ws: WebSocket, cid: str, token: str = ""):

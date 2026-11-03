@@ -77,7 +77,7 @@ export default function StudioLayout({ children }: { children: ReactNode }) {
             {!collapsed && <button aria-label="Sign out" title="Sign out" onClick={logout} className="text-ink-mute hover:text-ink"><SignOut size={15} /></button>}
           </div>
         </aside>
-        <div className="min-w-0 flex-1 pb-20 md:pb-0">
+        <div className="min-w-0 max-w-full flex-1 overflow-x-hidden pb-20 md:pb-0">
           {st && CAL_MSG[st] && (
             <div className="mx-4 mt-3 flex flex-wrap items-center gap-2 rounded-xl bg-butter/70 px-3 py-2 text-[12.5px] md:mx-6">
               <Warning size={15} /><span className="flex-1">{CAL_MSG[st]}</span>

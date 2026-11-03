@@ -6,8 +6,9 @@ import { Card, Field } from "@/components/ui";
 import { AiImport } from "@/components/AiImport";
 import { useStudio, useUnsavedGuard, savePersona, Page, Empty } from "../ctx";
 
+const LANGS = [["en", "English"], ["hi", "Hindi"], ["hinglish", "Hinglish"], ["ta-IN", "Tamil"], ["te-IN", "Telugu"], ["kn-IN", "Kannada"], ["bn-IN", "Bengali"], ["mr-IN", "Marathi"]] as const;
 const pick = (p: any) => ({ name: p.name, headline: p.headline || "", bio: p.bio || "", rates: p.rates || "", tone: p.tone || "", accent: p.accent || "lilac",
-  faqs: p.faqs?.length ? p.faqs : [], links: p.links?.length ? p.links : [] });
+  languages: p.languages?.length ? p.languages : ["en"], faqs: p.faqs?.length ? p.faqs : [], links: p.links?.length ? p.links : [] });
 
 export default function PersonaPage() {
   const { persona: p, reload, toast } = useStudio();
@@ -26,6 +27,7 @@ export default function PersonaPage() {
     const e: Record<string, string> = {};
     if (!f.name.trim()) e.name = "Add your name.";
     if (f.bio.trim().length < 20) e.bio = "Write at least a sentence or two.";
+    if (!f.languages.length) e.languages = "Choose at least one conversation language.";
     f.links.forEach((l: any, i: number) => { if (l.url && !/^https?:\/\/\S+\.\S+/.test(l.url)) e["link" + i] = "Use a full link starting with https://"; });
     setErrs(e); return !Object.keys(e).length;
   }
@@ -59,6 +61,7 @@ export default function PersonaPage() {
               <Field label="Rates" hint="Optional"><textarea rows={3} className="field clay-pressed resize-y" value={f.rates} onChange={(e) => set("rates", e.target.value)} placeholder="Share a starting rate or how you price projects." /></Field>
               <Field label="Conversation style"><textarea rows={3} className="field clay-pressed resize-y" value={f.tone} onChange={(e) => set("tone", e.target.value)} placeholder="Warm, direct, and concise." /></Field>
             </div>
+            <div className="mt-4 border-t border-rule pt-4"><div className="text-[13px] font-medium">Conversation languages</div><p className="mt-0.5 text-[12.5px] text-ink-soft">Choose every language your Twyn should understand and speak.</p><div className="mt-2 flex flex-wrap gap-1.5">{LANGS.map(([code, label]) => <button key={code} type="button" onClick={() => set("languages", f.languages.includes(code) ? f.languages.filter((x: string) => x !== code) : [...f.languages, code])} className={`rounded-full border px-3 py-1.5 text-[12px] transition ${f.languages.includes(code) ? "border-ink bg-ink text-canvas" : "border-rule bg-white text-ink-soft hover:bg-canvas"}`}>{label}</button>)}</div>{err("languages")}</div>
             <div className="mt-4 flex flex-wrap items-center gap-2"><span className="mr-1 text-[13px] font-medium">Page accent</span>
               {Object.entries(ACCENTS).map(([k, c]) => <button key={k} aria-label={k} onClick={() => set("accent", k)} className="h-6 w-6 rounded-full" style={{ background: c.soft, outline: f.accent === k ? `2px solid ${c.deep}` : "none", outlineOffset: 2 }} />)}</div>
           </Card>

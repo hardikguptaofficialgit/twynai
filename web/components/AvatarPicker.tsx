@@ -2,48 +2,75 @@
 
 import { Check, X } from "@phosphor-icons/react";
 import clsx from "clsx";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { ProfileAvatar, type AvatarStyle } from "@/components/ProfileAvatar";
 
 export const AVATAR_STYLES: { value: AvatarStyle; label: string }[] = [
-  { value: "lorelei-neutral", label: "Lorelei" },
-  { value: "notionists-neutral", label: "Notionists" },
-  { value: "micah", label: "Micah" },
-  { value: "big-smile", label: "Big Smile" },
-  { value: "initial-face", label: "Initials" },
+  { value: "twyn-01", label: "Aster" }, { value: "twyn-02", label: "Milo" },
+  { value: "twyn-03", label: "Nova" }, { value: "twyn-04", label: "Sage" },
+  { value: "twyn-05", label: "Rumi" }, { value: "twyn-06", label: "Iris" },
+  { value: "twyn-07", label: "Arlo" }, { value: "twyn-08", label: "Zoya" },
+  { value: "twyn-09", label: "Kian" }, { value: "twyn-10", label: "Mina" },
+  { value: "twyn-11", label: "Eli" }, { value: "twyn-12", label: "Tara" },
+  { value: "critters-01", label: "Mochi" }, { value: "critters-02", label: "Sunny" },
+  { value: "critters-03", label: "Pip" }, { value: "critters-04", label: "Miso" },
+  { value: "critters-05", label: "Clover" }, { value: "critters-06", label: "Bean" },
+  { value: "critters-07", label: "Nori" }, { value: "critters-08", label: "Pogo" },
+  { value: "critters-09", label: "Maple" }, { value: "critters-10", label: "Luna" },
+  { value: "critters-11", label: "Cosmo" }, { value: "critters-12", label: "Bubbles" },
 ];
 
-const AVATAR_BACKGROUNDS = ["d9cdf6", "cdeadb", "cfe2f5", "f8dacb", "f4eac3", "f5e7dc", "e5dff7", "d8eef0"];
-
-export function AvatarStylePicker({ seed, value, background = "d9cdf6", onChange, onBackgroundChange }: { seed: string; value: AvatarStyle; background?: string; onChange: (value: AvatarStyle) => void; onBackgroundChange?: (value: string) => void }) {
-  return <div className="space-y-3">
-    <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
-    {AVATAR_STYLES.map((style) => <button key={style.value} type="button" onClick={() => onChange(style.value)} aria-pressed={value === style.value} className={clsx("flex items-center gap-2 rounded-full border px-2 py-1.5 text-[12px] transition-colors", value === style.value ? "border-ink bg-white text-ink" : "border-rule bg-white/50 text-ink-soft hover:bg-white")}>
-      <ProfileAvatar seed={seed} style={style.value} background={background} size={30} />{style.label}{value === style.value && <Check size={13} weight="bold" className="text-mint-deep" />}
-    </button>)}
-    </div>
-    {onBackgroundChange && <div><p className="mb-1.5 text-[11px] text-ink-mute">Color</p><div className="flex flex-wrap gap-2">{AVATAR_BACKGROUNDS.map((color) => <button key={color} type="button" aria-label={"Choose " + color + " avatar color"} aria-pressed={background === color} onClick={() => onBackgroundChange(color)} className={clsx("h-7 w-7 rounded-full border-2", background === color ? "border-ink ring-2 ring-ink/10" : "border-white/80")} style={{ backgroundColor: "#" + color }} />)}</div></div>}
+export function AvatarStylePicker({ seed, value, background = "d9cdf6", onChange }: { seed: string; value: AvatarStyle; background?: string; onChange: (value: AvatarStyle) => void }) {
+  const groups = [["Pixel faces", AVATAR_STYLES.filter((avatar) => avatar.value.startsWith("twyn-"))], ["Critters", AVATAR_STYLES.filter((avatar) => avatar.value.startsWith("critters-"))]] as const;
+  return <div className="space-y-7">
+    {groups.map(([title, avatars]) => <section key={title}><div className="mb-2 text-[11px] font-medium uppercase tracking-[0.12em] text-ink-mute">{title}</div><div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
+      {avatars.map((avatar) => <button key={avatar.value} type="button" onClick={() => onChange(avatar.value)} aria-label={`Choose ${avatar.label} avatar`} aria-pressed={value === avatar.value} className={clsx("group relative rounded-2xl border bg-white/70 p-2 text-center transition duration-200 hover:-translate-y-0.5 hover:bg-white", value === avatar.value ? "border-ink ring-2 ring-ink/10" : "border-rule")}>
+        <ProfileAvatar seed={seed} style={avatar.value} background={background} size={64} className="mx-auto shadow-sm transition group-hover:scale-[1.03]" />
+        <span className="mt-1.5 block text-[11px] font-medium text-ink-soft">{avatar.label}</span>
+        {value === avatar.value && <span className="absolute right-1.5 top-1.5 grid h-5 w-5 place-items-center rounded-full bg-ink text-canvas"><Check size={12} weight="bold" /></span>}
+      </button>)}
+    </div></section>)}
   </div>;
 }
 
-export function AvatarPickerModal({ seed, value, background = "d9cdf6", onChange, onBackgroundChange }: { seed: string; value: AvatarStyle; background?: string; onChange: (value: AvatarStyle) => void; onBackgroundChange?: (value: string) => void }) {
+export function AvatarPickerModal({ seed, value, background = "d9cdf6", onChange }: { seed: string; value: AvatarStyle; background?: string; onChange: (value: AvatarStyle) => void }) {
   const [open, setOpen] = useState(false);
+  const closeButton = useRef<HTMLButtonElement>(null);
+  const selected = AVATAR_STYLES.find((avatar) => avatar.value === value) || AVATAR_STYLES[0];
   useEffect(() => {
     if (!open) return;
     const close = (e: KeyboardEvent) => { if (e.key === "Escape") setOpen(false); };
     document.addEventListener("keydown", close);
     const previous = document.body.style.overflow; document.body.style.overflow = "hidden";
+    window.setTimeout(() => closeButton.current?.focus(), 0);
     return () => { document.removeEventListener("keydown", close); document.body.style.overflow = previous; };
   }, [open]);
   return <>
     <button type="button" onClick={() => setOpen(true)} className="inline-flex items-center gap-2 rounded-full border border-rule bg-white px-3 py-1.5 text-[12.5px] font-medium text-ink transition-colors hover:bg-canvas">
-      <ProfileAvatar seed={seed} style={value} background={background} size={24} /> Choose avatar
+      <ProfileAvatar seed={seed} style={value} background={background} size={24} /> Change avatar
     </button>
-    {open && <div className="fixed inset-0 z-[70] flex items-end justify-center bg-ink/20 p-0 backdrop-blur-[2px] sm:items-center sm:p-4" role="dialog" aria-modal="true" aria-labelledby="avatar-picker-title" onMouseDown={(e) => { if (e.currentTarget === e.target) setOpen(false); }}>
-      <div className="w-full max-w-[560px] rounded-t-[26px] border border-rule bg-canvas p-5 shadow-[0_18px_60px_oklch(22%_0.025_285/0.18)] sm:rounded-[26px]">
-        <div className="flex items-start justify-between gap-4"><div><p className="eyebrow">Profile picture</p><h2 id="avatar-picker-title" className="display mt-1 text-[24px]">Choose your avatar</h2><p className="mt-1 text-[12.5px] text-ink-soft">Pick a calm, illustrated style and a color that feels like you.</p></div><button type="button" aria-label="Close avatar picker" onClick={() => setOpen(false)} className="grid h-9 w-9 place-items-center rounded-full border border-rule bg-white text-ink-soft hover:text-ink"><X size={16} /></button></div>
-        <div className="mt-5"><AvatarStylePicker seed={seed} value={value} background={background} onChange={(next) => { onChange(next); setOpen(false); }} onBackgroundChange={onBackgroundChange} /></div>
+    {open && typeof document !== "undefined" ? createPortal(<div className="fixed inset-0 z-[999] bg-[#fcfaf7]" role="dialog" aria-modal="true" aria-labelledby="avatar-picker-title">
+      <div className="flex h-[100dvh] w-full flex-col">
+        <div className="shrink-0 border-b border-rule/80 px-5 pb-4 pt-[calc(1rem+env(safe-area-inset-top))] sm:px-10 sm:pb-5 sm:pt-7">
+          <div className="mx-auto flex w-full max-w-[860px] items-start justify-between gap-4">
+            <div className="flex min-w-0 items-center gap-3 sm:gap-4">
+              <ProfileAvatar seed={seed} style={value} background={background} size={64} className="shrink-0 ring-4 ring-white/80 sm:h-[76px] sm:w-[76px]" />
+              <div className="min-w-0"><p className="eyebrow">Profile picture</p><h2 id="avatar-picker-title" className="display mt-1 text-[24px] sm:text-[32px]">Choose your avatar</h2><p className="mt-1 truncate text-[12px] text-ink-soft sm:text-[13px]">{selected.label} · saved to your profile</p></div>
+            </div>
+            <button ref={closeButton} type="button" aria-label="Close avatar picker" onClick={() => setOpen(false)} className="grid h-10 w-10 shrink-0 place-items-center rounded-full border border-rule bg-white text-ink-soft transition hover:text-ink sm:h-11 sm:w-11"><X size={18} /></button>
+          </div>
+        </div>
+        <div data-lenis-prevent="true" className="twyn-scrollbar min-h-0 flex-1 overflow-y-scroll overscroll-contain px-5 py-6 sm:px-10 sm:py-10 [touch-action:pan-y]" onWheel={(event) => event.stopPropagation()}>
+          <div className="mx-auto w-full max-w-[860px]">
+            <p className="mb-5 max-w-xl text-[13px] leading-relaxed text-ink-soft sm:text-[14px]">Pick a friendly pixel face or a soft Critter. Every option is deterministic, so your profile stays consistent everywhere.</p>
+            <AvatarStylePicker seed={seed} value={value} background={background} onChange={onChange} />
+          </div>
+        </div>
+        <div className="shrink-0 border-t border-rule/80 bg-white/45 px-5 py-3 pb-[calc(.75rem+env(safe-area-inset-bottom))] sm:px-10 sm:py-4 sm:pb-4">
+          <div className="mx-auto flex w-full max-w-[860px] justify-end"><button type="button" onClick={() => setOpen(false)} className="h-10 min-w-32 rounded-full bg-ink px-5 text-[13px] font-medium text-canvas transition hover:bg-ink-soft">Done</button></div>
+        </div>
       </div>
-    </div>}
+    </div>, document.body) : null}
   </>;
 }

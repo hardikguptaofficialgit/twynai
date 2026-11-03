@@ -51,9 +51,28 @@ export function parseAnswer(md: string): Parsed {
     if (t === "bio" || t === "about") out.bio = text.split("\n").join(" ");
     if (t.includes("talk") || t.includes("tone")) out.tone = text.split("\n").join(" ").slice(0, 200);
     if (t.includes("link")) {
-      for (const line of text.split("\n")) {
-        const match = line.match(/^\s*[-*]?\s*\[([^\]]+)\]\((https?:\/\/[^)]+)\)/) || line.match(/^\s*[-*]?\s*([^:]+):\s*(https?:\/\/\S+)/) || line.match(/^\s*[-*]?\s*(https?:\/\/\S+)/);
-        if (match) out.links.push({ label: match[2] ? match[1].trim() : "Website", url: (match[2] || match[1]).replace(/[),.;]+$/, "") });
+      const addLink = (label: string, url: string) => {
+        const cleanUrl = url.replace(/[),.;]+$/, "");
+        if (!/^https?:\/\/|^mailto:/i.test(cleanUrl) || out.links.some((link) => link.url === cleanUrl)) return;
+        out.links.push({ label: label.trim() || "Website", url: cleanUrl });
+      };
+      for (const rawLine of body.split("\n")) {
+        const line = rawLine.replace(/^\s*[-*•]\s+/, "").trim();
+        const markdown = /\[([^\]]+)\]\((https?:\/\/[^)\s]+|mailto:[^)\s]+)\)/g;
+        let match: RegExpExecArray | null;
+        let found = false;
+        while ((match = markdown.exec(line))) {
+          const prefix = line.slice(0, match.index).replace(/[:\-\s]+$/, "").trim();
+          const label = prefix || (match[1].match(/^https?:\/\//i) ? "Website" : match[1]);
+          addLink(label, match[2]); found = true;
+        }
+        if (found) continue;
+        const labelled = line.match(/^([^:]+):\s*(https?:\/\/\S+|[\w.+-]+@[\w.-]+\.[A-Za-z]{2,})$/);
+        if (labelled) addLink(labelled[1], labelled[2].includes("@") ? `mailto:${labelled[2]}` : labelled[2]);
+        else {
+          const bare = line.match(/https?:\/\/\S+/);
+          if (bare) addLink("Website", bare[0]);
+        }
       }
     }
     out.entries.push({ title: s.title, text });
@@ -101,13 +120,20 @@ export function AiImport({ pid, onApplied, compact }: { pid?: string; onApplied?
         <div className="glass space-y-2 p-3" style={{ borderRadius: 16 }}>
           <div className="flex items-center justify-between"><span className="text-[13px] font-medium">{prev.entries.length} sections, {prev.faqs.length} FAQs, {prev.links.length} links found</span>
             <button onClick={() => setPrev(null)} className="text-[12px] text-ink-soft hover:text-ink">Edit text</button></div>
-          <div className="max-h-64 space-y-1.5 overflow-y-auto pr-1">
+          <div
+            data-lenis-prevent="true"
+            className="twyn-scrollbar h-[min(58vh,520px)] min-h-[220px] space-y-1.5 overflow-y-scroll overscroll-contain pr-1 [touch-action:pan-y]"
+            onWheel={(event) => event.stopPropagation()}
+          >
             {prev.entries.map((e, i) => (
               <div key={i} className="clay-pressed flex gap-2 px-3 py-2 text-[12.5px]"><div className="min-w-0 flex-1"><div className="font-medium">{e.title}</div><p className="line-clamp-2 text-ink-soft">{e.text}</p></div>
                 <button aria-label="Remove" onClick={() => setPrev({ ...prev, entries: prev.entries.filter((_, j) => j !== i) })} className="self-start text-ink-mute hover:text-ink"><Trash size={14} /></button></div>))}
             {prev.faqs.map((f, i) => (
               <div key={"f" + i} className="clay-pressed flex gap-2 px-3 py-2 text-[12.5px]"><div className="min-w-0 flex-1"><div className="font-medium">Q: {f.q}</div><p className="line-clamp-1 text-ink-soft">A: {f.a}</p></div>
                 <button aria-label="Remove" onClick={() => setPrev({ ...prev, faqs: prev.faqs.filter((_, j) => j !== i) })} className="self-start text-ink-mute hover:text-ink"><Trash size={14} /></button></div>))}
+            {prev.links.map((link, i) => (
+              <div key={`link${i}`} className="clay-pressed flex items-center gap-2 px-3 py-2 text-[12.5px]"><ArrowSquareOut size={14} className="shrink-0 text-ink-mute" /><div className="min-w-0 flex-1"><div className="font-medium">{link.label}</div><p className="truncate text-ink-soft">{link.url}</p></div>
+                <button aria-label={`Remove ${link.label}`} onClick={() => setPrev({ ...prev, links: prev.links.filter((_, j) => j !== i) })} className="self-start text-ink-mute hover:text-ink"><Trash size={14} /></button></div>))}
           </div>
           {prev.bio && <label className="flex items-center gap-2 text-[12.5px]"><input type="checkbox" checked={useBio} onChange={(e) => setUseBio(e.target.checked)} />Also use the Bio section as my bio</label>}
           {prev.tone && <label className="flex items-center gap-2 text-[12.5px]"><input type="checkbox" checked={useTone} onChange={(e) => setUseTone(e.target.checked)} />Also use "How I talk" as my tone</label>}

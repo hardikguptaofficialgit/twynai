@@ -55,7 +55,7 @@ function loadAvatar(): Promise<File | null> {
 }
 
 type Draft = Omit<Persona, "id" | "has_voice"> & { id?: string; has_voice?: boolean; languages: string[]; availability: any; published?: boolean; onboarding_step?: number };
-const empty = (name = ""): Draft => ({ handle: "", name, headline: "", bio: "", rates: "", faqs: [], links: [], tone: TONES[0], accent: "lilac", avatar_style: "notionists-neutral", avatar_background: "d9cdf6", languages: ["en", "hinglish"], availability: DEFAULT_AVAIL });
+const empty = (name = ""): Draft => ({ handle: "", name, headline: "", bio: "", rates: "", faqs: [], links: [], tone: TONES[0], accent: "lilac", avatar_seed: "twyn-01", languages: ["en", "hinglish"], availability: DEFAULT_AVAIL });
 
 const input = "field clay-pressed text-ink placeholder:text-ink-mute/70";
 
@@ -119,8 +119,7 @@ function OnboardingInner() {
   const [saved, setSaved] = useState("");
   const [loaded, setLoaded] = useState(false);
   const [avatarFile, setAvatarFile] = useState<File | null>(null);
-  const [avatarStyle, setAvatarStyle] = useState<AvatarStyle>("notionists-neutral");
-  const [avatarBackground, setAvatarBackground] = useState("d9cdf6");
+  const [avatarStyle, setAvatarStyle] = useState<AvatarStyle>("twyn-01");
   const [availState, setAvailState] = useState<"idle" | "checking" | "available" | "taken" | "error">("idle");
   const [notice, setNotice] = useState<{ text: string; tone: "ok" | "err" } | null>(null);
   const stageStartedAt = useRef(Date.now());
@@ -140,7 +139,7 @@ function OnboardingInner() {
     setSaveError("");
   };
 
-  useEffect(() => { loadAvatar().then((file) => { if (file) setAvatarFile(file); }); const savedStyle = localStorage.getItem("twyn-onboarding-avatar-style") as AvatarStyle | null; if (savedStyle) setAvatarStyle(savedStyle); }, []);
+  useEffect(() => { loadAvatar().then((file) => { if (file) setAvatarFile(file); }); const savedStyle = localStorage.getItem("twyn-onboarding-avatar-style") as AvatarStyle | null; if (savedStyle) { setAvatarStyle(savedStyle); set({ avatar_seed: savedStyle }); } }, []);
 
   // Local-first: load from localStorage; if signed in, merge API persona
   useEffect(() => {
@@ -215,7 +214,7 @@ function OnboardingInner() {
       else if (!d.id && avail === false) e.handle = "That handle is taken.";
     }
     if (i === 1 && !d.name.trim()) e.name = "Add your name.";
-    if (i === 2 && !d.headline.trim()) e.headline = "Add a one-line role.";
+    if (i === 2 && (!d.headline.trim() || d.headline === "Other")) e.headline = "Add your custom role.";
     if (i === 3 && d.bio.trim().length < 40) e.bio = "Write at least a couple of sentences so Twyn has something to go on.";
     if (i === 4 && !d.languages.length) e.languages = "Pick at least one language.";
     if (i === 6) d.links.forEach((l, k) => { if (l.url && !/^https?:\/\//.test(l.url)) e["link" + k] = "Links should start with https://"; });
@@ -314,7 +313,7 @@ function OnboardingInner() {
   const go = (i: number) => { setErrs({}); setDir(i > stage ? 1 : -1); setStage(i); };
 
   const viewByStage: Record<number, React.ReactNode> = {
-    0: <div className="space-y-7"><HandleStep d={d} set={set} avail={avail} availState={availState} errs={errs} /><SubstepDivider label="Your profile" /><ProfilePhotoStep d={d} set={set} errs={errs} avatarFile={avatarFile} setAvatarFile={setAvatarFile} avatarStyle={avatarStyle} avatarBackground={avatarBackground} setAvatarStyle={(style: AvatarStyle) => { setAvatarStyle(style); set({ avatar_style: style }); localStorage.setItem("twyn-onboarding-avatar-style", style); }} setAvatarBackground={(color: string) => { setAvatarBackground(color); set({ avatar_background: color }); }} /><SubstepDivider label="About you" /><RoleStep d={d} set={set} errs={errs} /></div>,
+    0: <div className="space-y-7"><HandleStep d={d} set={set} avail={avail} availState={availState} errs={errs} /><SubstepDivider label="Your profile" /><ProfilePhotoStep d={d} set={set} errs={errs} avatarFile={avatarFile} setAvatarFile={setAvatarFile} avatarStyle={avatarStyle} setAvatarStyle={(style: AvatarStyle) => { setAvatarStyle(style); set({ avatar_seed: style }); localStorage.setItem("twyn-onboarding-avatar-style", style); }} /><SubstepDivider label="About you" /><RoleStep d={d} set={set} errs={errs} /></div>,
     1: <div className="space-y-7"><BioStep d={d} set={set} errs={errs} /><SubstepDivider label="Your Twyn" /><LanguagesStep d={d} set={set} errs={errs} /></div>,
     2: <div className="space-y-7"><ToneStep d={d} set={set} /><SubstepDivider label="Knowledge" /><KnowledgeStep d={d} set={set} errs={errs} ensurePersona={ensurePersona} /></div>,
     3: <div className="space-y-8"><VoiceStep d={d} set={set} ensurePersona={ensurePersona} /></div>,
@@ -382,8 +381,8 @@ function OnboardingInner() {
   );
 }
 
-function Head({ k, t, d }: { k: string; t: string; d: string }) {
-  return <div className="mb-8 text-center"><p className="eyebrow">{k}</p><h1 className="display mt-1.5 text-[28px]">{t}</h1><p className="mx-auto mt-2 max-w-lg text-[13.5px] text-ink-soft">{d}</p></div>;
+function Head({ k, t, d }: { k?: string; t: string; d: string }) {
+  return <div className="mb-8 text-center">{k && <p className="eyebrow">{k}</p>}<h1 className="display mt-1.5 text-[28px]">{t}</h1><p className="mx-auto mt-2 max-w-lg text-[13.5px] text-ink-soft">{d}</p></div>;
 }
 
 function SubstepDivider({ label }: { label: string }) {
@@ -407,7 +406,7 @@ function HandleStep({ d, set, avail, availState, errs }: any) {
   );
 }
 
-function ProfilePhotoStep({ d, set, errs, avatarFile, setAvatarFile, avatarStyle, avatarBackground, setAvatarStyle, setAvatarBackground }: any) {
+function ProfilePhotoStep({ d, set, errs, avatarFile, setAvatarFile, avatarStyle, setAvatarStyle }: any) {
   const [preview, setPreview] = useState("");
   const [photoError, setPhotoError] = useState("");
   useEffect(() => {
@@ -417,11 +416,11 @@ function ProfilePhotoStep({ d, set, errs, avatarFile, setAvatarFile, avatarStyle
   }, [avatarFile]);
   return (
     <div>
-      <Head k="Your profile" t="Add your name and photo" d="Your name is required. A profile photo is optional and can be added later." />
+      <Head t="Add your name and photo" d="Your name is required. A profile photo is optional and can be added later." />
       <Label t="Your name" err={errs.name}><input aria-invalid={!!errs.name} className={clsx(input, errs.name && "border-peach-deep/50")} value={d.name} onChange={(e) => set({ name: e.target.value })} placeholder="Your name" /></Label>
       <div className="glass mt-6 flex flex-col items-center gap-4 p-5 text-center sm:flex-row sm:text-left">
         <div className="grid h-20 w-20 shrink-0 place-items-center overflow-hidden rounded-full border border-rule bg-lilac text-xl font-medium text-ink shadow-sm ring-4 ring-white/70">
-          {preview ? <img src={preview} alt="Profile preview" className="h-full w-full object-cover" /> : <ProfileAvatar seed={d.name || d.handle || "Twyn"} image={d.avatar_url ? `${API}${d.avatar_url}` : undefined} style={avatarStyle} background={avatarBackground} size={80} alt="Profile preview" />}
+          {preview ? <img src={preview} alt="Profile preview" className="h-full w-full object-cover" /> : <ProfileAvatar seed={d.name || d.handle || "Twyn"} image={d.avatar_url ? `${API}${d.avatar_url}` : undefined} style={avatarStyle} size={80} alt="Profile preview" />}
         </div>
         <div className="min-w-0 flex-1">
           <p className="text-sm font-medium">Profile photo <span className="font-normal text-ink-mute">· optional</span></p>
@@ -430,7 +429,7 @@ function ProfilePhotoStep({ d, set, errs, avatarFile, setAvatarFile, avatarStyle
             <Camera size={15} />{avatarFile || d.avatar_url ? "Change photo" : "Choose photo"}
           </label>
           {avatarFile && <p className="mt-2 truncate text-xs text-ink-mute">Selected: {avatarFile.name}</p>}
-          {!avatarFile && !d.avatar_url && <div className="mt-3"><p className="mb-2 text-[11px] text-ink-mute">Choose your avatar</p><AvatarPickerModal seed={d.name || d.handle || "Twyn"} value={avatarStyle} background={avatarBackground} onChange={setAvatarStyle} onBackgroundChange={setAvatarBackground} /></div>}
+          {!avatarFile && !d.avatar_url && <div className="mt-3"><p className="mb-2 text-[11px] text-ink-mute">Choose your avatar</p><AvatarPickerModal seed={d.name || d.handle || "Twyn"} value={avatarStyle} onChange={setAvatarStyle} /></div>}
           <input id="profile-photo" type="file" accept="image/jpeg,image/png,image/webp" className="sr-only" onChange={(e) => {
             const f = e.target.files?.[0]; if (!f) return;
             if (!["image/jpeg", "image/png", "image/webp"].includes(f.type)) { setPhotoError("Use a JPG, PNG, or WebP image."); e.target.value = ""; return; }
@@ -447,9 +446,14 @@ function ProfilePhotoStep({ d, set, errs, avatarFile, setAvatarFile, avatarStyle
 }
 
 function RoleStep({ d, set, errs }: any) {
-  const custom = d.headline && !ROLE_OPTIONS.includes(d.headline);
+  const custom = d.headline && !ROLE_OPTIONS.includes(d.headline) && d.headline !== "Other";
   const selected = custom ? "Other" : d.headline;
-  return <div><Head k="About you" t="What do you do?" d="Choose a role that fits, or write your own." /><Label t="Your role" err={errs.headline}><select aria-invalid={!!errs.headline} className={clsx(input, "appearance-none", errs.headline && "border-peach-deep/50")} value={selected} onChange={(e) => set({ headline: e.target.value === "Other" ? "" : e.target.value })}><option value="">Choose your role</option>{ROLE_OPTIONS.map((role) => <option key={role} value={role}>{role}</option>)}</select></Label>{selected === "Other" && <Label t="Your role" hint="Optional custom label"><input autoFocus className={input} value={custom ? d.headline : ""} onChange={(e) => set({ headline: e.target.value })} placeholder="e.g. Product designer" /></Label>}</div>;
+  return <div><Head t="What do you do?" d="Choose a role that fits, or write your own." /><Label t="Your role" err={errs.headline}><select aria-invalid={!!errs.headline} className={clsx(input, "appearance-none", errs.headline && "border-peach-deep/50")} value={selected} onChange={(e) => set({ headline: e.target.value === "Other" ? "Other" : e.target.value })}><option value="">Choose your role</option>{ROLE_OPTIONS.map((role) => <option key={role} value={role}>{role}</option>)}</select></Label>
+    <AnimatePresence initial={false} mode="wait">
+      {selected === "Other" && <motion.div initial={{ opacity: 0, height: 0, y: -8 }} animate={{ opacity: 1, height: "auto", y: 0 }} exit={{ opacity: 0, height: 0, y: -8 }} transition={{ duration: 0.24, ease: [0.22, 1, 0.36, 1] }} className="overflow-hidden">
+        <div className="pt-3"><Label t="Your role" hint="Custom label"><input autoFocus className={input} value={custom ? d.headline : ""} onChange={(e) => set({ headline: e.target.value })} placeholder="e.g. Product designer" /></Label></div>
+      </motion.div>}
+    </AnimatePresence></div>;
 }
 
 const AI_WRITERS = [
@@ -477,7 +481,7 @@ function BioStep({ d, set, errs }: any) {
 
 function LanguagesStep({ d, set, errs }: any) {
   const toggle = (l: string) => set({ languages: d.languages.includes(l) ? d.languages.filter((x: string) => x !== l) : [...d.languages, l] });
-  return <div><Head k="Your Twyn" t="Which languages should it speak?" d="Choose all that feel natural for your conversations." /><Label t="Languages" err={errs.languages}><div className="flex justify-center gap-2 flex-wrap">{LANGS.map(([k, v]) => <Chip key={k} on={d.languages.includes(k)} onClick={() => toggle(k)}>{v}</Chip>)}</div></Label></div>;
+  return <div><Head t="Which languages should it speak?" d="Choose all that feel natural for your conversations." /><Label t="Languages" err={errs.languages}><div className="flex justify-center gap-2 flex-wrap">{LANGS.map(([k, v]) => <Chip key={k} on={d.languages.includes(k)} onClick={() => toggle(k)}>{v}</Chip>)}</div></Label></div>;
 }
 
 function ToneStep({ d, set }: any) {
@@ -544,7 +548,7 @@ function KnowledgeStep({ d, set, errs, ensurePersona }: any) {
 
   return (
     <div>
-      <Head k="Knowledge" t="What should it know?" d="Twyn only answers from what you add here. Anything else, it will say it does not know." />
+      <Head t="What should it know?" d="Twyn only answers from what you add here. Anything else, it will say it does not know." />
       <div className="glass mb-6 p-4" style={{ borderRadius: 18 }}>
         <AiImport pid={d.id} compact onApplied={(p, o) => set({ ...(o.bio ? { bio: p.bio } : {}), ...(o.tone ? { tone: p.tone } : {}), faqs: [...d.faqs.filter((f: any) => f.q.trim()), ...p.faqs], links: [...d.links.filter((l: any) => l.url.trim()), ...p.links.filter((l) => !d.links.some((existing: any) => existing.url === l.url))] })} />
       </div>
