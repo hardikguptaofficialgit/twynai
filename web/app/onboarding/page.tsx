@@ -2,17 +2,21 @@
 import Image from "next/image";
 import { useEffect, useRef, useState, Suspense } from "react";
 import Link from "next/link";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { AnimatePresence, motion } from "motion/react";
-import { ArrowLeft, ArrowRight, Camera, Check, Copy, FileText, Link as Link2, CircleNotch as Loader2, Microphone as Mic, Plus, Stop as Square, Trash as Trash2, UploadSimple as Upload, WarningCircle, X, ArrowSquareOut as ExternalLink, SpeakerHigh as Volume2 } from "@phosphor-icons/react";
+import { ArrowLeft, ArrowRight, Camera, Check, Copy, FileText, Link as Link2, CircleNotch as Loader2, Plus, Trash as Trash2, UploadSimple as Upload, WarningCircle, X, ArrowSquareOut as ExternalLink } from "@phosphor-icons/react";
 import clsx from "clsx";
-import { api, API, encodeWav, Persona, token } from "@/lib/api";
+import { api, API, Persona, token } from "@/lib/api";
 import { Logo, Backdrop, TwynLoader } from "@/components/ui";
 import { Orb } from "@/components/Orb";
 import { VoiceCloner } from "@/components/VoiceCloner";
 import { AiImport } from "@/components/AiImport";
+import { ProfileAvatar } from "@/components/ProfileAvatar";
 
-const STEPS = ["Handle", "Name", "Role", "About", "Languages", "Style", "Knowledge", "Voice", "Calendar", "Availability", "Publish"];
+const STAGES = ["Identity", "About", "Personality", "Experience", "Launch"];
+const STAGE_STEPS = [[0, 1, 2], [3, 4], [5, 6], [7, 8, 9], [10]];
+const LEGACY_STEP_FOR_STAGE = [0, 3, 5, 7, 10];
+const stageForLegacyStep = (step: number) => step >= 10 ? 4 : step >= 7 ? 3 : step >= 5 ? 2 : step >= 3 ? 1 : 0;
 const LANGS: [string, string][] = [["en", "English"], ["hi", "Hindi"], ["hinglish", "Hinglish"], ["ta", "Tamil"], ["te", "Telugu"], ["kn", "Kannada"], ["bn", "Bengali"], ["mr", "Marathi"], ["gu", "Gujarati"], ["ml", "Malayalam"], ["pa", "Punjabi"]];
 const TONES = ["Warm and concise", "Friendly and casual", "Crisp and professional", "Playful"];
 const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
@@ -79,10 +83,10 @@ function Progress({ step, max, go }: { step: number; max: number; go: (i: number
   return (
     <div className="mx-auto max-w-3xl">
       <div className="h-1 overflow-hidden rounded-full bg-paper-3">
-        <motion.div className="h-full rounded-full bg-ink" animate={{ width: `${((step + 1) / STEPS.length) * 100}%` }} transition={{ type: "spring", stiffness: 120, damping: 20 }} />
+        <motion.div className="h-full rounded-full bg-ink" animate={{ width: `${((step + 1) / STAGES.length) * 100}%` }} transition={{ type: "spring", stiffness: 120, damping: 20 }} />
       </div>
       <ol className="mt-3 hidden items-center justify-between gap-1 sm:flex">
-        {STEPS.map((s, i) => {
+        {STAGES.map((s, i) => {
           const done = i < step || (i <= max && i !== step);
           return (
             <li key={s}>
@@ -100,11 +104,10 @@ function Progress({ step, max, go }: { step: number; max: number; go: (i: number
 }
 
 function OnboardingInner() {
-  const r = useRouter();
   const sp = useSearchParams();
   const [me, setMe] = useState<any>(null);
   const [d, setD] = useState<Draft>(empty());
-  const [step, setStep] = useState(0);
+  const [stage, setStage] = useState(0);
   const [max, setMax] = useState(0);
   const [dir, setDir] = useState(1);
   const [errs, setErrs] = useState<Record<string, string>>({});
@@ -113,6 +116,7 @@ function OnboardingInner() {
   const [saved, setSaved] = useState("");
   const [loaded, setLoaded] = useState(false);
   const [avatarFile, setAvatarFile] = useState<File | null>(null);
+  const stageStartedAt = useRef(Date.now());
   const set = (p: Partial<Draft>) => {
     setD((x) => ({ ...x, ...p }));
     setErrs((current) => {
@@ -135,47 +139,40 @@ function OnboardingInner() {
     const local = JSON.parse(localStorage.getItem("proxy_draft") || "null");
 
     if (token()) {
-      api("/api/me")
-        .then((owner) => {
+      Promise.all([api("/api/me"), api("/api/me/personas")])
+        .then(([owner, ps]: [any, any[]]) => {
           // Older onboarding builds silently created this placeholder identity.
           if (/^creator_\d+@twyn\.app$/i.test(owner.email || "")) {
             localStorage.removeItem("proxy_token");
             if (local) {
               setD({ ...local, handle: claim || local.handle });
-              setStep(Math.min(local.onboarding_step || 0, 10));
-              setMax(Math.min(local.onboarding_step || 0, 10));
+              const s = stageForLegacyStep(Math.min(local.onboarding_step || 0, 10));
+              setStage(s); setMax(s);
             } else set({ handle: claim });
-            return null;
+            return;
           }
           setMe(owner);
-          if (owner?.name && !local?.name) {
-            setD((prev) => ({ ...prev, name: prev.name || owner.name }));
-          }
-          return api("/api/me/personas");
-        })
-        .then((ps: any[] | null) => {
-          if (!ps) return;
+          if (owner?.name && !local?.name) setD((prev) => ({ ...prev, name: prev.name || owner.name }));
           if (ps[0]) {
             const p = ps[0];
             setD({ ...empty(), ...p, availability: { ...DEFAULT_AVAIL, ...(p.availability || {}) } });
-            const s = Math.min(p.onboarding_step || 1, 10);
-            setStep(p.published ? 10 : s); setMax(p.published ? 10 : s);
+            const s = stageForLegacyStep(Math.min(p.onboarding_step || 0, 10));
+            setStage(p.published ? 4 : s); setMax(p.published ? 4 : s);
           } else if (local) {
             setD({ ...local, handle: claim || local.handle });
-            setStep(Math.min(local.onboarding_step || 0, 10)); setMax(Math.min(local.onboarding_step || 0, 10));
-          } else {
-            set({ handle: claim });
-          }
+            const s = stageForLegacyStep(Math.min(local.onboarding_step || 0, 10));
+            setStage(s); setMax(s);
+          } else set({ handle: claim });
         })
         .catch(() => {
           localStorage.removeItem("proxy_token");
           if (local) setD({ ...local, handle: claim || local.handle });
           else set({ handle: claim });
-          if (local) { setStep(Math.min(local.onboarding_step || 0, 10)); setMax(Math.min(local.onboarding_step || 0, 10)); }
+          if (local) { const s = stageForLegacyStep(Math.min(local.onboarding_step || 0, 10)); setStage(s); setMax(s); }
         })
         .finally(() => setLoaded(true));
     } else {
-      if (local) { setD({ ...local, handle: claim || local.handle }); setStep(Math.min(local.onboarding_step || 0, 10)); setMax(Math.min(local.onboarding_step || 0, 10)); }
+      if (local) { const s = stageForLegacyStep(Math.min(local.onboarding_step || 0, 10)); setD({ ...local, handle: claim || local.handle }); setStage(s); setMax(s); }
       else set({ handle: claim });
       setLoaded(true);
     }
@@ -183,6 +180,10 @@ function OnboardingInner() {
 
   // Persist draft locally when there's no API id yet
   useEffect(() => { if (loaded && !d.id) localStorage.setItem("proxy_draft", JSON.stringify(d)); }, [d, loaded]);
+  useEffect(() => {
+    if (stage > 0 && process.env.NODE_ENV !== "production") console.debug(`[twyn-perf] onboarding stage=${stage} duration_ms=${Date.now() - stageStartedAt.current}`);
+    stageStartedAt.current = Date.now();
+  }, [stage]);
 
   // Live handle availability check
   const [avail, setAvail] = useState<null | boolean>(null);
@@ -192,7 +193,7 @@ function OnboardingInner() {
     return () => clearTimeout(t);
   }, [d.handle, d.id]);
 
-  function validate(i: number) {
+  function validate(i: number, update = true) {
     const e: Record<string, string> = {};
     if (i === 0) {
       if (!/^[a-z0-9-]{3,30}$/.test(d.handle)) e.handle = "Use 3 to 30 lowercase letters, numbers or dashes.";
@@ -204,7 +205,8 @@ function OnboardingInner() {
     if (i === 4 && !d.languages.length) e.languages = "Pick at least one language.";
     if (i === 6) d.links.forEach((l, k) => { if (l.url && !/^https?:\/\//.test(l.url)) e["link" + k] = "Links should start with https://"; });
     if (i === 9 && (!d.availability.days.length || d.availability.start >= d.availability.end)) e.avail = "Choose at least one day and an end time after the start time.";
-    setErrs(e); return !Object.keys(e).length;
+    if (update) setErrs(e);
+    return e;
   }
 
   async function ensurePersona(): Promise<string | null> {
@@ -218,7 +220,7 @@ function OnboardingInner() {
         name: d.name?.trim() || "My Twyn",
         faqs: d.faqs.filter((f: any) => f.q.trim()),
         links: d.links.filter((l: any) => l.url.trim()),
-        onboarding_step: step,
+        onboarding_step: LEGACY_STEP_FOR_STAGE[stage],
       };
       const p: any = await api("/api/personas", { method: "POST", body: JSON.stringify(body) });
       setD((prev) => ({ ...prev, ...p, availability: { ...DEFAULT_AVAIL, ...(p.availability || {}) } }));
@@ -229,7 +231,8 @@ function OnboardingInner() {
     }
   }
 
-  async function persist(nextStep: number, extra: Partial<Draft> = {}) {
+  async function persist(nextStage: number, extra: Partial<Draft> = {}) {
+    const nextStep = LEGACY_STEP_FOR_STAGE[nextStage] ?? 10;
     setSaving(true);
     setSaveError("");
     try {
@@ -280,26 +283,27 @@ function OnboardingInner() {
   }
 
   async function next() {
-    if (!validate(step)) return;
-    const n = step + 1;
+    const stageErrors = STAGE_STEPS[stage].reduce<Record<string, string>>((all, i) => ({ ...all, ...validate(i, false) }), {});
+    setErrs(stageErrors);
+    if (Object.keys(stageErrors).length) return;
+    const n = Math.min(stage + 1, STAGES.length - 1);
     if (!(await persist(n))) return;
-    setDir(1); setStep(n); setMax((m) => Math.max(m, n));
+    setDir(1); setStage(n); setMax((m) => Math.max(m, n));
   }
-  const back = () => { setErrs({}); setDir(-1); setStep((s) => Math.max(0, s - 1)); };
-  const go = (i: number) => { setErrs({}); setDir(i > step ? 1 : -1); setStep(i); };
+  async function skipStage() {
+    const n = Math.min(stage + 1, STAGES.length - 1);
+    if (!(await persist(n))) return;
+    setDir(1); setStage(n); setMax((m) => Math.max(m, n));
+  }
+  const back = () => { setErrs({}); setDir(-1); setStage((s) => Math.max(0, s - 1)); };
+  const go = (i: number) => { setErrs({}); setDir(i > stage ? 1 : -1); setStage(i); };
 
-  const viewByStep: Record<number, React.ReactNode> = {
-    0: <HandleStep d={d} set={set} avail={avail} errs={errs} />,
-    1: <ProfilePhotoStep d={d} set={set} errs={errs} avatarFile={avatarFile} setAvatarFile={setAvatarFile} />,
-    2: <RoleStep d={d} set={set} errs={errs} />,
-    3: <BioStep d={d} set={set} errs={errs} />,
-    4: <LanguagesStep d={d} set={set} errs={errs} />,
-    5: <ToneStep d={d} set={set} />,
-    6: <KnowledgeStep d={d} set={set} errs={errs} ensurePersona={ensurePersona} />,
-    7: <VoiceStep d={d} set={set} ensurePersona={ensurePersona} />,
-    8: <CalendarStep me={me} />,
-    9: <AvailabilityStep d={d} set={set} errs={errs} />,
-    10: <PublishStep d={d} publish={async () => { if (await persist(10, { published: true })) set({ published: true }); }} saving={saving} />,
+  const viewByStage: Record<number, React.ReactNode> = {
+    0: <div className="space-y-8"><HandleStep d={d} set={set} avail={avail} errs={errs} /><ProfilePhotoStep d={d} set={set} errs={errs} avatarFile={avatarFile} setAvatarFile={setAvatarFile} /><RoleStep d={d} set={set} errs={errs} /></div>,
+    1: <div className="space-y-8"><BioStep d={d} set={set} errs={errs} /><LanguagesStep d={d} set={set} errs={errs} /></div>,
+    2: <div className="space-y-8"><ToneStep d={d} set={set} /><KnowledgeStep d={d} set={set} errs={errs} ensurePersona={ensurePersona} /></div>,
+    3: <div className="space-y-8"><VoiceStep d={d} set={set} ensurePersona={ensurePersona} /><CalendarStep me={me} /><AvailabilityStep d={d} set={set} errs={errs} /></div>,
+    4: <PublishStep d={d} publish={async () => { if (await persist(4, { published: true })) set({ published: true }); }} saving={saving} />,
   };
 
   return (
@@ -310,13 +314,13 @@ function OnboardingInner() {
           <Logo />
           <div className="flex items-center gap-3 text-[12.5px] text-ink-mute">
             <AnimatePresence>{saved && <motion.span initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="flex items-center gap-1 text-mint-deep"><Check size={14} />{saved}</motion.span>}</AnimatePresence>
-            <span>Step {step + 1} of {STEPS.length}</span>
+            <span>Stage {stage + 1} of {STAGES.length}</span>
             <Link href="/studio" className="rounded-full px-2.5 py-1 hover:text-ink">Exit</Link>
           </div>
         </header>
       </div>
       <div className="mx-auto w-[min(860px,calc(100%-2rem))] pb-16 pt-8">
-        <p className="eyebrow mb-3 text-center">Set up your Twyn</p><Progress step={step} max={max} go={go} />
+        <p className="eyebrow mb-3 text-center">Set up your Twyn</p><Progress step={stage} max={max} go={go} />
         <div className="clay relative mt-6 overflow-hidden p-6 md:p-10">
           {!loaded ? <TwynLoader label="Loading your setup" compact /> : !token() ? (
             <div className="mx-auto max-w-[420px] text-center py-6">
@@ -336,22 +340,22 @@ function OnboardingInner() {
             </div>
           ) : (
             <AnimatePresence mode="wait" custom={dir} initial={false}>
-              <motion.div className="mx-auto max-w-[620px]" key={step} custom={dir}
+              <motion.div className="mx-auto max-w-[620px]" key={stage} custom={dir}
                 initial={{ opacity: 0, x: dir * 36 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: dir * -36 }}
                 transition={{ duration: 0.32, ease: [0.22, 1, 0.36, 1] }}>
-                {viewByStep[step]}
+                {viewByStage[stage]}
               </motion.div>
             </AnimatePresence>
           )}
-          {loaded && token() && step < 10 && saveError && <InlineError className="mx-auto mt-5 max-w-[620px]">{saveError}</InlineError>}
-          {loaded && token() && step < 10 && (
+          {loaded && token() && stage < 4 && saveError && <InlineError className="mx-auto mt-5 max-w-[620px]">{saveError}</InlineError>}
+          {loaded && token() && stage < 4 && (
             <div className="mt-8 flex items-center justify-between border-t border-rule pt-5">
-              <button onClick={back} disabled={step === 0} className="inline-flex items-center gap-1.5 rounded-xl px-3 py-2 text-sm text-ink-soft hover:text-ink disabled:invisible"><ArrowLeft size={15} />Back</button>
+              <button onClick={back} disabled={stage === 0} className="inline-flex items-center gap-1.5 rounded-xl px-3 py-2 text-sm text-ink-soft hover:text-ink disabled:invisible"><ArrowLeft size={15} />Back</button>
               <div className="flex items-center gap-2">
-                {[6, 7, 8].includes(step) && <button onClick={next} className="rounded-xl h-9 px-4 text-[13.5px] text-ink-soft hover:text-ink">Skip for now</button>}
+                {[2, 3].includes(stage) && <button onClick={skipStage} disabled={saving} className="rounded-xl h-9 px-4 text-[13.5px] text-ink-soft hover:text-ink disabled:opacity-50">Skip for now</button>}
                 <motion.button whileTap={{ scale: 0.97 }} onClick={next} disabled={saving}
                   className="inline-flex items-center gap-2 rounded-full bg-ink h-9 px-4 text-[13.5px] font-medium text-canvas hover:bg-ink-soft disabled:opacity-60">
-                  {saving ? <Loader2 size={15} className="animate-spin" /> : null}{step === 9 ? "Review" : "Continue"}<ArrowRight size={15} />
+                  {saving ? <Loader2 size={15} className="animate-spin" /> : null}{stage === 3 ? "Review" : "Continue"}<ArrowRight size={15} />
                 </motion.button>
               </div>
             </div>
@@ -394,14 +398,13 @@ function ProfilePhotoStep({ d, set, errs, avatarFile, setAvatarFile }: any) {
     const url = URL.createObjectURL(avatarFile); setPreview(url);
     return () => URL.revokeObjectURL(url);
   }, [avatarFile]);
-  const initials = d.name ? d.name.split(" ").map((w: string) => w[0]).join("").slice(0, 2).toUpperCase() : "YOU";
   return (
     <div>
       <Head k="Your profile" t="Add your name and photo" d="Your name is required. A profile photo is optional and can be added later." />
       <Label t="Your name" err={errs.name}><input aria-invalid={!!errs.name} className={clsx(input, errs.name && "border-peach-deep/50")} value={d.name} onChange={(e) => set({ name: e.target.value })} placeholder="Your name" /></Label>
       <div className="glass mt-6 flex flex-col items-center gap-4 p-5 text-center sm:flex-row sm:text-left">
         <div className="grid h-20 w-20 shrink-0 place-items-center overflow-hidden rounded-full border border-rule bg-lilac text-xl font-medium text-ink shadow-sm ring-4 ring-white/70">
-          {preview || d.avatar_url ? <img src={preview || `${API}${d.avatar_url}`} alt="Profile preview" className="h-full w-full object-cover" /> : initials}
+          {preview ? <img src={preview} alt="Profile preview" className="h-full w-full object-cover" /> : <ProfileAvatar seed={d.name || d.handle || "Twyn"} image={d.avatar_url ? `${API}${d.avatar_url}` : undefined} size={80} alt="Profile preview" />}
         </div>
         <div className="min-w-0 flex-1">
           <p className="text-sm font-medium">Profile photo <span className="font-normal text-ink-mute">· optional</span></p>

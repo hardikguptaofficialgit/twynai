@@ -12,9 +12,32 @@ import { Marquee } from "@/components/ui-kit/marquee";
 import { AnimatedList } from "@/components/ui-kit/animated-list";
 import { NumberTicker } from "@/components/ui-kit/number-ticker";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui-kit/accordion";
+import { ModelStack } from "@/components/ModelStack";
 
 const ease = [0.22, 1, 0.36, 1] as [number, number, number, number];
 const fade = (d = 0) => ({ initial: { opacity: 0, y: 8 }, whileInView: { opacity: 1, y: 0 }, viewport: { once: true, margin: "-40px" }, transition: { duration: 0.5, delay: d, ease } });
+const pixelColors = ["#a99fe0", "#9cc6e4", "#a8dcc3", "#c9c1f0"];
+
+function PixelField({ className = "" }: { className?: string }) {
+  const pixels = Array.from({ length: 72 }, (_, i) => {
+    const x = (i * 37) % 101;
+    const y = (i * 61) % 101;
+    return { x, y, color: pixelColors[i % pixelColors.length], size: 7 + (i % 3) * 2 };
+  });
+  return (
+    <div aria-hidden className={`pixel-field ${className}`}>
+      {pixels.map((pixel, i) => (
+        <motion.span
+          key={i}
+          className="pixel-field__cell"
+          style={{ left: `${pixel.x}%`, top: `${pixel.y}%`, width: pixel.size, height: pixel.size, backgroundColor: pixel.color }}
+          animate={{ opacity: [0.28, 0.8, 0.28], y: [0, -3, 0] }}
+          transition={{ duration: 3.2 + (i % 4) * 0.35, repeat: Infinity, delay: (i % 7) * 0.18, ease: "easeInOut" }}
+        />
+      ))}
+    </div>
+  );
+}
 
 function SoundWave() {
   const shouldReduce = useReducedMotion();
@@ -72,16 +95,20 @@ function CallCard() {
   return (
     <div className="glass p-2" style={{ borderRadius: 22 }}>
       <div className="clay flex items-center gap-3 p-3" style={{ borderRadius: 16 }}>
-        <div
-          className="clay-sm relative grid h-9 w-9 shrink-0 place-items-center rounded-full bg-lilac font-display text-[15px] font-semibold text-ink select-none"
-          style={{ borderRadius: 9999 }}
-        >
-          <span>H</span>
-          <span
-            aria-label="Live"
-            className="absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-[1.5px] border-white bg-mint shadow-[0_1px_2px_oklch(40%_0.03_70_/_0.1)]"
-          />
-        </div>
+       <div className="clay-sm relative grid h-9 w-9 shrink-0 place-items-center overflow-visible rounded-full bg-lilac">
+  <Image
+    src="/images/profile.png"
+    alt="Profile"
+    fill
+    className="rounded-full object-cover"
+    sizes="36px"
+  />
+
+  <span
+    aria-label="Live"
+    className="absolute -bottom-0.5 -right-0.5 z-10 h-3 w-3 rounded-full border-[1.5px] border-white bg-mint shadow-[0_1px_2px_oklch(40%_0.03_70_/_0.1)]"
+  />
+</div>
         <div className="min-w-0 flex-1">
           <p className="text-[13px] font-medium">Hardik&rsquo;s Twyn</p>
           <p className="text-[12px] text-ink-mute">On a call with Ravi · Hinglish</p>
@@ -105,6 +132,34 @@ function CallCard() {
         <div className="min-w-0"><p className="text-[13px] font-medium">Discovery call booked</p><p className="text-[12px] text-ink-soft">Sun 1 Nov, 3:00 PM IST · invite sent</p></div>
       </motion.div>
     </div>
+  );
+}
+
+function CalendarMockup() {
+  const days = ["M", "T", "W", "T", "F", "S", "S"];
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 16, rotate: 1.5 }}
+      animate={{ opacity: 1, y: 0, rotate: 0 }}
+      transition={{ duration: 0.65, delay: 0.35, ease }}
+      className="glass ml-auto w-full max-w-[340px] p-2"
+      style={{ borderRadius: 20 }}
+    >
+      <div className="clay p-3" style={{ borderRadius: 15 }}>
+        <div className="flex items-center justify-between">
+          <div><p className="text-[12px] font-medium">Your calendar</p><p className="text-[11px] text-ink-mute">November 2025</p></div>
+          <span className="grid h-7 w-7 place-items-center rounded-full bg-mint text-mint-deep"><CalendarCheck size={14} weight="duotone" /></span>
+        </div>
+        <div className="mt-3 grid grid-cols-7 gap-1 text-center text-[10px] text-ink-mute">
+          {days.map((day, i) => <span key={`${day}-${i}`} className="py-1">{day}</span>)}
+          {Array.from({ length: 21 }, (_, i) => <span key={i} className={`grid h-6 place-items-center rounded-md ${i === 11 ? "bg-ink text-canvas" : i === 15 ? "bg-lilac text-ink" : "text-ink-soft"}`}>{i + 1}</span>)}
+        </div>
+        <motion.div initial={{ scaleX: 0.8, opacity: 0 }} animate={{ scaleX: 1, opacity: 1 }} transition={{ duration: 0.45, delay: 0.9, ease }} className="mt-3 flex origin-left items-center justify-between rounded-xl bg-mint px-3 py-2">
+          <div><p className="text-[11px] font-medium">Discovery call</p><p className="text-[10px] text-ink-soft">Sun · 3:00 PM IST</p></div>
+          <span className="text-[10px] font-medium text-mint-deep">Booked</span>
+        </motion.div>
+      </div>
+    </motion.div>
   );
 }
 
@@ -155,7 +210,7 @@ export default function Landing() {
             <span>Free in beta · no card</span>
           </motion.div>
         </div>
-        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6, delay: 0.1, ease }} className="mx-auto w-full max-w-[400px]"><CallCard /></motion.div>
+        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6, delay: 0.1, ease }} className="mx-auto w-full max-w-[400px]"><CallCard /><CalendarMockup /></motion.div>
       </section>
       </div>
 
@@ -237,8 +292,9 @@ export default function Landing() {
         </div>
       </section>
 
-      <section className="border-t border-rule">
-        <div className={`${W} py-16`}>
+      <section className="pixel-section relative overflow-hidden border-t border-rule">
+        <PixelField className="inset-y-0 left-0 w-full opacity-60" />
+        <div className={`${W} relative z-10 py-16`}>
           <motion.div {...fade()} className="glass flex flex-col items-start gap-5 p-7 md:flex-row md:items-center md:justify-between md:p-9">
             <div>
               <h2 className="display text-[28px] md:text-[34px]">Claim your link.</h2>
@@ -249,11 +305,13 @@ export default function Landing() {
         </div>
       </section>
 
-      <footer className="border-t border-rule">
-        <div className={`${W} flex flex-col items-start justify-between gap-3 py-6 text-[12.5px] text-ink-mute sm:flex-row sm:items-center`}>
+      <footer className="pixel-section relative overflow-hidden border-t border-rule">
+        <PixelField className="inset-0 opacity-45" />
+        <div className={`${W} relative z-10 flex flex-col items-start justify-between gap-4 py-7 text-[12.5px] text-ink-mute sm:flex-row sm:items-center`}>
           <div className="flex flex-wrap items-center gap-3"><Logo /><span>Built for the Gnani AI Internship Challenge</span></div>
           <div className="flex items-center gap-5">
-            <span className="flex items-center gap-1.5">LLM by <Image src="/brands/groq.svg" alt="Groq" width={12} height={12} /> Groq</span>
+            <ModelStack />
+            <span className="flex items-center gap-2 border-l border-rule pl-5">Voice by <img src="https://cdn.prod.website-files.com/6848bfb15c1067d1b767ceb1/6a28e9711abd50da5dabc294_Layer_1.svg" alt="Gnani AI" className="h-5 w-auto" /></span>
             <Link href="/p/hardik" className="hover:text-ink">Demo</Link><Link href="/login" className="hover:text-ink">Sign in</Link>
           </div>
         </div>

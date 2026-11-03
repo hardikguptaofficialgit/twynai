@@ -90,6 +90,15 @@ textarea.field { height: auto; padding: 0.55rem 0.75rem; line-height: 1.5; }
 html, body { overflow-x: clip; }
 body { font-size: 14px; line-height: 1.55; }
 
+.nav-shell {
+  border-bottom: 1px solid var(--color-rule);
+  border-radius: 0 0 48px 48px / 0 0 18px 18px;
+  box-shadow: 0 1px 0 oklch(100% 0 0 / 0.7);
+}
+.pixel-field { position: absolute; pointer-events: none; overflow: hidden; }
+.pixel-field__cell { position: absolute; display: block; border-radius: 1px; }
+.pixel-section { isolation: isolate; }
+
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; } }
 
 @theme inline {

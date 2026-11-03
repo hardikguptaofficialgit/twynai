@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Copy, SignOut, Trash, CircleNotch } from "@phosphor-icons/react";
 import { api, API } from "@/lib/api";
 import { Card, Pill } from "@/components/ui";
+import { ProfileAvatar } from "@/components/ProfileAvatar";
 import { useStudio, Page } from "../ctx";
 
 const STATUS: Record<string, [string, string, string]> = {
@@ -37,7 +38,7 @@ export default function Settings() {
             <Pill tone="mint">Signed in</Pill>
           </div>
           <div className="mt-3 flex items-center gap-3">
-            {me.picture ? <img src={me.picture} alt="" className="h-10 w-10 rounded-full ring-2 ring-white/60" referrerPolicy="no-referrer" /> : <span className="grid h-10 w-10 place-items-center rounded-full bg-lilac font-medium">{(me.name || me.email)[0]?.toUpperCase()}</span>}
+            <ProfileAvatar seed={me.name || me.email} image={me.picture} size={40} className="ring-2 ring-white/60" />
             <div className="min-w-0 flex-1">
               <div className="text-[13.5px] font-medium">{me.name || "Creator"}</div>
               <div className="text-[12.5px] text-ink-soft">{me.email}</div>

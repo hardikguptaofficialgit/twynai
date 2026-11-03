@@ -7,6 +7,7 @@ import { SquaresFour, UserCircle, Waveform, CalendarBlank, CalendarCheck, Users,
 import { api, API } from "@/lib/api";
 import { useOwner } from "@/lib/useOwner";
 import { Backdrop, Mark, TwynLoader } from "@/components/ui";
+import { ProfileAvatar } from "@/components/ProfileAvatar";
 import { StudioCtx, useToasts, useOverview } from "./ctx";
 
 const NAV = [
@@ -63,7 +64,7 @@ export default function StudioLayout({ children }: { children: ReactNode }) {
           </nav>
           <a href={`/p/${persona.handle}`} target="_blank" className="mb-1 flex h-8 items-center gap-2.5 rounded-lg px-2.5 text-[13px] text-ink-soft hover:bg-white/60"><ArrowSquareOut size={16} />{!collapsed && "Public page"}</a>
           <div className={clsx("flex items-center gap-2 rounded-xl px-1.5 py-1.5", !collapsed && "hairline bg-white/50")}>
-            {me.picture ? <img src={me.picture} alt="" className="h-7 w-7 rounded-full" referrerPolicy="no-referrer" /> : <span className="grid h-7 w-7 place-items-center rounded-full bg-lilac text-[12px] font-medium">{(me.name || me.email)[0]?.toUpperCase()}</span>}
+            <ProfileAvatar seed={me.name || me.email} image={me.picture} size={28} />
             {!collapsed && <div className="min-w-0 flex-1"><div className="truncate text-[12.5px] font-medium">{me.name}</div><div className="truncate text-[11px] text-ink-mute">{me.email}</div></div>}
             {!collapsed && <button aria-label="Sign out" title="Sign out" onClick={logout} className="text-ink-mute hover:text-ink"><SignOut size={15} /></button>}
           </div>

@@ -32,11 +32,16 @@ export function connectWs(path: string, onMessage: (data: any) => void) {
 }
 
 export async function api<T = any>(path: string, opts: RequestInit = {}): Promise<T> {
+  const started = typeof performance !== "undefined" ? performance.now() : Date.now();
   const headers: Record<string, string> = { ...(opts.headers as any) };
   if (!(opts.body instanceof FormData) && opts.body) headers["Content-Type"] = "application/json";
   const t = token();
   if (t) headers["Authorization"] = `Bearer ${t}`;
   const r = await fetch(API + path, { ...opts, headers });
+  if (typeof window !== "undefined" && (process.env.NODE_ENV !== "production" || process.env.NEXT_PUBLIC_DEBUG_PERF === "1")) {
+    const elapsed = (typeof performance !== "undefined" ? performance.now() : Date.now()) - started;
+    console.debug(`[twyn-perf] api ${opts.method || "GET"} ${path} ${Math.round(elapsed)}ms status=${r.status}`);
+  }
   if (!r.ok) {
     const t = await r.text();
     let msg = t || r.statusText;
