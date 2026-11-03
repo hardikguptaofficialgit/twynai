@@ -25,6 +25,20 @@ $R2BucketName = Require-ProductionValue 'R2_BUCKET_NAME'
 $R2Endpoint = Require-ProductionValue 'R2_ENDPOINT'
 $R2Region = if ($env:R2_REGION) { $env:R2_REGION } else { 'auto' }
 
+$NormalizedWebOrigin = $WebOrigin.TrimEnd('/')
+$NormalizedCorsOrigins = @($CorsOrigins.Split(',') | ForEach-Object { $_.Trim().TrimEnd('/') } | Where-Object { $_ })
+if ($NormalizedWebOrigin -ne 'https://twynai.vercel.app') {
+    throw 'WEB_ORIGIN must be https://twynai.vercel.app.'
+}
+foreach ($RequiredOrigin in @('https://twynai.vercel.app', 'http://localhost:3100')) {
+    if ($NormalizedCorsOrigins -notcontains $RequiredOrigin) {
+        throw "CORS_ORIGINS must include $RequiredOrigin."
+    }
+}
+if ($NormalizedCorsOrigins -contains '*') {
+    throw 'CORS_ORIGINS must not contain * when credentials are enabled.'
+}
+
 try {
     $RedirectUri = [Uri]$GoogleRedirectUri
     if ($RedirectUri.Scheme -ne 'https' -or $RedirectUri.AbsolutePath -ne '/api/auth/google/callback') {

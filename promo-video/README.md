@@ -23,6 +23,21 @@ The final deliverables are:
 - `out/twyn-hackathon-demo-vertical.mp4`
 - `out/twyn-hackathon-demo-poster.png`
 
+## V2 launch film
+
+V2 is additive: it does not overwrite the V1 composition, footage, or exports. Its research, plan, source, capture library, and asset policy are in `TWYN-V2-*.md`, `v2/`, and `ASSET-CREDITS-V2.md`.
+
+```powershell
+# Start an isolated SQLite API on 8101 and the frontend on 3101 first.
+npm run capture:v2
+npm run audio:v2
+npm run render:v2
+npm run poster:v2
+npm run frames:v2
+```
+
+V2 capture must never use Neon or production credentials. Its output is `out/twyn-hackathon-demo-v2.mp4`. The timed visual storyboard is `v2/STORYBOARD-V2.md`; ready-to-post copy is `V2-CAPTION.md`.
+
 ## Quality gates
 
 - 1920x1080, 30 fps, H.264 MP4 with AAC audio.

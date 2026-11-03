@@ -1,0 +1,29 @@
+{
+  "name": "twyn-hackathon-film",
+  "private": true,
+  "scripts": {
+    "capture": "node capture/capture.mjs",
+    "capture:v2": "node v2/capture/capture-v2.mjs",
+    "render": "remotion render src/index.tsx TwynLaunchFilm out/twyn-hackathon-demo.mp4 --codec=h264 --image-format=jpeg --audio-codec=aac --concurrency=2",
+    "render:vertical": "remotion render src/index.tsx TwynLaunchFilmVertical out/twyn-hackathon-demo-vertical.mp4 --codec=h264 --image-format=jpeg --audio-codec=aac --concurrency=2",
+    "poster": "remotion still src/index.tsx TwynLaunchFilm out/twyn-hackathon-demo-poster.png --frame=900 --image-format=png",
+    "frames": "ffmpeg -y -i out/twyn-hackathon-demo.mp4 -vf \"select=eq(n\\,0)+eq(n\\,450)+eq(n\\,900)+eq(n\\,1350)\" -vsync vfr out/frame-%02d.png",
+    "audio:v2": "python v2/audio/make_v2_audio.py",
+    "render:v2": "remotion render src/index.tsx TwynLaunchFilmV2 out/twyn-hackathon-demo-v2.mp4 --codec=h264 --image-format=png --audio-codec=aac --crf=17 --concurrency=2",
+    "poster:v2": "remotion still src/index.tsx TwynLaunchFilmV2 out/twyn-hackathon-demo-v2-poster.png --frame=1740 --image-format=png",
+    "frames:v2": "ffmpeg -y -i out/twyn-hackathon-demo-v2.mp4 -vf \"fps=1/5,scale=960:-2\" -fps_mode vfr out/v2-frame-%02d.png"
+  },
+  "dependencies": {
+    "@remotion/cli": "4.0.287",
+    "@remotion/media-utils": "4.0.287",
+    "playwright": "1.57.0",
+    "react": "19.1.0",
+    "react-dom": "19.1.0",
+    "remotion": "4.0.287"
+  },
+  "devDependencies": {
+    "@types/node": "22.0.0",
+    "@types/react": "19.0.0",
+    "typescript": "5.9.3"
+  }
+}

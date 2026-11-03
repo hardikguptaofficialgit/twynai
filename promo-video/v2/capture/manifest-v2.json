@@ -1,0 +1,29 @@
+{
+  "generatedAt": "2026-11-03T13:25:44.907Z",
+  "api": "local isolated SQLite",
+  "web": "http://localhost:3101",
+  "publicHandle": "mira-v2-342393",
+  "setupHandle": "arav-v2-342393",
+  "scenes": [
+    {
+      "name": "v2-01-landing",
+      "errors": []
+    },
+    {
+      "name": "v2-02-onboarding",
+      "errors": []
+    },
+    {
+      "name": "v2-03-voice-knowledge",
+      "errors": []
+    },
+    {
+      "name": "v2-04-public-chat",
+      "errors": []
+    },
+    {
+      "name": "v2-05-talk",
+      "errors": []
+    }
+  ]
+}
