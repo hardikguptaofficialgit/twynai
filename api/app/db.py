@@ -8,7 +8,7 @@ if DATABASE_URL.startswith("sqlite"):
     engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
 else:  # Neon Postgres: survive scale-to-zero (idle connections get dropped after ~5 min)
     # Keep aggregate Neon connections bounded when Cloud Run scales out.
-    engine = create_engine(DATABASE_URL, pool_pre_ping=True, pool_recycle=300, pool_size=DB_POOL_SIZE, max_overflow=DB_MAX_OVERFLOW)
+    engine = create_engine(DATABASE_URL, pool_pre_ping=True, pool_recycle=300, pool_size=DB_POOL_SIZE, max_overflow=DB_MAX_OVERFLOW, pool_timeout=5)
 SessionLocal = sessionmaker(bind=engine, expire_on_commit=False)
 
 def uid(): return uuid.uuid4().hex[:12]

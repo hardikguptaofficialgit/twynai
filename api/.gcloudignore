@@ -1,0 +1,17 @@
+.venv/
+__pycache__/
+.pytest_cache/
+*.pyc
+*.db
+*.log
+*-uploads/
+uploads/
+twyn-api-staged.tar
+.env
+.env.*
+tests/
+scripts/
+cloudrun/
+deploy-cloud-run.ps1
+deploy-server.sh
+docker-compose.server.yml

@@ -210,7 +210,7 @@ export default function Landing() {
             <span>Free in beta · no card</span>
           </motion.div>
         </div>
-        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6, delay: 0.1, ease }} className="mx-auto w-full max-w-[400px]"><CallCard /><CalendarMockup /></motion.div>
+        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6, delay: 0.1, ease }} className="mx-auto w-full max-w-[400px]"><CallCard /></motion.div>
       </section>
       </div>
 
@@ -253,6 +253,11 @@ export default function Landing() {
                   ))}
                 </AnimatedList>
               </div>
+            </motion.div>
+            <motion.div {...fade(0.06)} className="clay p-5 md:col-span-3 md:row-span-2">
+              <p className="text-[15px] font-medium">Calendar handoff</p>
+              <p className="mt-1 text-[13.5px] text-ink-soft">Twyn finds a time, books the call and sends the invite while you stay focused.</p>
+              <div className="mt-4"><CalendarMockup /></div>
             </motion.div>
             {([["One-tap takeover", "Jump into any conversation and reply as yourself, live.", Hand, "bg-peach"], ["Auto language", "Detects Hindi, Tamil or Hinglish and replies in kind, by voice or text.", Translate, "bg-sky"]] as const).map(([t, d, I, bg], i) => (
               <motion.div key={t} {...fade(0.05 * i)} className="clay p-5 md:col-span-3">

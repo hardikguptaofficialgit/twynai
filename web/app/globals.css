@@ -82,13 +82,61 @@ textarea.field { height: auto; padding: 0.55rem 0.75rem; line-height: 1.5; }
 .hair-t { border-top: 1px solid var(--color-rule); }
 .reveal { animation: reveal .5s var(--ease-out) both; }
 @keyframes reveal { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
-.twyn-loader-mark { animation: twyn-loader-float 1.8s ease-in-out infinite; box-shadow: 0 5px 18px oklch(40% 0.04 70 / 0.08); }
-.twyn-loader-dot { animation: twyn-loader-dot 1s ease-in-out infinite; }
-@keyframes twyn-loader-float { 0%, 100% { transform: translateY(0) rotate(-5deg); } 50% { transform: translateY(-4px) rotate(5deg); } }
-@keyframes twyn-loader-dot { 0%, 60%, 100% { opacity: .35; transform: translateY(0) scale(.8); } 30% { opacity: 1; transform: translateY(-3px) scale(1); } }
+.twyn-loader-visual {
+  position: relative;
+  display: grid;
+  width: 64px;
+  height: 64px;
+  place-items: center;
+}
+.twyn-loader-visual--compact { width: 48px; height: 48px; }
+.twyn-loader-orbit {
+  position: absolute;
+  inset: 8px;
+  border: 1px solid var(--color-lilac-deep);
+  border-right-color: transparent;
+  border-bottom-color: transparent;
+  border-radius: 999px;
+  opacity: .62;
+  animation: twyn-loader-spin 1.5s cubic-bezier(.55, .05, .45, .95) infinite;
+}
+.twyn-loader-core { display: flex; align-items: center; gap: 4px; height: 18px; }
+.twyn-loader-bar {
+  display: block;
+  width: 4px;
+  height: 12px;
+  border-radius: 999px;
+  background: var(--color-ink);
+  transform-origin: center;
+  animation: twyn-loader-signal 1.05s ease-in-out infinite;
+}
+.twyn-loader-bar:nth-child(2) { background: var(--color-lilac-deep); }
+.twyn-loader-bar:nth-child(3) { background: var(--color-ink-soft); }
+@keyframes twyn-loader-spin { to { transform: rotate(360deg); } }
+@keyframes twyn-loader-signal { 0%, 100% { opacity: .35; transform: scaleY(.55); } 45% { opacity: 1; transform: scaleY(1.15); } }
 }
 html, body { overflow-x: clip; }
 body { font-size: 14px; line-height: 1.55; }
+
+/* Quiet, narrow scrollbars for contained app rails and panels. Keep the page
+   scrollbar native on small screens, where the whole document remains the
+   natural scrolling surface. */
+.twyn-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: oklch(55% 0.02 285 / 0.42) transparent;
+  scrollbar-gutter: stable;
+  touch-action: pan-y;
+  overscroll-behavior: contain;
+}
+.twyn-scrollbar::-webkit-scrollbar { width: 7px; height: 7px; }
+.twyn-scrollbar::-webkit-scrollbar-track { background: transparent; }
+.twyn-scrollbar::-webkit-scrollbar-thumb {
+  background: oklch(55% 0.02 285 / 0.42);
+  border: 2px solid transparent;
+  border-radius: 999px;
+  background-clip: padding-box;
+}
+.twyn-scrollbar::-webkit-scrollbar-thumb:hover { background: oklch(45% 0.025 285 / 0.62); background-clip: padding-box; }
 
 .nav-shell {
   border-bottom: 1px solid var(--color-rule);

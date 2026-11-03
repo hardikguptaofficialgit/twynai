@@ -21,7 +21,7 @@ export function useToasts() {
     setTimeout(() => setList((l) => l.filter((t) => t.id !== id)), 3200);
   }, []);
   const view = (
-    <div className="pointer-events-none fixed bottom-20 right-4 z-50 flex flex-col items-end gap-2 md:bottom-5">
+    <div className="pointer-events-none fixed left-1/2 top-4 z-50 flex w-[min(92vw,420px)] -translate-x-1/2 flex-col items-center gap-2">
       {list.map((t) => (
         <div key={t.id} role="status" className="glass pointer-events-auto flex items-center gap-2 px-3 py-2 text-[13px]" style={{ borderRadius: 14 }}>
           {t.tone === "ok" ? <Check size={14} className="text-mint-deep" /> : <Warning size={14} className="text-peach-deep" />}{t.text}

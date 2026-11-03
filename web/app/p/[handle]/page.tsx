@@ -3,10 +3,11 @@ import Image from "next/image";
 import { useEffect, useRef, useState } from "react";
 import { useParams } from "next/navigation";
 import { motion, AnimatePresence } from "motion/react";
-import { ArrowUpRight, Check, Clock, Microphone as Mic, PaperPlaneRight as Send, ChatCircle as MessageSquare, Waveform as AudioLines, Stop as Square, CalendarCheck, UserPlus, MagnifyingGlass as Search } from "@phosphor-icons/react";
+import { ArrowUpRight, Check, Clock, Microphone as Mic, PaperPlaneRight as Send, ChatCircle as MessageSquare, Waveform as AudioLines, Stop as Square, CalendarCheck, UserPlus, MagnifyingGlass as Search, Plus, X } from "@phosphor-icons/react";
 import { api, API, connectWs, Persona, ACCENTS, encodeWav } from "@/lib/api";
 import { Backdrop, Logo, Pill, TwynLoader } from "@/components/ui";
 import { Orb } from "@/components/Orb";
+import { ProfileAvatar, profileAvatarUrl } from "@/components/ProfileAvatar";
 
 type Msg = { role: "visitor" | "persona" | "owner"; text: string; tools?: any[] };
 const TOOL_LABEL: Record<string, [string, any, string]> = {
@@ -22,6 +23,8 @@ export default function PublicPersona() {
   const { handle } = useParams<{ handle: string }>();
   const [p, setP] = useState<Persona | null>(null);
   const [mode, setMode] = useState<"chat" | "voice" | "book">("chat");
+  const [mobileActionOpen, setMobileActionOpen] = useState(false);
+  const [mobileMode, setMobileMode] = useState<"chat" | "voice" | "book" | null>(null);
   const [msgs, setMsgs] = useState<Msg[]>([]);
   const [text, setText] = useState("");
   const [cid, setCid] = useState("");
@@ -40,9 +43,20 @@ export default function PublicPersona() {
   const turnStarted = useRef(false);
   const turnStopTimer = useRef<number | null>(null);
   const end = useRef<HTMLDivElement>(null);
+  const mobileClose = useRef<HTMLButtonElement>(null);
 
   useEffect(() => { api<Persona>(`/api/p/${handle}`).then(setP).catch(() => setErr("This Twyn does not exist.")); }, [handle]);
   useEffect(() => { end.current?.scrollIntoView({ behavior: "smooth" }); }, [msgs, busy]);
+  useEffect(() => {
+    const locked = mobileActionOpen || !!mobileMode;
+    if (!locked) return;
+    const previous = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    window.setTimeout(() => mobileClose.current?.focus(), 0);
+    const onKey = (event: KeyboardEvent) => { if (event.key === "Escape") { setMobileActionOpen(false); setMobileMode(null); } };
+    window.addEventListener("keydown", onKey);
+    return () => { document.body.style.overflow = previous; window.removeEventListener("keydown", onKey); };
+  }, [mobileActionOpen, mobileMode]);
   useEffect(() => () => {
     callActive.current = false;
     if (turnStopTimer.current) window.clearTimeout(turnStopTimer.current);
@@ -241,10 +255,65 @@ export default function PublicPersona() {
 
   const first = p.name.split(" ")[0];
   const initials = p.name.split(" ").map((w) => w[0]).join("").slice(0, 2);
+  const avatarImage = p.avatar_url ? `${API}${p.avatar_url}` : profileAvatarUrl(p.name);
   const share = typeof window !== "undefined" ? window.location.href : "";
   const TABS = [["chat", "Chat", MessageSquare], ["voice", "Talk", AudioLines], ["book", "Book", CalendarCheck]] as const;
+  const modeContent = mode === "book" ? <BookPanel handle={handle} first={first} />
+    : mode === "voice" ? (
+      <div className="flex flex-1 flex-col items-center justify-center gap-4 bg-paper-2/30 p-3 md:p-6">
+        <div className="glass flex w-full max-w-[560px] flex-1 flex-col items-center justify-center gap-4 rounded-[30px] p-6 md:p-8">
+          <Orb size={150} state={orb} level={level} color={accent.soft} deep={accent.deep} initials={initials} image={avatarImage} />
+          <div className="text-center">
+            <div className="text-[15px] font-medium">{{ idle: callActive.current ? "Your turn" : "Start a live conversation", listening: "Listening", thinking: "Thinking", speaking: `${first} is speaking` }[orb]}</div>
+            <div className="mt-0.5 text-[12.5px] text-ink-mute">{callActive.current ? "Just speak. Twyn sends your turn after a short pause." : "Speak in any Indian language."} {lang && `Detected: ${LANG[lang] || lang}`}</div>
+            {lat && <div className="mt-2 flex flex-wrap justify-center gap-1 text-[11px]">{([["Hear", lat.stt_ms], ["First token", lat.llm_ms], ["TTS chunk", lat.tts_ms], ["First audio", lat.first_audio_ms]] as const).map(([k, v]) => (
+              <span key={k} className="hairline rounded-full bg-white/70 px-2 py-0.5 text-ink-soft">{k} <span className="font-medium text-ink tnum">{((v || 0) / 1000).toFixed(1)}s</span></span>))}</div>}
+            {note && <div className="mt-1.5 text-[11px] text-ink-mute">{note}</div>}
+          </div>
+          <motion.button aria-label={callActive.current ? "End live conversation" : "Start live conversation"} whileTap={{ scale: 0.94 }} onClick={() => callActive.current ? endCall() : beginCall()}
+            className="grid h-12 w-12 place-items-center rounded-full text-white" style={{ background: orb === "listening" ? accent.deep : "var(--color-ink)" }}>
+            {callActive.current ? <Square size={16} /> : <Mic size={18} />}
+          </motion.button>
+          {err && <p className="text-[12.5px] text-peach-deep">{err}</p>}
+          <div className="mt-2 w-full max-w-lg space-y-1.5">{msgs.slice(-2).map((m, i) => <p key={i} className={m.role === "visitor" ? "text-right text-[13px] text-ink-mute" : "text-[13px]"}>{m.text}</p>)}</div>
+        </div>
+      </div>
+    ) : (
+      <>
+        <div className="flex-1 space-y-3 overflow-y-auto px-3 py-4">
+          {msgs.length === 0 && (
+            <div className="mx-auto mt-10 max-w-sm text-center">
+              <div className="mx-auto w-fit"><Orb size={64} color={accent.soft} deep={accent.deep} initials={initials} image={avatarImage} /></div>
+              <h2 className="display mt-2 text-[26px] leading-tight">Hi, I&rsquo;m {first}&rsquo;s Twyn.</h2>
+              <p className="mt-1 text-[13px] text-ink-soft">Ask about work, rates or availability. I can book a call. English, Hindi, Hinglish and more.</p>
+              <div className="mt-4 flex flex-wrap justify-center gap-1.5">
+                {["Aapka rate kitna hai?", "Can we book a call this week?", "What do you work on?"].map((q) => <button key={q} onClick={() => send(q)} className="hairline h-7 rounded-full bg-white/80 px-3 text-[12.5px] text-ink-soft hover:bg-white hover:text-ink">{q}</button>)}
+              </div>
+            </div>
+          )}
+          <AnimatePresence initial={false}>
+            {msgs.map((m, i) => (
+              <motion.div key={i} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} className={m.role === "visitor" ? "flex justify-end" : "flex justify-start"}>
+                <div className="max-w-[78%]">
+                  {m.role === "owner" && <div className="mb-0.5 text-[11px] font-medium text-peach-deep">{p.name} (live)</div>}
+                  <div className={m.role === "visitor" ? "rounded-2xl rounded-br-md bg-ink px-3.5 py-2 text-[13.5px] leading-relaxed text-canvas" : "hairline whitespace-pre-wrap rounded-2xl rounded-bl-md px-3.5 py-2 text-[13.5px] leading-relaxed"} style={m.role === "visitor" ? {} : { background: m.role === "owner" ? "#f8dacb" : "#fbfbfd" }}>{m.text}</div>
+                  {m.tools && m.tools.length > 0 && <div className="mt-1.5 flex flex-wrap gap-1">{m.tools.map((t, j) => { const [l, I, tone] = TOOL_LABEL[t.name] || [t.name, Search, "white"]; return <Pill key={j} tone={tone}><I size={11} />{l}</Pill>; })}</div>}
+                </div>
+              </motion.div>
+            ))}
+          </AnimatePresence>
+          {busy && <div className="hairline flex w-fit gap-1 rounded-2xl bg-[#fbfbfd] px-3.5 py-3">{[0, 1, 2].map((i) => <motion.span key={i} className="h-1.5 w-1.5 rounded-full bg-ink-mute" animate={{ y: [0, -3, 0] }} transition={{ duration: 0.8, repeat: Infinity, delay: i * 0.15 }} />)}</div>}
+          <div ref={end} />
+        </div>
+        <form onSubmit={(e) => { e.preventDefault(); send(); }} className="clay-sm m-1 flex items-center gap-1 bg-white p-1">
+          <input value={text} onChange={(e) => setText(e.target.value)} placeholder={`Message ${first}...`} className="h-9 flex-1 bg-transparent px-3 text-[13.5px] outline-none placeholder:text-ink-mute" />
+          <button type="button" aria-label="Talk instead" onClick={() => setMode("voice")} className="grid h-8 w-8 place-items-center rounded-full text-ink-soft hover:bg-paper-2"><Mic size={15} /></button>
+          <motion.button aria-label="Send" whileTap={{ scale: 0.94 }} className="grid h-8 w-8 place-items-center rounded-full bg-ink text-canvas"><Send size={14} /></motion.button>
+        </form>
+      </>
+    );
   return (
-    <main className="relative min-h-screen pb-10">
+    <main className="relative min-h-screen pb-10 lg:h-dvh lg:overflow-hidden lg:pb-0">
       <Backdrop />
       <div className="sticky top-0 z-30 border-b border-rule bg-canvas/75 backdrop-blur-xl">
         <div className="mx-auto flex h-12 w-[min(1040px,calc(100%-2rem))] items-center justify-between">
@@ -257,11 +326,11 @@ export default function PublicPersona() {
           </span>
         </div>
       </div>
-      <div className="reveal mx-auto grid w-[min(1040px,calc(100%-2rem))] gap-4 pt-5 lg:grid-cols-[300px_minmax(0,1fr)]">
-        <aside className="space-y-3">
+      <div className="reveal mx-auto grid w-[min(1040px,calc(100%-2rem))] gap-4 pt-5 lg:h-[calc(100dvh-3rem)] lg:min-h-0 lg:grid-cols-[300px_minmax(0,1fr)] lg:overflow-hidden">
+        <aside data-lenis-prevent="true" className="twyn-scrollbar space-y-3 lg:min-h-0 lg:h-full lg:overflow-y-auto lg:pr-2">
           <div className="glass p-5">
             <div className="flex items-center gap-3">
-              <div className="clay-sm grid h-14 w-14 shrink-0 place-items-center overflow-hidden rounded-full font-display text-[22px]" style={{ background: accent.soft, borderRadius: 9999 }}>{p.avatar_url ? <img src={`${API}${p.avatar_url}`} alt={`${p.name}'s profile`} className="h-full w-full object-cover" /> : initials}</div>
+              <ProfileAvatar seed={p.name} image={avatarImage} size={56} alt={`${p.name}'s profile`} className="clay-sm shrink-0 ring-2 ring-white/70" />
               <div className="min-w-0">
                 <h1 className="display truncate text-[22px] leading-tight">{p.name}</h1>
                 <p className="truncate text-[12.5px] text-ink-soft">{p.headline}</p>
@@ -274,7 +343,7 @@ export default function PublicPersona() {
             </div>
             {p.bio && <p className="mt-4 border-t border-rule pt-4 text-[13px] leading-relaxed text-ink-soft">{p.bio}</p>}
             {p.rates && <div className="clay-pressed mt-3 px-3 py-2.5 text-[13px]"><div className="eyebrow mb-0.5">Rates</div>{p.rates}</div>}
-            <button onClick={() => setMode("book")} className="mt-3 flex h-9 w-full items-center justify-center gap-2 rounded-full bg-ink text-[13px] font-medium text-canvas hover:bg-ink-soft"><CalendarCheck size={14} />Book a call</button>
+            <button onClick={() => setMode("book")} className="mt-3 hidden h-9 w-full items-center justify-center gap-2 rounded-full bg-ink text-[13px] font-medium text-canvas hover:bg-ink-soft lg:flex"><CalendarCheck size={14} />Book a call</button>
           </div>
           {p.links.length > 0 && <div className="glass space-y-1 p-3">
             {p.links.map((l) => (
@@ -283,10 +352,10 @@ export default function PublicPersona() {
               </a>))}
           </div>}
           {p.faqs.length > 0 && <div className="glass p-4"><div className="eyebrow mb-2">Ask me</div>
-            <div className="flex flex-col gap-1">{p.faqs.slice(0, 4).map((f) => <button key={f.q} onClick={() => { setMode("chat"); send(f.q); }} className="rounded-lg px-2.5 py-1.5 text-left text-[13px] text-ink-soft hover:bg-white/70 hover:text-ink">{f.q}</button>)}</div></div>}
+            <div className="flex flex-wrap gap-1.5 lg:flex-col lg:gap-1">{p.faqs.slice(0, 4).map((f) => <button key={f.q} onClick={() => { setMode("chat"); send(f.q); }} className="rounded-full border border-rule/70 bg-white/60 px-3 py-1.5 text-left text-[12.5px] text-ink-soft hover:bg-white hover:text-ink lg:rounded-lg lg:border-0 lg:bg-transparent lg:px-2.5 lg:text-[13px]">{f.q}</button>)}</div></div>}
         </aside>
 
-        <section className="glass flex h-[calc(100vh-6.5rem)] min-h-[520px] flex-col p-2">
+        <section className="glass hidden min-h-[520px] min-h-0 flex-col p-2 lg:flex lg:h-full">
           <div className="flex items-center justify-between px-3 pb-2 pt-1">
             <span className="text-[12.5px] text-ink-mute">{first}&rsquo;s Twyn</span>
             <div className="clay-pressed flex p-0.5">
@@ -300,59 +369,50 @@ export default function PublicPersona() {
           </div>
           <div className="hair-t" />
 
-          {mode === "book" ? <BookPanel handle={handle} first={first} />
-          : mode === "voice" ? (
-            <div className="flex flex-1 flex-col items-center justify-center gap-3 p-6">
-              <Orb size={150} state={orb} level={level} color={accent.soft} deep={accent.deep} initials={initials} image={p.avatar_url ? `${API}${p.avatar_url}` : undefined} />
-              <div className="text-center">
-                <div className="text-[15px] font-medium">{{ idle: callActive.current ? "Your turn" : "Start a live conversation", listening: "Listening", thinking: "Thinking", speaking: `${first} is speaking` }[orb]}</div>
-                <div className="mt-0.5 text-[12.5px] text-ink-mute">{callActive.current ? "Just speak. Twyn sends your turn after a short pause." : "Speak in any Indian language."} {lang && `Detected: ${LANG[lang] || lang}`}</div>
-                {lat && <div className="mt-2 flex flex-wrap justify-center gap-1 text-[11px]">{([["Hear", lat.stt_ms], ["First token", lat.llm_ms], ["TTS chunk", lat.tts_ms], ["First audio", lat.first_audio_ms]] as const).map(([k, v]) => (
-                  <span key={k} className="hairline rounded-full bg-white/70 px-2 py-0.5 text-ink-soft">{k} <span className="font-medium text-ink tnum">{((v || 0) / 1000).toFixed(1)}s</span></span>))}</div>}
-                {note && <div className="mt-1.5 text-[11px] text-ink-mute">{note}</div>}
-              </div>
-              <motion.button aria-label={callActive.current ? "End live conversation" : "Start live conversation"} whileTap={{ scale: 0.94 }} onClick={() => callActive.current ? endCall() : beginCall()}
-                className="grid h-12 w-12 place-items-center rounded-full text-white" style={{ background: orb === "listening" ? accent.deep : "var(--color-ink)" }}>
-                {callActive.current ? <Square size={16} /> : <Mic size={18} />}
-              </motion.button>
-              {err && <p className="text-[12.5px] text-peach-deep">{err}</p>}
-              <div className="mt-2 w-full max-w-lg space-y-1.5">{msgs.slice(-2).map((m, i) => <p key={i} className={m.role === "visitor" ? "text-right text-[13px] text-ink-mute" : "text-[13px]"}>{m.text}</p>)}</div>
-            </div>
-          ) : (
-            <>
-              <div className="flex-1 space-y-3 overflow-y-auto px-3 py-4">
-                {msgs.length === 0 && (
-                  <div className="mx-auto mt-10 max-w-sm text-center">
-                    <div className="mx-auto w-fit"><Orb size={64} color={accent.soft} deep={accent.deep} initials={initials} image={p.avatar_url ? `${API}${p.avatar_url}` : undefined} /></div>
-                    <h2 className="display mt-2 text-[26px] leading-tight">Hi, I&rsquo;m {first}&rsquo;s Twyn.</h2>
-                    <p className="mt-1 text-[13px] text-ink-soft">Ask about work, rates or availability. I can book a call. English, Hindi, Hinglish and more.</p>
-                    <div className="mt-4 flex flex-wrap justify-center gap-1.5">
-                      {["Aapka rate kitna hai?", "Can we book a call this week?", "What do you work on?"].map((q) => <button key={q} onClick={() => send(q)} className="hairline h-7 rounded-full bg-white/80 px-3 text-[12.5px] text-ink-soft hover:bg-white hover:text-ink">{q}</button>)}
-                    </div>
-                  </div>
-                )}
-                <AnimatePresence initial={false}>
-                  {msgs.map((m, i) => (
-                    <motion.div key={i} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} className={m.role === "visitor" ? "flex justify-end" : "flex justify-start"}>
-                      <div className="max-w-[78%]">
-                        {m.role === "owner" && <div className="mb-0.5 text-[11px] font-medium text-peach-deep">{p.name} (live)</div>}
-                        <div className={m.role === "visitor" ? "rounded-2xl rounded-br-md bg-ink px-3.5 py-2 text-[13.5px] leading-relaxed text-canvas" : "hairline whitespace-pre-wrap rounded-2xl rounded-bl-md px-3.5 py-2 text-[13.5px] leading-relaxed"} style={m.role === "visitor" ? {} : { background: m.role === "owner" ? "#f8dacb" : "#fbfbfd" }}>{m.text}</div>
-                        {m.tools && m.tools.length > 0 && <div className="mt-1.5 flex flex-wrap gap-1">{m.tools.map((t, j) => { const [l, I, tone] = TOOL_LABEL[t.name] || [t.name, Search, "white"]; return <Pill key={j} tone={tone}><I size={11} />{l}</Pill>; })}</div>}
-                      </div>
-                    </motion.div>
-                  ))}
-                </AnimatePresence>
-                {busy && <div className="hairline flex w-fit gap-1 rounded-2xl bg-[#fbfbfd] px-3.5 py-3">{[0, 1, 2].map((i) => <motion.span key={i} className="h-1.5 w-1.5 rounded-full bg-ink-mute" animate={{ y: [0, -3, 0] }} transition={{ duration: 0.8, repeat: Infinity, delay: i * 0.15 }} />)}</div>}
-                <div ref={end} />
-              </div>
-              <form onSubmit={(e) => { e.preventDefault(); send(); }} className="clay-sm m-1 flex items-center gap-1 bg-white p-1">
-                <input value={text} onChange={(e) => setText(e.target.value)} placeholder={`Message ${first}...`} className="h-9 flex-1 bg-transparent px-3 text-[13.5px] outline-none placeholder:text-ink-mute" />
-                <button type="button" aria-label="Talk instead" onClick={() => setMode("voice")} className="grid h-8 w-8 place-items-center rounded-full text-ink-soft hover:bg-paper-2"><Mic size={15} /></button>
-                <motion.button aria-label="Send" whileTap={{ scale: 0.94 }} className="grid h-8 w-8 place-items-center rounded-full bg-ink text-canvas"><Send size={14} /></motion.button>
-              </form>
-            </>
-          )}
+          {modeContent}
         </section>
+      </div>
+      <div className="lg:hidden">
+        <AnimatePresence>
+          {!mobileActionOpen && !mobileMode && <motion.button
+            initial={{ opacity: 0, scale: .8, y: 12 }} animate={{ opacity: 1, scale: 1, y: 0 }} whileTap={{ scale: .94 }}
+            type="button" aria-label="Open connection actions" onClick={() => setMobileActionOpen(true)}
+            className="fixed bottom-[calc(1rem+env(safe-area-inset-bottom))] right-4 z-40 grid h-14 w-14 place-items-center rounded-full bg-ink text-canvas shadow-[0_10px_25px_oklch(22%_0.025_285/0.2)]">
+            <Plus size={23} weight="regular" />
+          </motion.button>}
+        </AnimatePresence>
+
+        <AnimatePresence>
+          {mobileActionOpen && !mobileMode && <>
+            <motion.button aria-label="Close connection actions" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setMobileActionOpen(false)} className="fixed inset-0 z-40 bg-ink/20 backdrop-blur-[2px]" />
+            <motion.div role="dialog" aria-modal="true" aria-labelledby="connect-title" initial={{ y: "100%" }} animate={{ y: 0 }} exit={{ y: "100%" }} transition={{ type: "spring", stiffness: 420, damping: 34 }} className="fixed inset-x-0 bottom-0 z-50 rounded-t-[28px] border-t border-white/80 bg-canvas px-5 pb-[calc(1.25rem+env(safe-area-inset-bottom))] pt-4 shadow-[0_-12px_32px_oklch(22%_0.025_285/0.12)]">
+              <div className="mx-auto mb-4 h-1 w-10 rounded-full bg-rule" />
+              <div className="flex items-start justify-between gap-4">
+                <div><p className="eyebrow">Connect</p><h2 id="connect-title" className="display mt-1 text-[25px]">Connect with {first}</h2></div>
+                <button ref={mobileClose} type="button" aria-label="Close" onClick={() => setMobileActionOpen(false)} className="grid h-9 w-9 shrink-0 place-items-center rounded-full border border-rule bg-white/70 text-ink-soft"><X size={17} /></button>
+              </div>
+              <div className="mt-5 space-y-2">
+                {([["chat", "Chat", "Start a text conversation", MessageSquare, "bg-lilac"], ["voice", "Talk", "Speak with the real-time voice experience", AudioLines, "bg-mint"], ["book", "Book", "Schedule a time to meet", CalendarCheck, "bg-sky"]] as const).map(([next, title, description, Icon, tone]) => (
+                  <button key={next} type="button" onClick={() => { setMode(next); setMobileMode(next); setMobileActionOpen(false); }} className="flex w-full items-center gap-3 rounded-2xl border border-rule/80 bg-white/75 p-3 text-left transition-transform active:scale-[.99]">
+                    <span className={`grid h-11 w-11 shrink-0 place-items-center rounded-2xl ${tone}`}><Icon size={20} /></span>
+                    <span className="min-w-0"><span className="block text-[14px] font-medium">{title}</span><span className="mt-0.5 block text-[12px] text-ink-soft">{description}</span></span>
+                    <ArrowUpRight size={15} className="ml-auto shrink-0 text-ink-mute" />
+                  </button>
+                ))}
+              </div>
+            </motion.div>
+          </>}
+        </AnimatePresence>
+
+        <AnimatePresence>
+          {mobileMode && <motion.div role="dialog" aria-modal="true" aria-labelledby="mobile-mode-title" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-50 flex min-h-0 flex-col bg-canvas">
+            <div className="flex shrink-0 items-center justify-between border-b border-rule px-4 pb-3 pt-[calc(.75rem+env(safe-area-inset-top))]">
+              <div><p className="text-[12px] text-ink-mute">{first}&rsquo;s Twyn</p><h2 id="mobile-mode-title" className="text-[15px] font-medium">{mobileMode === "chat" ? "Chat" : mobileMode === "voice" ? "Talk" : "Book a time"}</h2></div>
+              <button ref={mobileClose} type="button" aria-label="Close experience" onClick={() => setMobileMode(null)} className="grid h-9 w-9 place-items-center rounded-full border border-rule bg-white/70 text-ink-soft"><X size={17} /></button>
+            </div>
+            <div className="flex min-h-0 flex-1 flex-col">{modeContent}</div>
+          </motion.div>}
+        </AnimatePresence>
       </div>
     </main>
   );

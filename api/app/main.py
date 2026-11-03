@@ -387,6 +387,8 @@ async def upload_voice(pid: str, file: UploadFile = File(...), o=Depends(current
         try: storage.delete(new_sample)
         except Exception: log.exception("Failed to clean up an unsuccessful voice upload")
         log.exception("Voice clone error: %s", e)
+        if isinstance(e, (httpx.ConnectError, httpx.TimeoutException)):
+            raise HTTPException(503, "Voice cloning service is temporarily unavailable. Please try again.")
         raise HTTPException(502, f"voice clone failed: {getattr(e, 'message', str(e)) or type(e).__name__}")
     p.voice_sample_path = new_sample
     preview_key = f"personas/{p.id}/voice-preview.wav"
@@ -490,11 +492,19 @@ LANG_NAMES = {"hinglish": "Hinglish: Hindi and English mixed, written ONLY in La
 
 def system_prompt(p, ctx, lang, voice_mode):
     k = "\n".join(f"<k>{c.text}</k>" for _, c in ctx) or "(no matching notes)"
+    faqs = json.loads(p.faqs or "[]")
+    links = json.loads(p.links or "[]")
+    faq_text = "\n".join(f"Q: {f.get('q', '')} A: {f.get('a', '')}" for f in faqs if f.get('q') or f.get('a')) or "(none)"
+    link_text = ", ".join(f"{l.get('label') or 'Website'}: {l.get('url')}" for l in links if l.get('url')) or "(none)"
     return f"""You are Twyn, the AI persona of {p.name} ({p.headline}). Speak in first person as {p.name}. Tone: {p.tone}.
 Profile: {p.headline}. {p.bio} {("Rates: " + p.rates) if p.rates else ""}
 Answer ONLY from the profile and knowledge below. If the answer is not there, say you do not know yet and offer to pass a message or book a call. Never invent prices, dates or facts.
 Reply in the caller's language: {LANG_NAMES.get(lang, lang)}. {"Keep replies under 2 short sentences; this will be spoken aloud." if voice_mode else "Keep replies short and clear."}
 No emojis, no markdown, no bullet lists, plain sentences. When offering times, name at most three, and copy each slot's 'say' text from check_availability exactly. Use tools to check availability, book meetings and capture leads. Today is {dt.datetime.now(calendar_svc.IST).strftime('%A %d %B %Y')} (IST).
+Profile FAQs:
+{faq_text}
+Profile links:
+{link_text}
 Knowledge:
 {k}"""
 
@@ -502,6 +512,8 @@ async def run_tool(s, p, conv, name, args):
     owner = s.get(Owner, p.owner_id); cal = calendar_svc.for_owner(owner, s)
     rules = calendar_svc.rules_of(p); dur = int(rules["duration"])
     bookings = list(s.scalars(select(Booking).where(Booking.persona_id == p.id)))
+    # Do not hold a database connection while checking or writing to Google Calendar.
+    s.commit()
     if name == "check_availability":
         days = min(int(args.get("days") or 7), 30)
         slots = calendar_svc.generate(rules, calendar_svc.all_busy(cal, bookings, days), days=days, limit=8, per_day=3)
@@ -562,6 +574,8 @@ def plain(t: str) -> str:
 async def agent_reply(s, p, conv, text, voice_mode=False):
     history = [m for m in conv.messages if m.role in ("visitor", "persona", "owner")][-12:]
     ctx = rag.search(list(s.scalars(select(Chunk).where(Chunk.persona_id == p.id))), text)
+    # The provider call can take seconds. Release the request's DB connection first.
+    s.commit()
     msgs = [{"role": "system", "content": system_prompt(p, ctx, conv.language, voice_mode)}]
     msgs += [{"role": "user" if m.role == "visitor" else "assistant", "content": m.text} for m in history]
     msgs.append({"role": "user", "content": text})
@@ -626,9 +640,39 @@ async def handle_turn(s, p, conv, text, voice_mode=False):
     s.add(Message(conversation_id=conv.id, role="persona", text=reply, meta=json.dumps({"tools": tools, "provider": provider, "sources": sources})))
     s.commit(); s.refresh(conv)
     await hub.send(conv.id, {"type": "message", "role": "persona", "text": reply, "tools": tools})
-    transcript = "\n".join(f"{m.role}: {m.text}" for m in conv.messages)
-    conv.summary = await llm.summarize(transcript); s.commit()
+    # Summarization is dashboard metadata, not part of the visitor's response.
+    # Run it after the response path so a second provider call cannot hold the
+    # chat request open or make a normal greeting feel stalled.
+    asyncio.create_task(refresh_conversation_summary(conv.id))
     return reply, tools, provider, sources
+
+async def refresh_conversation_summary(conversation_id):
+    """Refresh dashboard summary without delaying chat or voice responses."""
+    summary_session = SessionLocal()
+    try:
+        conversation = summary_session.get(Conversation, conversation_id)
+        if not conversation:
+            return
+        transcript = "\n".join(f"{m.role}: {m.text}" for m in conversation.messages)
+    except Exception:
+        summary_session.rollback()
+        log.exception("conversation summary read failed")
+        return
+    finally:
+        # Never hold a pool connection while waiting on an external model.
+        summary_session.close()
+    try:
+        summary = await llm.summarize(transcript)
+        save_session = SessionLocal()
+        try:
+            conversation = save_session.get(Conversation, conversation_id)
+            if conversation:
+                conversation.summary = summary
+                save_session.commit()
+        finally:
+            save_session.close()
+    except Exception:
+        log.exception("conversation summary refresh failed")
 
 class ChatIn(BaseModel):
     text: str; conversation_id: str = ""; visitor_name: str = ""
@@ -699,6 +743,8 @@ async def agent_stream(s, p, conv, text, voice_mode=True):
     """Like agent_reply, but yields ("text", delta) tokens from the final answer round."""
     history = [m for m in conv.messages if m.role in ("visitor", "persona", "owner")][-12:]
     ctx = rag.search(list(s.scalars(select(Chunk).where(Chunk.persona_id == p.id))), text)
+    # Streaming provider calls must not reserve a DB connection for their duration.
+    s.commit()
     msgs = [{"role": "system", "content": system_prompt(p, ctx, conv.language, voice_mode)}]
     msgs += [{"role": "user" if m.role == "visitor" else "assistant", "content": m.text} for m in history[:-1]]
     msgs.append({"role": "user", "content": text})
@@ -721,19 +767,6 @@ async def agent_stream(s, p, conv, text, voice_mode=True):
             msgs.append({"role": "tool", "tool_call_id": c["id"] or "call_0", "content": json.dumps(res, ensure_ascii=False)})
     yield "text", "Let me get back to you on that."
     yield "done", {"content": "Let me get back to you on that.", "tools": tools_used, "provider": "fallback", "sources": []}
-
-async def summarize_conversation(conversation_id: str):
-    s = SessionLocal()
-    try:
-        conv = s.get(Conversation, conversation_id)
-        if conv:
-            transcript = "\n".join(f"{m.role}: {m.text}" for m in conv.messages)
-            conv.summary = await llm.summarize(transcript)
-            s.commit()
-    except Exception:
-        log.exception("conversation summary failed for %s", conversation_id)
-    finally:
-        s.close()
 
 @app.post("/api/p/{handle}/voice/stream")
 async def voice_stream(handle: str, audio: UploadFile = File(...), conversation_id: str = Form(""), text_hint: str = Form("")):
@@ -820,7 +853,7 @@ async def voice_stream(handle: str, audio: UploadFile = File(...), conversation_
             await hub.send(conv.id, {"type": "message", "role": "persona", "text": reply, "tools": info["tools"]})
             lat["total_ms"] = ms()
             yield ev({"type": "done", "reply": reply, "tools": info["tools"], "provider": info["provider"], "fallback": fallback, "latency": lat, "conversation_id": conv.id})
-            asyncio.create_task(summarize_conversation(conv.id))
+            asyncio.create_task(refresh_conversation_summary(conv.id))
         finally:
             s.close()
     return StreamingResponse(gen(), media_type="application/x-ndjson", headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})

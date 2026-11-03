@@ -5,7 +5,7 @@ import { api, API, encodeWav, token } from "@/lib/api";
 import { Orb } from "@/components/Orb";
 
 /** Record in the browser (15 to 30 s, script to read) or upload a clip; clone with Gnani; re-clone any time. */
-export function VoiceCloner({ d, set, ensurePersona, script = "Hi, this is my voice sample. Thanks for listening." }: { d: any; set: (p: any) => void; ensurePersona?: () => Promise<string | null>; script?: string }) {
+export function VoiceCloner({ d, set, ensurePersona, script = "Hi, this is my voice sample. I'm just speaking naturally so you can get a better understanding of my voice, tone, and speaking style. I hope the audio is clear and captures how I normally sound during a conversation. Thanks for listening!" }: { d: any; set: (p: any) => void; ensurePersona?: () => Promise<string | null>; script?: string }) {
   const [rec, setRec] = useState(false);
   const [secs, setSecs] = useState(0);
   const [level, setLevel] = useState(0);

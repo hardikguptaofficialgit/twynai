@@ -12,13 +12,16 @@ import { Orb } from "@/components/Orb";
 import { VoiceCloner } from "@/components/VoiceCloner";
 import { AiImport } from "@/components/AiImport";
 import { ProfileAvatar } from "@/components/ProfileAvatar";
+import type { AvatarStyle } from "@/components/ProfileAvatar";
+import { AvatarStylePicker } from "@/components/AvatarPicker";
 
 const STAGES = ["Identity", "About", "Personality", "Experience", "Launch"];
-const STAGE_STEPS = [[0, 1, 2], [3, 4], [5, 6], [7, 8, 9], [10]];
+const STAGE_STEPS = [[0, 1, 2], [3, 4], [5, 6], [7], [10]];
 const LEGACY_STEP_FOR_STAGE = [0, 3, 5, 7, 10];
 const stageForLegacyStep = (step: number) => step >= 10 ? 4 : step >= 7 ? 3 : step >= 5 ? 2 : step >= 3 ? 1 : 0;
 const LANGS: [string, string][] = [["en", "English"], ["hi", "Hindi"], ["hinglish", "Hinglish"], ["ta", "Tamil"], ["te", "Telugu"], ["kn", "Kannada"], ["bn", "Bengali"], ["mr", "Marathi"], ["gu", "Gujarati"], ["ml", "Malayalam"], ["pa", "Punjabi"]];
 const TONES = ["Warm and concise", "Friendly and casual", "Crisp and professional", "Playful"];
+const ROLE_OPTIONS = ["Designer", "Founder", "Engineer", "Creator", "Consultant", "Developer", "Artist", "Researcher", "Other"];
 const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 const DEFAULT_AVAIL = { days: [0, 1, 2, 3, 4], start: "10:00", end: "18:00", duration: 30, buffer: 15, notice: 12 };
 const AVATAR_DB = "twyn-onboarding";
@@ -116,7 +119,14 @@ function OnboardingInner() {
   const [saved, setSaved] = useState("");
   const [loaded, setLoaded] = useState(false);
   const [avatarFile, setAvatarFile] = useState<File | null>(null);
+  const [avatarStyle, setAvatarStyle] = useState<AvatarStyle>("notionists-neutral");
+  const [availState, setAvailState] = useState<"idle" | "checking" | "available" | "taken" | "error">("idle");
+  const [notice, setNotice] = useState<{ text: string; tone: "ok" | "err" } | null>(null);
   const stageStartedAt = useRef(Date.now());
+  const notify = (text: string, tone: "ok" | "err" = "ok") => {
+    setNotice({ text, tone });
+    window.setTimeout(() => setNotice((current) => current?.text === text ? null : current), 3200);
+  };
   const set = (p: Partial<Draft>) => {
     setD((x) => ({ ...x, ...p }));
     setErrs((current) => {
@@ -129,7 +139,7 @@ function OnboardingInner() {
     setSaveError("");
   };
 
-  useEffect(() => { loadAvatar().then((file) => { if (file) setAvatarFile(file); }); }, []);
+  useEffect(() => { loadAvatar().then((file) => { if (file) setAvatarFile(file); }); const savedStyle = localStorage.getItem("twyn-onboarding-avatar-style") as AvatarStyle | null; if (savedStyle) setAvatarStyle(savedStyle); }, []);
 
   // Local-first: load from localStorage; if signed in, merge API persona
   useEffect(() => {
@@ -188,9 +198,13 @@ function OnboardingInner() {
   // Live handle availability check
   const [avail, setAvail] = useState<null | boolean>(null);
   useEffect(() => {
-    if (d.id || d.handle.length < 3) { setAvail(null); return; }
-    const t = setTimeout(() => api(`/api/handles/${d.handle}`).then((r) => setAvail(r.available)).catch(() => {}), 300);
-    return () => clearTimeout(t);
+    if (d.id || d.handle.length < 3) { setAvail(null); setAvailState("idle"); return; }
+    const controller = new AbortController();
+    setAvailState("checking");
+    const t = setTimeout(() => api(`/api/handles/${d.handle}`, { signal: controller.signal })
+      .then((r) => { setAvail(r.available); setAvailState(r.available ? "available" : "taken"); })
+      .catch((error) => { if (error?.name !== "AbortError") { setAvail(null); setAvailState("error"); notify("Couldn’t check that handle. Try again.", "err"); } }), 180);
+    return () => { clearTimeout(t); controller.abort(); };
   }, [d.handle, d.id]);
 
   function validate(i: number, update = true) {
@@ -285,7 +299,7 @@ function OnboardingInner() {
   async function next() {
     const stageErrors = STAGE_STEPS[stage].reduce<Record<string, string>>((all, i) => ({ ...all, ...validate(i, false) }), {});
     setErrs(stageErrors);
-    if (Object.keys(stageErrors).length) return;
+    if (Object.keys(stageErrors).length) { notify(stageErrors.handle || "Please check the highlighted fields.", "err"); return; }
     const n = Math.min(stage + 1, STAGES.length - 1);
     if (!(await persist(n))) return;
     setDir(1); setStage(n); setMax((m) => Math.max(m, n));
@@ -299,16 +313,17 @@ function OnboardingInner() {
   const go = (i: number) => { setErrs({}); setDir(i > stage ? 1 : -1); setStage(i); };
 
   const viewByStage: Record<number, React.ReactNode> = {
-    0: <div className="space-y-8"><HandleStep d={d} set={set} avail={avail} errs={errs} /><ProfilePhotoStep d={d} set={set} errs={errs} avatarFile={avatarFile} setAvatarFile={setAvatarFile} /><RoleStep d={d} set={set} errs={errs} /></div>,
+    0: <div className="space-y-8"><HandleStep d={d} set={set} avail={avail} availState={availState} errs={errs} /><ProfilePhotoStep d={d} set={set} errs={errs} avatarFile={avatarFile} setAvatarFile={setAvatarFile} avatarStyle={avatarStyle} setAvatarStyle={(style: AvatarStyle) => { setAvatarStyle(style); localStorage.setItem("twyn-onboarding-avatar-style", style); }} /><RoleStep d={d} set={set} errs={errs} /></div>,
     1: <div className="space-y-8"><BioStep d={d} set={set} errs={errs} /><LanguagesStep d={d} set={set} errs={errs} /></div>,
     2: <div className="space-y-8"><ToneStep d={d} set={set} /><KnowledgeStep d={d} set={set} errs={errs} ensurePersona={ensurePersona} /></div>,
-    3: <div className="space-y-8"><VoiceStep d={d} set={set} ensurePersona={ensurePersona} /><CalendarStep me={me} /><AvailabilityStep d={d} set={set} errs={errs} /></div>,
+    3: <div className="space-y-8"><VoiceStep d={d} set={set} ensurePersona={ensurePersona} /></div>,
     4: <PublishStep d={d} publish={async () => { if (await persist(4, { published: true })) set({ published: true }); }} saving={saving} />,
   };
 
   return (
     <main className="relative min-h-screen">
       <Backdrop />
+      {notice && <div role="status" className={clsx("fixed left-1/2 top-4 z-50 flex -translate-x-1/2 items-center gap-2 rounded-2xl border px-4 py-3 text-[13px] shadow-lg", notice.tone === "ok" ? "border-mint-deep/20 bg-mint text-mint-deep" : "border-peach-deep/20 bg-peach text-peach-deep")}><span className="h-2 w-2 rounded-full bg-current" />{notice.text}</div>}
       <div className="sticky top-0 z-30 border-b border-rule bg-canvas/70 backdrop-blur-xl">
         <header className="mx-auto flex h-12 w-[min(1040px,calc(100%-2rem))] items-center justify-between">
           <Logo />
@@ -370,7 +385,7 @@ function Head({ k, t, d }: { k: string; t: string; d: string }) {
   return <div className="mb-8 text-center"><p className="eyebrow">{k}</p><h1 className="display mt-1.5 text-[28px]">{t}</h1><p className="mx-auto mt-2 max-w-lg text-[13.5px] text-ink-soft">{d}</p></div>;
 }
 
-function HandleStep({ d, set, avail, errs }: any) {
+function HandleStep({ d, set, avail, availState, errs }: any) {
   return (
     <div>
       <Head k="Your link" t="Claim your handle" d="This is the link people will use to talk to your Twyn. Keep it short and easy to say." />
@@ -379,18 +394,15 @@ function HandleStep({ d, set, avail, errs }: any) {
           <span className="text-ink-mute">twyn.ai/</span>
           <input autoFocus disabled={!!d.id} aria-invalid={!!errs.handle} value={d.handle} onChange={(e) => set({ handle: e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, "") })}
             placeholder="yourname" className="min-w-0 flex-1 bg-transparent py-2 text-[14px] font-medium outline-none placeholder:text-ink-mute/70" />
-          {d.id ? <span className="text-xs text-ink-mute">locked</span> : avail === true ? <span className="flex items-center gap-1 text-xs text-mint-deep"><Check size={13} />Available</span> : avail === false ? <span className="flex items-center gap-1 text-xs text-peach-deep"><X size={13} />Taken</span> : null}
+          {d.id ? <span className="text-xs text-ink-mute">locked</span> : availState === "checking" ? <span className="flex items-center gap-1 text-xs text-ink-mute"><Loader2 size={13} className="animate-spin" />Checking</span> : avail === true ? <span className="flex items-center gap-1 text-xs text-mint-deep"><Check size={13} />Available</span> : avail === false ? <span className="flex items-center gap-1 text-xs text-peach-deep"><X size={13} />Taken</span> : availState === "error" ? <span className="text-xs text-peach-deep">Try again</span> : null}
         </div>
       </Label>
-      <div className="mt-8 flex flex-wrap gap-2 text-sm text-ink-mute">
-        <span>Ideas:</span>
-        {["firstname", "firstname-lastname", "studio-name"].map((x) => <span key={x} className="rounded-full bg-white/60 px-3 py-1">{x}</span>)}
-      </div>
+
     </div>
   );
 }
 
-function ProfilePhotoStep({ d, set, errs, avatarFile, setAvatarFile }: any) {
+function ProfilePhotoStep({ d, set, errs, avatarFile, setAvatarFile, avatarStyle, setAvatarStyle }: any) {
   const [preview, setPreview] = useState("");
   const [photoError, setPhotoError] = useState("");
   useEffect(() => {
@@ -404,7 +416,7 @@ function ProfilePhotoStep({ d, set, errs, avatarFile, setAvatarFile }: any) {
       <Label t="Your name" err={errs.name}><input aria-invalid={!!errs.name} className={clsx(input, errs.name && "border-peach-deep/50")} value={d.name} onChange={(e) => set({ name: e.target.value })} placeholder="Your name" /></Label>
       <div className="glass mt-6 flex flex-col items-center gap-4 p-5 text-center sm:flex-row sm:text-left">
         <div className="grid h-20 w-20 shrink-0 place-items-center overflow-hidden rounded-full border border-rule bg-lilac text-xl font-medium text-ink shadow-sm ring-4 ring-white/70">
-          {preview ? <img src={preview} alt="Profile preview" className="h-full w-full object-cover" /> : <ProfileAvatar seed={d.name || d.handle || "Twyn"} image={d.avatar_url ? `${API}${d.avatar_url}` : undefined} size={80} alt="Profile preview" />}
+          {preview ? <img src={preview} alt="Profile preview" className="h-full w-full object-cover" /> : <ProfileAvatar seed={d.name || d.handle || "Twyn"} image={d.avatar_url ? `${API}${d.avatar_url}` : undefined} style={avatarStyle} size={80} alt="Profile preview" />}
         </div>
         <div className="min-w-0 flex-1">
           <p className="text-sm font-medium">Profile photo <span className="font-normal text-ink-mute">· optional</span></p>
@@ -413,6 +425,7 @@ function ProfilePhotoStep({ d, set, errs, avatarFile, setAvatarFile }: any) {
             <Camera size={15} />{avatarFile || d.avatar_url ? "Change photo" : "Choose photo"}
           </label>
           {avatarFile && <p className="mt-2 truncate text-xs text-ink-mute">Selected: {avatarFile.name}</p>}
+          {!avatarFile && !d.avatar_url && <div className="mt-3"><p className="mb-2 text-[11px] text-ink-mute">Choose your DiceBear style</p><AvatarStylePicker seed={d.name || d.handle || "Twyn"} value={avatarStyle} onChange={setAvatarStyle} /></div>}
           <input id="profile-photo" type="file" accept="image/jpeg,image/png,image/webp" className="sr-only" onChange={(e) => {
             const f = e.target.files?.[0]; if (!f) return;
             if (!["image/jpeg", "image/png", "image/webp"].includes(f.type)) { setPhotoError("Use a JPG, PNG, or WebP image."); e.target.value = ""; return; }
@@ -429,11 +442,32 @@ function ProfilePhotoStep({ d, set, errs, avatarFile, setAvatarFile }: any) {
 }
 
 function RoleStep({ d, set, errs }: any) {
-  return <div><Head k="About you" t="What do you do?" d="A short role helps visitors understand how you can help." /><Label t="Your role" err={errs.headline}><input aria-invalid={!!errs.headline} className={clsx(input, errs.headline && "border-peach-deep/50")} value={d.headline} onChange={(e) => set({ headline: e.target.value })} placeholder="Designer, founder, engineer…" /></Label></div>;
+  const custom = d.headline && !ROLE_OPTIONS.includes(d.headline);
+  const selected = custom ? "Other" : d.headline;
+  return <div><Head k="About you" t="What do you do?" d="Choose a role that fits, or write your own." /><Label t="Your role" err={errs.headline}><select aria-invalid={!!errs.headline} className={clsx(input, "appearance-none", errs.headline && "border-peach-deep/50")} value={selected} onChange={(e) => set({ headline: e.target.value === "Other" ? "" : e.target.value })}><option value="">Choose your role</option>{ROLE_OPTIONS.map((role) => <option key={role} value={role}>{role}</option>)}</select></Label>{selected === "Other" && <Label t="Your role" hint="Optional custom label"><input autoFocus className={input} value={custom ? d.headline : ""} onChange={(e) => set({ headline: e.target.value })} placeholder="e.g. Product designer" /></Label>}</div>;
+}
+
+const AI_WRITERS = [
+  ["ChatGPT", "https://chatgpt.com/", "q", "/brands/chatgpt.svg"],
+  ["Claude", "https://claude.ai/new", "q", "/brands/claude.svg"],
+  ["Gemini", "https://gemini.google.com/app", "prompt", "https://cdn.jsdelivr.net/npm/@thesvg/icons/icons/google-gemini.svg"],
+  ["Perplexity", "https://www.perplexity.ai/search/new", "q", "/brands/perplexity.svg"],
+] as const;
+
+function IntroAiToolbar({ d }: { d: any }) {
+  const prompt = `Write a short, warm first-person introduction for my digital twin. Name: ${d.name || "[name]"}. Role: ${d.headline || "[role]"}. Keep it under 60 words, clear and natural. Mention what I work on and what people can ask me about. Return only the introduction.`;
+  const openWriter = (url: string, parameter: string) => {
+    void navigator.clipboard?.writeText(prompt);
+    window.open(`${url}?${parameter}=${encodeURIComponent(prompt)}`, "_blank", "noopener,noreferrer");
+  };
+  return <div className="absolute bottom-3 right-3 flex items-center gap-1 rounded-full border border-rule bg-white/90 p-1 shadow-sm backdrop-blur-sm" aria-label="Draft with AI">
+    <span className="px-1.5 text-[10px] text-ink-mute">Draft with</span>
+    {AI_WRITERS.map(([name, url, parameter, icon]) => <button key={name} type="button" title={`${name}: open with a prefilled intro prompt`} aria-label={`Draft with ${name}`} onClick={() => openWriter(url, parameter)} className="grid h-7 w-7 place-items-center rounded-full transition-colors hover:bg-paper-2">{icon.startsWith("http") ? <img src={icon} alt="" width={15} height={15} /> : <Image src={icon} alt="" width={15} height={15} className={name === "ChatGPT" ? "brightness-0" : undefined} />}</button>)}
+  </div>;
 }
 
 function BioStep({ d, set, errs }: any) {
-  return <div><Head k="About you" t="Tell us a little more" d="What do you work on, and what do people usually ask you about?" /><Label t="A short introduction" hint={`${d.bio.length} characters`} err={errs.bio}><textarea aria-invalid={!!errs.bio} rows={5} className={clsx(input, "resize-none", errs.bio && "border-peach-deep/50")} value={d.bio} onChange={(e) => set({ bio: e.target.value })} placeholder="I help… I work with… People usually reach out about…" /></Label></div>;
+  return <div><Head k="About you" t="Tell us a little more" d="What do you work on, and what do people usually ask you about?" /><Label t="A short introduction" hint={`${d.bio.length} characters`} err={errs.bio}><div className="relative"><textarea aria-invalid={!!errs.bio} rows={5} className={clsx(input, "resize-none pb-14 pr-36", errs.bio && "border-peach-deep/50")} value={d.bio} onChange={(e) => set({ bio: e.target.value })} placeholder="I help… I work with… People usually reach out about…" /><IntroAiToolbar d={d} /></div></Label></div>;
 }
 
 function LanguagesStep({ d, set, errs }: any) {
@@ -507,7 +541,7 @@ function KnowledgeStep({ d, set, errs, ensurePersona }: any) {
     <div>
       <Head k="Knowledge" t="What should it know?" d="Twyn only answers from what you add here. Anything else, it will say it does not know." />
       <div className="glass mb-6 p-4" style={{ borderRadius: 18 }}>
-        <AiImport pid={d.id} compact onApplied={(p, o) => set({ ...(o.bio ? { bio: p.bio } : {}), ...(o.tone ? { tone: p.tone } : {}), faqs: [...d.faqs.filter((f: any) => f.q.trim()), ...p.faqs] })} />
+        <AiImport pid={d.id} compact onApplied={(p, o) => set({ ...(o.bio ? { bio: p.bio } : {}), ...(o.tone ? { tone: p.tone } : {}), faqs: [...d.faqs.filter((f: any) => f.q.trim()), ...p.faqs], links: [...d.links.filter((l: any) => l.url.trim()), ...p.links.filter((l) => !d.links.some((existing: any) => existing.url === l.url))] })} />
       </div>
       <Label t="Rates and pricing" hint="optional"><input className={input} value={d.rates} onChange={(e) => set({ rates: e.target.value })} placeholder="MVP builds from 25,000 rupees per week. Discovery calls are free." /></Label>
 
@@ -677,18 +711,22 @@ function AvailabilityStep({ d, set, errs }: any) {
   );
 }
 
+function Confetti() {
+  const colors = ["#a99fe0", "#9cc6e4", "#a8dcc3", "#f4eac3", "#f8dacb"];
+  return <div aria-hidden className="pointer-events-none fixed inset-0 z-50 overflow-hidden">{Array.from({ length: 42 }, (_, i) => <motion.span key={i} className="absolute top-[-10%] h-3 w-1.5 rounded-sm" style={{ left: `${(i * 29) % 100}%`, backgroundColor: colors[i % colors.length] }} initial={{ y: 0, rotate: 0, opacity: 1 }} animate={{ y: "115vh", rotate: 360 + (i % 3) * 180, opacity: [1, 1, 0] }} transition={{ duration: 2.6 + (i % 5) * 0.25, delay: (i % 8) * 0.08, ease: "easeOut" }} />)}</div>;
+}
+
 function PublishStep({ d, publish, saving }: any) {
   const link = typeof window !== "undefined" ? `${window.location.origin}/p/${d.handle}` : `/p/${d.handle}`;
   const [copied, setCopied] = useState(false);
 
   const copy = () => { navigator.clipboard?.writeText(link); setCopied(true); setTimeout(() => setCopied(false), 1500); };
-  const a = d.availability;
   const rows: [string, string][] = [
     ["Persona", `${d.name} · ${d.headline}`], ["Tone", d.tone],
     ["Languages", d.languages.map((l: string) => LANGS.find((x) => x[0] === l)?.[1] || l).join(", ")],
     ["Knowledge", `${d.faqs.length} FAQ${d.faqs.length === 1 ? "" : "s"} · ${d.links.length} link${d.links.length === 1 ? "" : "s"}${d.rates ? " · rates" : ""}`],
     ["Voice", d.has_voice ? "Your cloned voice" : "Default voice (add yours later)"],
-    ["Availability", `${a.days.map((i: number) => DAYS[i]).join(", ")} · ${a.start} to ${a.end} IST · ${a.duration} min`],
+    ["Availability", "Configure this later in Studio"],
   ];
 
   // Sign-in prompt when not authenticated
@@ -720,13 +758,18 @@ function PublishStep({ d, publish, saving }: any) {
         <dl className="divide-y divide-ink/5">{rows.map(([k, v]) => <div key={k} className="flex gap-6 py-3 text-sm"><dt className="w-28 shrink-0 text-ink-mute">{k}</dt><dd className="text-ink">{v}</dd></div>)}</dl>
         <motion.button whileTap={{ scale: 0.97 }} onClick={publish} disabled={saving} className="mt-8 inline-flex items-center gap-2 rounded-full bg-ink h-9 px-5 text-[13.5px] font-medium text-canvas">{saving && <Loader2 size={15} className="animate-spin" />}Publish my Twyn</motion.button>
       </>) : (
-        <motion.div initial={{ opacity: 0, scale: 0.98 }} animate={{ opacity: 1, scale: 1 }} className="text-center">
+        <motion.div initial={{ opacity: 0, scale: 0.98 }} animate={{ opacity: 1, scale: 1 }} className="text-center"><Confetti />
           <div className="mx-auto grid place-items-center"><Orb size={84} state="speaking" level={0.3} initials={initials} /></div>
           <h1 className="display text-[32px] mt-2">Your Twyn is live.</h1>
           <p className="mx-auto mt-2 max-w-sm text-ink-soft">Share this link anywhere. Conversations, leads and bookings show up in your dashboard.</p>
           <div className="clay-pressed mx-auto mt-7 flex max-w-md items-center gap-2 py-2 pl-4 pr-2">
             <span className="flex-1 truncate text-left text-sm font-medium">{link.replace(/^https?:\/\//, "")}</span>
             <button onClick={copy} className="inline-flex items-center gap-1.5 rounded-full bg-ink px-3.5 py-2 text-sm text-canvas">{copied ? <Check size={14} /> : <Copy size={14} />}{copied ? "Copied" : "Copy"}</button>
+          </div>
+          <div className="glass mx-auto mt-5 max-w-md p-4 text-left" style={{ borderRadius: 18 }}>
+            <p className="text-[13px] font-medium">Want Twyn to manage your schedule?</p>
+            <p className="mt-1 text-[12.5px] text-ink-soft">Connect Google Calendar and configure availability anytime from Studio.</p>
+            <div className="mt-3 flex flex-wrap gap-2"><a href={`${API}/api/auth/google/login?next=%2Fstudio%2Fsettings&calendar=1`} className="inline-flex h-8 items-center rounded-full bg-ink px-3 text-[12.5px] font-medium text-canvas">Connect Calendar</a><a href="/studio/availability" className="clay-sm inline-flex h-8 items-center bg-white px-3 text-[12.5px] font-medium">Set availability</a></div>
           </div>
           <div className="mt-6 flex justify-center gap-3">
             <Link href={`/p/${d.handle}`} className="clay-sm inline-flex items-center gap-1.5 bg-white h-9 px-4 text-[13.5px]"><ExternalLink size={14} />Open page</Link>

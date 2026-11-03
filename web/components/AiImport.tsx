@@ -21,16 +21,16 @@ const enc = encodeURIComponent(AI_PROMPT);
 const AIS = [
   { k: "ChatGPT", logo: "/brands/chatgpt-dark.svg", url: `https://chatgpt.com/?q=${enc}` },
   { k: "Claude", logo: "/brands/claude.svg", url: `https://claude.ai/new?q=${enc}` },
-  { k: "Gemini", logo: "/brands/gemini.svg", url: "https://gemini.google.com/app", copy: true },
+  { k: "Gemini", logo: "https://cdn.jsdelivr.net/npm/@thesvg/icons/icons/google-gemini.svg", url: "https://gemini.google.com/app", copy: true },
   { k: "Grok", logo: "/brands/grok.svg", url: `https://grok.com/?q=${enc}` },
   { k: "Perplexity", logo: "/brands/perplexity.svg", url: `https://www.perplexity.ai/search?q=${enc}` },
 ];
 
-export type Parsed = { entries: { title: string; text: string }[]; faqs: { q: string; a: string }[]; bio: string; tone: string };
+export type Parsed = { entries: { title: string; text: string }[]; faqs: { q: string; a: string }[]; links: { label: string; url: string }[]; bio: string; tone: string };
 
 /** Split a markdown answer into sections; FAQs become Q/A pairs, Bio and How I talk can fill profile fields. */
 export function parseAnswer(md: string): Parsed {
-  const out: Parsed = { entries: [], faqs: [], bio: "", tone: "" };
+  const out: Parsed = { entries: [], faqs: [], links: [], bio: "", tone: "" };
   const secs: { title: string; body: string[] }[] = []; let cur = { title: "Notes", body: [] as string[] };
   for (const line of md.replace(/\r/g, "").split("\n")) {
     const h = line.match(/^\s{0,3}#{1,4}\s+(.+?)\s*#*\s*$/) || line.match(/^\s*\*\*([^*]{2,40})\*\*:?\s*$/);
@@ -50,12 +50,18 @@ export function parseAnswer(md: string): Parsed {
     const text = clean(body); if (!text) continue;
     if (t === "bio" || t === "about") out.bio = text.split("\n").join(" ");
     if (t.includes("talk") || t.includes("tone")) out.tone = text.split("\n").join(" ").slice(0, 200);
+    if (t.includes("link")) {
+      for (const line of text.split("\n")) {
+        const match = line.match(/^\s*[-*]?\s*\[([^\]]+)\]\((https?:\/\/[^)]+)\)/) || line.match(/^\s*[-*]?\s*([^:]+):\s*(https?:\/\/\S+)/) || line.match(/^\s*[-*]?\s*(https?:\/\/\S+)/);
+        if (match) out.links.push({ label: match[2] ? match[1].trim() : "Website", url: (match[2] || match[1]).replace(/[),.;]+$/, "") });
+      }
+    }
     out.entries.push({ title: s.title, text });
   }
   return out;
 }
 
-export function AiImport({ pid, onApplied, compact }: { pid?: string; onApplied?: (p: Parsed, opts: { bio: boolean; tone: boolean }) => void | Promise<void>; compact?: boolean }) {
+export function AiImport({ pid, onApplied, compact }: { pid?: string; onApplied?: (p: Parsed, opts: { bio: boolean; tone: boolean; links: { label: string; url: string }[] }) => void | Promise<void>; compact?: boolean }) {
   const [copied, setCopied] = useState(false);
   const [text, setText] = useState("");
   const [prev, setPrev] = useState<Parsed | null>(null);
@@ -68,7 +74,7 @@ export function AiImport({ pid, onApplied, compact }: { pid?: string; onApplied?
     try {
       const entries = [...prev.entries, ...prev.faqs.map((f) => ({ title: "FAQ", text: `Q: ${f.q} A: ${f.a}` }))];
       const r = await api(`/api/personas/${pid}/knowledge`, { method: "POST", body: JSON.stringify({ entries }) });
-      await onApplied?.(prev, { bio: useBio && !!prev.bio, tone: useTone && !!prev.tone });
+      await onApplied?.(prev, { bio: useBio && !!prev.bio, tone: useTone && !!prev.tone, links: prev.links });
       setMsg(`Imported ${r.chunks} knowledge entries.`); setPrev(null); setText("");
     } catch (e: any) { setErr(e.message || "Import failed."); } finally { setBusy(false); }
   }
@@ -82,7 +88,7 @@ export function AiImport({ pid, onApplied, compact }: { pid?: string; onApplied?
         {AIS.map((a) => (
           <a key={a.k} href={a.url} target="_blank" rel="noreferrer" onClick={() => { if (a.copy) copy(); }}
             className="clay-sm flex min-w-0 h-10 items-center gap-1.5 bg-white px-2.5 text-[12.5px] font-medium text-ink hover:bg-canvas sm:gap-2 sm:px-3 sm:text-[13px]">
-            <Image src={a.logo} alt="" width={15} height={15} className="shrink-0" /><span className="min-w-0 flex-1 whitespace-nowrap">Ask {a.k}</span><ArrowSquareOut size={12} className="shrink-0 text-ink-mute" />
+            {a.logo.startsWith("http") ? <img src={a.logo} alt="" width={15} height={15} className="shrink-0" /> : <Image src={a.logo} alt="" width={15} height={15} className="shrink-0" />}<span className="min-w-0 flex-1 whitespace-nowrap">Ask {a.k}</span><ArrowSquareOut size={12} className="shrink-0 text-ink-mute" />
           </a>))}
         <button onClick={copy} className="clay-sm flex min-w-0 h-10 items-center gap-1.5 bg-white px-2.5 text-[12.5px] font-medium text-ink hover:bg-canvas sm:gap-2 sm:px-3 sm:text-[13px]">{copied ? <Check size={14} className="shrink-0" /> : <Copy size={14} className="shrink-0" />}<span className="whitespace-nowrap">{copied ? "Copied" : "Copy prompt"}</span></button>
       </div>
@@ -93,7 +99,7 @@ export function AiImport({ pid, onApplied, compact }: { pid?: string; onApplied?
           {!pid && <span className="text-[12px] text-ink-mute">Save your persona first.</span>}</div>
       </> : (
         <div className="glass space-y-2 p-3" style={{ borderRadius: 16 }}>
-          <div className="flex items-center justify-between"><span className="text-[13px] font-medium">{prev.entries.length} sections, {prev.faqs.length} FAQs found</span>
+          <div className="flex items-center justify-between"><span className="text-[13px] font-medium">{prev.entries.length} sections, {prev.faqs.length} FAQs, {prev.links.length} links found</span>
             <button onClick={() => setPrev(null)} className="text-[12px] text-ink-soft hover:text-ink">Edit text</button></div>
           <div className="max-h-64 space-y-1.5 overflow-y-auto pr-1">
             {prev.entries.map((e, i) => (

@@ -49,13 +49,13 @@
     export function TwynLoader({ label = "Getting things ready", compact = false }: { label?: string; compact?: boolean }) {
       return (
         <div role="status" aria-live="polite" className={`flex flex-col items-center justify-center ${compact ? "gap-2 py-8" : "min-h-[70vh] gap-3"}`}>
-          <span className={`twyn-loader-mark grid place-items-center rounded-full bg-white/80 ${compact ? "h-12 w-12" : "h-16 w-16"}`}>
-            <Mark size={compact ? 23 : 29} />
+          <span aria-hidden="true" className={`twyn-loader-visual ${compact ? "twyn-loader-visual--compact" : ""}`}>
+            <span className="twyn-loader-orbit" />
+            <span className="twyn-loader-core">
+              {[0, 1, 2].map((i) => <i key={i} className="twyn-loader-bar" style={{ animationDelay: `${i * 120}ms` }} />)}
+            </span>
           </span>
           <span className="text-[12.5px] font-medium text-ink-soft">{label}</span>
-          <span aria-hidden="true" className="flex items-center gap-1.5">
-            {[0, 1, 2].map((i) => <i key={i} className="twyn-loader-dot h-1.5 w-1.5 rounded-full bg-lilac-deep" style={{ animationDelay: `${i * 160}ms` }} />)}
-          </span>
         </div>
       );
     }

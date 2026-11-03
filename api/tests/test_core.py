@@ -91,7 +91,7 @@ def test_llm_provider_chain_skips_unconfigured(monkeypatch):
         monkeypatch.setattr(llm.config, key, "")
     assert llm.providers() == []
 
-def test_meta_monthly_budget_reserves_and_stops_at_cap(monkeypatch):
+def test_meta_spend_is_tracked_without_a_monthly_cap(monkeypatch):
     from sqlalchemy import create_engine, select
     from sqlalchemy.orm import sessionmaker
     from app.db import Base, ProviderSpend
@@ -100,12 +100,11 @@ def test_meta_monthly_budget_reserves_and_stops_at_cap(monkeypatch):
     Base.metadata.create_all(test_engine)
     monkeypatch.setattr(llm, "engine", test_engine)
     monkeypatch.setattr(llm, "SessionLocal", sessionmaker(bind=test_engine, expire_on_commit=False))
-    monkeypatch.setattr(llm.config, "META_MONTHLY_BUDGET_USD", 0.01)
     reservation = llm._reserve_meta([{"role": "user", "content": "hello"}])
     assert reservation
     llm._settle_meta(reservation, {"prompt_tokens": 1000, "completion_tokens": 1000})
     assert llm._reserve_meta([{"role": "user", "content": "hello"}])
-    assert llm._reserve_meta([{"role": "user", "content": "hello"}]) is None
+    assert llm._reserve_meta([{"role": "user", "content": "hello"}])
     with sessionmaker(bind=test_engine)() as s:
         spend = s.scalar(select(ProviderSpend))
         assert spend.spent_micros == 5500
@@ -349,7 +348,7 @@ def test_llm_meta_fallback_to_nvidia(monkeypatch):
             })
         return httpx.Response(404, request=req)
 
-    # Allow meta budget reservation
+    # Allow Meta spend reservation
     monkeypatch.setattr(llm, "_reserve_meta", lambda msgs, tools: ("2026-11", 500))
     monkeypatch.setattr(llm, "_settle_meta", lambda res, usage=None, charge_reserve=False: None)
 

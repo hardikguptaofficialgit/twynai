@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Gloock, Hanken_Grotesk, JetBrains_Mono, Noto_Sans_Devanagari } from "next/font/google";
+import { Lora, Hanken_Grotesk, JetBrains_Mono, Noto_Sans_Devanagari } from "next/font/google";
 import localFont from "next/font/local";
 const tamil = localFont({
   src: [
@@ -14,7 +14,7 @@ import "./globals.css";
 import SmoothScroll from "@/components/SmoothScroll";
 import BackendStatus from "@/components/BackendStatus";
 
-const disp = Gloock({ subsets: ["latin"], weight: "400", variable: "--font-disp", display: "swap" });
+const disp = Lora({ subsets: ["latin"], weight: ["400", "500"], variable: "--font-disp", display: "swap" });
 const body = Hanken_Grotesk({ subsets: ["latin"], weight: ["400", "500", "700"], variable: "--font-body", display: "swap" });
 const jb = JetBrains_Mono({ subsets: ["latin"], weight: ["400"], variable: "--font-jb", display: "swap" });
 
@@ -39,7 +39,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className={`${disp.variable} ${body.variable} ${jb.variable} ${tamil.variable} ${deva.variable}`}>
+    <html lang="en" className={`${disp.variable} ${body.variable} ${jb.variable} ${tamil.variable} ${deva.variable}`} suppressHydrationWarning>
       <body
         className={`antialiased`}
         suppressHydrationWarning

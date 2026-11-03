@@ -6,13 +6,16 @@ type ProfileAvatarProps = {
   size?: number;
   className?: string;
   alt?: string;
+  style?: AvatarStyle;
 };
 
-export function profileAvatarUrl(seed: string) {
+export type AvatarStyle = "notionists-neutral" | "adventurer-neutral" | "bottts-neutral";
+
+export function profileAvatarUrl(seed: string, style: AvatarStyle = "notionists-neutral") {
   const value = seed.trim() || "Twyn";
-  return `https://api.dicebear.com/9.x/initials/svg?seed=${encodeURIComponent(value)}&backgroundColor=d9cdf6&fontFamily=Arial&fontWeight=600&fontSize=38&radius=50`;
+  return `https://api.dicebear.com/9.x/${style}/svg?seed=${encodeURIComponent(value)}&backgroundColor=d9cdf6&radius=50&scale=90`;
 }
 
-export function ProfileAvatar({ seed = "Twyn", image, size = 40, className = "", alt = "" }: ProfileAvatarProps) {
-  return <img src={image || profileAvatarUrl(seed)} alt={alt} width={size} height={size} className={`rounded-full object-cover ${className}`} referrerPolicy={image ? "no-referrer" : undefined} />;
+export function ProfileAvatar({ seed = "Twyn", image, size = 40, className = "", alt = "", style = "notionists-neutral" }: ProfileAvatarProps) {
+  return <img src={image || profileAvatarUrl(seed, style)} alt={alt} width={size} height={size} className={`rounded-full object-cover ${className}`} referrerPolicy={image ? "no-referrer" : undefined} />;
 }
