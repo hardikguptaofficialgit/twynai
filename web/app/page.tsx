@@ -313,7 +313,7 @@ export default function Landing() {
       <footer className="pixel-section relative overflow-hidden border-t border-rule">
         <PixelField className="inset-0 opacity-45" />
         <div className={`${W} relative z-10 flex flex-col items-start justify-between gap-4 py-7 text-[12.5px] text-ink-mute sm:flex-row sm:items-center`}>
-          <div className="flex flex-wrap items-center gap-3"><Logo /><span>Built for the Gnani AI Internship Challenge</span></div>
+          <div className="flex flex-wrap items-center gap-3"><Logo /><span>Built for the Gnani AI  Challenge</span></div>
           <div className="flex items-center gap-5">
             <ModelStack />
             <span className="flex items-center gap-2 border-l border-rule pl-5">Voice by <img src="https://cdn.prod.website-files.com/6848bfb15c1067d1b767ceb1/6a28e9711abd50da5dabc294_Layer_1.svg" alt="Gnani AI" className="h-5 w-auto" /></span>
