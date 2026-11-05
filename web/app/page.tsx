@@ -206,7 +206,7 @@ export default function Landing() {
           </motion.p>
           <motion.div {...fade(0.25)} className="mt-6"><ClaimBar /></motion.div>
           <motion.div {...fade(0.3)} className="mt-3 flex items-center gap-4 text-[12.5px] text-ink-mute">
-            <Link href="/p/hardik" className="inline-flex items-center gap-1 text-ink-soft underline decoration-ink/20 underline-offset-4 hover:text-ink">Try Hardik’s Twyn <ArrowUpRight size={12} /></Link>
+            <Link href="/p/strykerin" className="inline-flex items-center gap-1 text-ink-soft underline decoration-ink/20 underline-offset-4 hover:text-ink">Try Hardik’s Twyn <ArrowUpRight size={12} /></Link>
             <span>Free in beta · no card</span>
           </motion.div>
         </div>
