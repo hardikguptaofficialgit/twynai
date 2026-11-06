@@ -137,6 +137,7 @@ export default function PublicPersona() {
 
   async function send(t = text) {
     if (!t.trim() || busy) return;
+    const requestStarted = performance.now();
     const streamId = typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`;
     setMsgs((m) => [...m, { role: "visitor", text: t }, { role: "persona", text: "", id: streamId }]); setText(""); setBusy(true);
     try {
@@ -153,7 +154,7 @@ export default function PublicPersona() {
           if (event.type === "conversation") setCid(event.conversation_id);
           else if (event.type === "text") setMsgs((messages) => { const next = [...messages]; const index = next.findIndex((message) => message.id === streamId); if (index < 0) return next; next[index] = { ...next[index], text: `${next[index].text}${event.delta}` }; return next; });
           else if (event.type === "tool") tools = [...tools, { name: event.name, result: event.result }];
-          else if (event.type === "done") { setCid(event.conversation_id || cid); setHuman(event.takeover); updateReply(event.reply || "", event.tools || tools); if (event.tools?.some((tool: any) => tool.name === "book_meeting" && tool.result?.booked)) setBookingDraft(null); }
+          else if (event.type === "done") { setCid(event.conversation_id || cid); setHuman(event.takeover); updateReply(event.reply || "", event.tools || tools); if (event.tools?.some((tool: any) => tool.name === "book_meeting" && tool.result?.booked)) setBookingDraft(null); const elapsed = performance.now() - requestStarted; if (elapsed >= 4500) window.dispatchEvent(new CustomEvent("twyn:latency", { detail: { ms: Math.round(elapsed), mode: "chat" } })); }
           else if (event.type === "error") throw new Error(event.message || "The conversation could not be reached.");
         }
       }
@@ -181,15 +182,23 @@ export default function PublicPersona() {
       const r = new MediaRecorder(stream); rec.current = r;
       r.ondataavailable = (e) => chunks.push(e.data);
       const stopTurn = () => { if (r.state === "recording") r.stop(); };
+      let noiseFloor = 2.5; let speechFrames = 0; let quietFrames = 0;
       const listen = () => {
         analyser.getByteTimeDomainData(samples);
         const volume = samples.reduce((sum, value) => sum + Math.abs(value - 128), 0) / samples.length;
         setLevel(Math.min(1, volume / 18));
-        if (volume > 3) {
-          turnStarted.current = true;
-          if (turnStopTimer.current) { window.clearTimeout(turnStopTimer.current); turnStopTimer.current = null; }
-        } else if (turnStarted.current && !turnStopTimer.current) {
-          turnStopTimer.current = window.setTimeout(stopTurn, 900);
+        if (!turnStarted.current) {
+          noiseFloor = noiseFloor * 0.96 + volume * 0.04;
+          const threshold = Math.max(4, noiseFloor * 2.1);
+          speechFrames = volume > threshold ? speechFrames + 1 : 0;
+          if (speechFrames >= 3) { turnStarted.current = true; quietFrames = 0; }
+        } else {
+          const threshold = Math.max(3.5, noiseFloor * 1.35);
+          if (volume > threshold) {
+            quietFrames = 0;
+            if (turnStopTimer.current) { window.clearTimeout(turnStopTimer.current); turnStopTimer.current = null; }
+          } else quietFrames += 1;
+          if (quietFrames >= 4 && !turnStopTimer.current) turnStopTimer.current = window.setTimeout(stopTurn, 650);
         }
         if (r.state === "recording") raf.current = requestAnimationFrame(listen);
       };
@@ -296,6 +305,7 @@ export default function PublicPersona() {
             if (e.fallback?.length) setNote(`Fallback: ${e.fallback.join(", ")}`);
             else if (mock) setNote("Demo voice (browser speech) until the Gnani key is set");
             const L = e.latency || {};
+            if (L.total_ms >= 4500) window.dispatchEvent(new CustomEvent("twyn:latency", { detail: { ms: L.total_ms, mode: "voice" } }));
             setLat({ stt_ms: L.stt_ms, llm_ms: L.first_token_ms ? L.first_token_ms - L.stt_ms : L.llm_ms, tts_ms: L.first_audio_ms && L.first_sentence_ms ? Math.max(0, L.first_audio_ms - Math.min(L.first_sentence_ms, L.filler_ms || 1e9)) : 0,
               total_ms: L.total_ms, client_ms: Math.round((firstAudio || performance.now()) - t0), first_audio_ms: Math.round((firstAudio || performance.now()) - t0) });
             reply = e.reply || reply;

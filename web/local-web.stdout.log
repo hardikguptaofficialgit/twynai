@@ -1,72 +1,28 @@
 
 > web@0.1.0 dev
-> next dev --hostname 127.0.0.1 --port 3100
+> next dev -p 3100
 
    ▲ Next.js 15.5.28
-   - Local:        http://127.0.0.1:3100
-   - Network:      http://127.0.0.1:3100
+   - Local:        http://localhost:3100
+   - Network:      http://10.21.35.134:3100
+   - Environments: .env.local
 
  ✓ Starting...
- ✓ Ready in 4.7s
- ○ Compiling /login ...
- ✓ Compiled /login in 13.6s (1589 modules)
- GET /login 200 in 14281ms
+ ✓ Ready in 3.9s
  ○ Compiling / ...
- ✓ Compiled / in 17.6s (10843 modules)
- GET / 200 in 18386ms
- GET / 200 in 407ms
- GET / 200 in 413ms
- GET / 200 in 193ms
- GET / 200 in 202ms
- GET / 200 in 269ms
- ✓ Compiled in 1229ms (5356 modules)
- GET / 200 in 108ms
- ✓ Compiled in 647ms (5356 modules)
- GET / 200 in 103ms
- GET / 200 in 190ms
- ✓ Compiled in 752ms (5356 modules)
- GET / 200 in 76ms
- ✓ Compiled in 577ms (5356 modules)
- GET / 200 in 67ms
- GET / 200 in 270ms
- GET / 200 in 303ms
- ✓ Compiled in 795ms (5356 modules)
- GET / 200 in 59ms
- GET / 200 in 309ms
- ✓ Compiled in 622ms (5356 modules)
- GET / 200 in 57ms
- ✓ Compiled in 576ms (5356 modules)
- GET / 200 in 61ms
- ✓ Compiled in 566ms (5356 modules)
- GET / 200 in 54ms
- GET / 200 in 563ms
- GET / 200 in 567ms
- ✓ Compiled in 1079ms (5356 modules)
- GET / 200 in 60ms
- ✓ Compiled in 779ms (5356 modules)
- GET / 200 in 56ms
- ✓ Compiled in 588ms (5356 modules)
- GET / 200 in 54ms
- GET / 200 in 281ms
- ✓ Compiled in 562ms (5356 modules)
- GET / 200 in 57ms
- GET / 200 in 266ms
- GET / 200 in 289ms
- GET / 500 in 533ms
- ○ Compiling /_error ...
- ✓ Compiled /_error in 6.8s (11181 modules)
- ✓ Compiled in 4.5s (11195 modules)
- GET / 500 in 21511ms
- GET / 500 in 5756ms
- GET / 500 in 1605ms
- GET / 500 in 330ms
- GET / 500 in 1321ms
- GET / 500 in 353ms
- GET / 500 in 1320ms
- GET / 500 in 323ms
- GET / 500 in 581ms
- GET / 500 in 1453ms
- GET / 500 in 403ms
- ✓ Compiled in 1088ms (11195 modules)
- GET / 500 in 471ms
- GET / 500 in 248ms
+ ✓ Compiled / in 8s (10826 modules)
+ GET / 200 in 8903ms
+ GET / 200 in 176ms
+ GET / 200 in 279ms
+ GET / 200 in 761ms
+ ○ Compiling /_not-found ...
+ ✓ Compiled /_not-found in 2.7s (10830 modules)
+ GET / 200 in 562ms
+ GET /strykerin 404 in 3415ms
+ ○ Compiling /p/[handle] ...
+ ✓ Compiled /p/[handle] in 3.9s (10827 modules)
+ GET /p/strykerin 200 in 5332ms
+ GET /p/strykerin 200 in 124ms
+ ✓ Compiled in 2.4s (10838 modules)
+ GET /p/strykerin 200 in 296ms
+ GET /p/strykerin 200 in 553ms

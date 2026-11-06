@@ -61,11 +61,8 @@ export function Orb({
         style={{ width: size, height: size, background: color, boxShadow: shadow }}
         animate={{
           scale: shouldReduce ? 1 : 1 + l * 0.1 + (state === "thinking" ? 0.03 : 0),
-          borderRadius: active && !shouldReduce
-            ? ["46% 54% 52% 48% / 48% 45% 55% 52%", "54% 46% 48% 52% / 54% 50% 50% 46%", "48% 52% 55% 45% / 50% 56% 44% 50%", "46% 54% 52% 48% / 48% 45% 55% 52%"]
-            : "50%",
         }}
-        transition={shouldReduce ? { duration: 0 } : { scale: { type: "spring", stiffness: 280, damping: 20 }, borderRadius: { duration: state === "thinking" ? 2.8 : 4.5, repeat: Infinity, ease: "easeInOut" } }}
+        transition={shouldReduce ? { duration: 0 } : { scale: { type: "spring", stiffness: 280, damping: 20 } }}
       >
         {/* Soft specular highlight */}
         <div className="pointer-events-none absolute left-[18%] top-[15%] h-[26%] w-[32%] rounded-full bg-white/60 blur-[1px]" />

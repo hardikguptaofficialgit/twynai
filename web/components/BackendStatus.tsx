@@ -5,7 +5,9 @@ import { API } from "@/lib/api";
 
 export default function BackendStatus() {
   const [unavailable, setUnavailable] = useState(false);
+  const [slow, setSlow] = useState(false);
   const failures = useRef(0);
+  const slowTimer = useRef<number | null>(null);
 
   const check = useCallback(async () => {
     if (!navigator.onLine) {
@@ -36,19 +38,35 @@ export default function BackendStatus() {
     const interval = window.setInterval(() => void check(), 20000);
     window.addEventListener("online", check);
     window.addEventListener("offline", check);
+    const onLatency = (event: Event) => {
+      const ms = (event as CustomEvent<{ ms?: number }>).detail?.ms || 0;
+      if (ms < 4500) return;
+      setSlow(true);
+      if (slowTimer.current) window.clearTimeout(slowTimer.current);
+      slowTimer.current = window.setTimeout(() => setSlow(false), 9000);
+    };
+    window.addEventListener("twyn:latency", onLatency);
     return () => {
       window.clearInterval(interval);
       window.removeEventListener("online", check);
       window.removeEventListener("offline", check);
+      window.removeEventListener("twyn:latency", onLatency);
+      if (slowTimer.current) window.clearTimeout(slowTimer.current);
     };
   }, [check]);
 
-  if (!unavailable) return null;
-
+  const visible = unavailable || slow;
   return (
-    <div role="status" aria-live="polite" className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1 border-b border-peach-deep/20 bg-peach/70 px-4 py-2 text-center text-[13px] text-ink">
-      <span>Twyn’s backend or database is temporarily unreachable. It runs on a self-hosted server, so it may be restarting or offline.</span>
-      <button onClick={() => void check()} className="font-semibold underline underline-offset-2 hover:text-ink-soft">Retry</button>
+    <div
+      role="status"
+      aria-live="polite"
+      aria-hidden={!visible}
+      className={`pointer-events-none fixed left-1/2 top-4 z-[100] w-[min(calc(100vw-2rem),30rem)] -translate-x-1/2 transition-all duration-300 ease-out ${visible ? "translate-y-0 opacity-100" : "-translate-y-3 opacity-0"}`}
+    >
+      <div className={`pointer-events-auto flex items-center justify-center gap-3 rounded-full border px-4 py-2.5 text-center text-[12.5px] leading-5 shadow-[0_10px_30px_rgba(36,31,48,0.12)] backdrop-blur-md ${unavailable ? "border-peach-deep/30 bg-peach/95 text-ink" : "border-lilac-deep/25 bg-lilac/95 text-ink"}`}>
+        <span>{unavailable ? "Twyn’s backend or database is temporarily unreachable. It may be restarting or offline." : "Twyn is running on a lightweight, cost-conscious server, so some responses may take a moment."}</span>
+        {unavailable && <button onClick={() => void check()} className="shrink-0 font-semibold underline underline-offset-2 hover:text-ink-soft">Retry</button>}
+      </div>
     </div>
   );
 }
