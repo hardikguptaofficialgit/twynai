@@ -37,6 +37,9 @@ GROQ_API_KEY = _secret("GROQ_API_KEY")
 GROQ_MODEL = os.getenv("GROQ_MODEL", "openai/gpt-oss-120b")
 OPENROUTER_API_KEY = _secret("OPENROUTER_API_KEY")
 OPENROUTER_MODEL = os.getenv("OPENROUTER_MODEL", "openai/gpt-4o-mini")
+# Ordered fastest-first for visitor turns. Keep this configurable so a provider
+# can be promoted without changing application code or secrets.
+LLM_PROVIDER_ORDER = [x.strip().lower() for x in os.getenv("LLM_PROVIDER_ORDER", "meta,groq,nvidia,openrouter").split(",") if x.strip()]
 GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID", "")
 GOOGLE_CLIENT_SECRET = _secret("GOOGLE_CLIENT_SECRET")
 WEB_ORIGIN = os.getenv("WEB_ORIGIN", "http://localhost:3100")
@@ -53,8 +56,10 @@ if any((OBJECT_STORAGE_ENDPOINT, OBJECT_STORAGE_ACCESS_KEY_ID, OBJECT_STORAGE_SE
     raise RuntimeError("Set the object storage endpoint, access key, secret key, and bucket together.")
 
 def modes():
+    configured = {"meta": META_API_KEY, "groq": GROQ_API_KEY, "nvidia": NVIDIA_API_KEY, "openrouter": OPENROUTER_API_KEY}
+    primary = next((name for name in LLM_PROVIDER_ORDER if configured.get(name)), "mock")
     return {
-        "llm": "meta" if META_API_KEY else ("nvidia" if NVIDIA_API_KEY else ("groq" if GROQ_API_KEY else ("openrouter" if OPENROUTER_API_KEY else "mock"))),
+        "llm": primary,
         "voice": "gnani" if GNANI_API_KEY else "mock",
         "calendar": "google" if GOOGLE_CLIENT_ID else "mock",
         "google_login": bool(GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET),

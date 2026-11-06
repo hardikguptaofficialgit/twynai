@@ -1,4 +1,4 @@
-"""LLM provider chain: Meta -> Groq -> NVIDIA -> OpenRouter -> mock."""
+"""LLM provider chain: configurable low-latency order -> mock."""
 import asyncio, json, re, httpx, logging, math, time
 from datetime import datetime, timezone
 from . import config
@@ -12,7 +12,8 @@ META_OUTPUT_LIMIT = 700
 META_INPUT_PER_MILLION_USD = 1.25
 META_OUTPUT_PER_MILLION_USD = 4.25
 COMPLETE_DEADLINE_SECONDS = 12
-META_ATTEMPT_TIMEOUT_SECONDS = 1.5
+META_ATTEMPT_TIMEOUT_SECONDS = 3.5
+STREAM_PROVIDER_TIMEOUT_SECONDS = 5
 
 def _reserve_meta(messages, tools=None):
     # Reserve by UTF-8 byte count (a conservative token upper bound) before sending.
@@ -59,9 +60,11 @@ def _settle_meta(reservation, usage=None, charge_reserve=False):
 async def _reserve_meta_async(messages, tools=None):
     """Reserve budget without blocking the FastAPI event loop or chat latency."""
     try:
-        return await asyncio.wait_for(asyncio.to_thread(_reserve_meta, messages, tools), timeout=0.5)
+        # Spend tracking is observability, not a reason to delay a visitor's
+        # first token. Neon can occasionally take longer than this under load.
+        return await asyncio.wait_for(asyncio.to_thread(_reserve_meta, messages, tools), timeout=0.1)
     except Exception as e:
-        log.warning("Meta spend reservation skipped: %s", type(e).__name__)
+        log.debug("Meta spend reservation skipped: %s", type(e).__name__)
         return None
 
 def _settle_meta_background(reservation, usage=None, charge_reserve=False):
@@ -83,14 +86,13 @@ TOOLS = [
 ]
 
 def providers():
-    out = []
-    # Groq is the low-latency path for visitor chat. Keep every configured
-    # provider in the chain so tool calls and provider outages still fail over.
-    if config.META_API_KEY: out.append(("meta", "https://api.meta.ai/v1/chat/completions", config.META_API_KEY, config.META_MODEL))
-    if config.GROQ_API_KEY: out.append(("groq", "https://api.groq.com/openai/v1/chat/completions", config.GROQ_API_KEY, config.GROQ_MODEL))
-    if config.NVIDIA_API_KEY: out.append(("nvidia", "https://integrate.api.nvidia.com/v1/chat/completions", config.NVIDIA_API_KEY, config.NVIDIA_MODEL))
-    if config.OPENROUTER_API_KEY: out.append(("openrouter", "https://openrouter.ai/api/v1/chat/completions", config.OPENROUTER_API_KEY, config.OPENROUTER_MODEL))
-    return out
+    catalog = {
+        "meta": ("https://api.meta.ai/v1/chat/completions", config.META_API_KEY, config.META_MODEL),
+        "groq": ("https://api.groq.com/openai/v1/chat/completions", config.GROQ_API_KEY, config.GROQ_MODEL),
+        "nvidia": ("https://integrate.api.nvidia.com/v1/chat/completions", config.NVIDIA_API_KEY, config.NVIDIA_MODEL),
+        "openrouter": ("https://openrouter.ai/api/v1/chat/completions", config.OPENROUTER_API_KEY, config.OPENROUTER_MODEL),
+    }
+    return [(name, *catalog[name]) for name in config.LLM_PROVIDER_ORDER if name in catalog and catalog[name][1]]
 
 async def complete(messages, tools=None):
     """Returns (assistant_message_dict, provider_name)."""
@@ -111,10 +113,9 @@ async def complete(messages, tools=None):
                 body["reasoning_effort"] = "minimal" if name == "meta" else "low"
             if tools: body["tools"] = tools
             reservation = await _reserve_meta_async(messages, tools) if name == "meta" else None
-            # Meta remains the primary provider, but a slow first provider must
-            # not hold a visitor request for the entire chain deadline. Groq
-            # is the configured low-latency fallback.
-            provider_timeout = META_ATTEMPT_TIMEOUT_SECONDS if name == "meta" else (12 if name == "nvidia" else 8)
+            # The provider order is latency-aware and configurable. Each slow
+            # provider gets a bounded attempt so outages do not block visitors.
+            provider_timeout = META_ATTEMPT_TIMEOUT_SECONDS if name == "meta" else STREAM_PROVIDER_TIMEOUT_SECONDS
             timeout = min(provider_timeout, max(1.0, remaining))
             async with httpx.AsyncClient(timeout=timeout) as c:
                 r = await asyncio.wait_for(c.post(url, headers={"Authorization": f"Bearer {key}"}, json=body), timeout=timeout)
@@ -205,7 +206,7 @@ async def stream(messages, tools=None):
                 reservation = await _reserve_meta_async(messages, tools)
                 body["stream_options"] = {"include_usage": True}
                 body["reasoning_effort"] = "minimal"
-            provider_timeout = META_ATTEMPT_TIMEOUT_SECONDS if name == "meta" else (12 if name == "nvidia" else 8)
+            provider_timeout = META_ATTEMPT_TIMEOUT_SECONDS if name == "meta" else STREAM_PROVIDER_TIMEOUT_SECONDS
             timeout = provider_timeout
             async with httpx.AsyncClient(timeout=httpx.Timeout(timeout, read=timeout)) as c:
                 async with c.stream("POST", url, headers={"Authorization": f"Bearer {key}"}, json=body) as r:

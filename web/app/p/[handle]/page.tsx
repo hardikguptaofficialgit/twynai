@@ -9,7 +9,7 @@ import { Backdrop, Logo, Pill, TwynLoader } from "@/components/ui";
 import { Orb } from "@/components/Orb";
 import { ProfileAvatar, profileAvatarUrl } from "@/components/ProfileAvatar";
 
-type Msg = { role: "visitor" | "persona" | "owner"; text: string; tools?: any[] };
+type Msg = { role: "visitor" | "persona" | "owner"; text: string; tools?: any[]; id?: string };
 type BookingSlot = { start: string; say: string };
 type BookingDraft = BookingSlot & { name?: string; email?: string; topic?: string };
 type ConversationSnapshot = { conversationId: string; messages: Msg[]; bookingDraft: BookingDraft | null; savedAt: number };
@@ -137,12 +137,13 @@ export default function PublicPersona() {
 
   async function send(t = text) {
     if (!t.trim() || busy) return;
-    setMsgs((m) => [...m, { role: "visitor", text: t }, { role: "persona", text: "" }]); setText(""); setBusy(true);
+    const streamId = typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`;
+    setMsgs((m) => [...m, { role: "visitor", text: t }, { role: "persona", text: "", id: streamId }]); setText(""); setBusy(true);
     try {
       const response = await fetch(`${API}/api/p/${handle}/chat/stream`, { method: "POST", headers: { "Content-Type": "application/json", ...(token() ? { Authorization: `Bearer ${token()}` } : {}) }, body: JSON.stringify({ text: t, conversation_id: cid }) });
       if (!response.ok || !response.body) throw new Error("The conversation could not be reached.");
       const reader = response.body.getReader(); const decoder = new TextDecoder(); let pending = ""; let tools: any[] = [];
-      const updateReply = (reply: string, nextTools = tools) => setMsgs((messages) => { const next = [...messages]; const index = next.length - 1; next[index] = { role: "persona", text: reply, tools: nextTools }; return next; });
+      const updateReply = (reply: string, nextTools = tools) => setMsgs((messages) => { const next = [...messages]; const index = next.findIndex((message) => message.id === streamId); if (index < 0) return next; next[index] = { ...next[index], role: "persona", text: reply, tools: nextTools }; return next; });
       for (;;) {
         const { value, done } = await reader.read(); if (done) break;
         pending += decoder.decode(value, { stream: true });
@@ -150,13 +151,13 @@ export default function PublicPersona() {
           const line = pending.slice(0, newline).trim(); pending = pending.slice(newline + 1); if (!line) continue;
           const event = JSON.parse(line);
           if (event.type === "conversation") setCid(event.conversation_id);
-          else if (event.type === "text") setMsgs((messages) => { const next = [...messages]; const index = next.length - 1; next[index] = { ...next[index], text: `${next[index].text}${event.delta}` }; return next; });
+          else if (event.type === "text") setMsgs((messages) => { const next = [...messages]; const index = next.findIndex((message) => message.id === streamId); if (index < 0) return next; next[index] = { ...next[index], text: `${next[index].text}${event.delta}` }; return next; });
           else if (event.type === "tool") tools = [...tools, { name: event.name, result: event.result }];
           else if (event.type === "done") { setCid(event.conversation_id || cid); setHuman(event.takeover); updateReply(event.reply || "", event.tools || tools); if (event.tools?.some((tool: any) => tool.name === "book_meeting" && tool.result?.booked)) setBookingDraft(null); }
           else if (event.type === "error") throw new Error(event.message || "The conversation could not be reached.");
         }
       }
-    } catch (error: any) { setMsgs((m) => { const next = [...m]; next[next.length - 1] = { role: "persona", text: error?.message || "Something went wrong. Please try again." }; return next; }); }
+    } catch (error: any) { setMsgs((messages) => { const next = [...messages]; const index = next.findIndex((message) => message.id === streamId); if (index >= 0) next[index] = { ...next[index], role: "persona", text: error?.message || "Something went wrong. Please try again." }; return next; }); }
     finally { setBusy(false); }
   }
 
@@ -388,18 +389,22 @@ export default function PublicPersona() {
             </div>
           )}
           <AnimatePresence initial={false}>
-            {msgs.map((m, i) => (
-              <motion.div key={i} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} className={m.role === "visitor" ? "flex justify-end" : "flex justify-start"}>
+            {msgs.map((m, i) => {
+              // Keep an empty assistant message as the streaming target in state,
+              // but never render it as a second empty chat bubble beside the
+              // dedicated typing indicator below.
+              if (m.role === "persona" && !m.text) return null;
+              return <motion.div key={i} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} className={m.role === "visitor" ? "flex justify-end" : "flex justify-start"}>
                 <div className="max-w-[78%]">
                   {m.role === "owner" && <div className="mb-0.5 text-[11px] font-medium text-peach-deep">{p.name} (live)</div>}
                   <div className={m.role === "visitor" ? "rounded-2xl rounded-br-md bg-ink px-3.5 py-2 text-[13.5px] leading-relaxed text-canvas" : "hairline whitespace-pre-wrap rounded-2xl rounded-bl-md px-3.5 py-2 text-[13.5px] leading-relaxed"} style={m.role === "visitor" ? {} : { background: m.role === "owner" ? "#f8dacb" : "#fbfbfd" }}>{m.text}</div>
                   {m.tools && m.tools.length > 0 && <div className="mt-1.5 flex flex-wrap gap-1">{m.tools.map((t, j) => { const [l, I, tone] = TOOL_LABEL[t.name] || [t.name, Search, "white"]; return <Pill key={j} tone={tone}><I size={11} />{l}</Pill>; })}</div>}
                   {i === latestAvailabilityIndex && !bookingDraft && !bookingComplete && (m.tools || []).flatMap((t) => t.name === "check_availability" ? (t.result?.slots || []) : []).length > 0 && <SlotPicker slots={(m.tools || []).flatMap((t) => t.name === "check_availability" ? (t.result?.slots || []) : [])} onConfirm={chooseSlot} disabled={busy} />}
                 </div>
-              </motion.div>
-            ))}
+              </motion.div>;
+            })}
           </AnimatePresence>
-          {busy && <div className="hairline flex w-fit gap-1 rounded-2xl bg-[#fbfbfd] px-3.5 py-3">{[0, 1, 2].map((i) => <motion.span key={i} className="h-1.5 w-1.5 rounded-full bg-ink-mute" animate={{ y: [0, -3, 0] }} transition={{ duration: 0.8, repeat: Infinity, delay: i * 0.15 }} />)}</div>}
+          {busy && <div role="status" aria-label="Twyn is responding" className="hairline flex w-fit gap-1 rounded-2xl bg-[#fbfbfd] px-3.5 py-3">{[0, 1, 2].map((i) => <motion.span key={i} className="h-1.5 w-1.5 rounded-full bg-ink-mute" animate={{ y: [0, -3, 0] }} transition={{ duration: 0.8, repeat: Infinity, delay: i * 0.15 }} />)}</div>}
           {bookingDraft && <BookingDetailsForm draft={bookingDraft} onSubmit={submitBooking} disabled={busy} />}
           <div ref={end} />
         </div>
